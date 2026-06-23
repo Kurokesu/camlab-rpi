@@ -1,0 +1,47 @@
+# camtest sensor registry - curated, human-maintained source of truth.
+#
+# Each entry drives the sensor selector and how ConfigManager composes the
+# managed dtoverlay line in /boot/firmware/config.txt. The CSI port (cam0/cam1)
+# is a per-RIG setting (not per-sensor) and lives in the managed block, so it is
+# NOT listed here.
+#
+# Fields:
+#   name         display name in the GUI
+#   overlay      dtoverlay token, must exist in /boot/firmware/overlays/
+#   driver_repo  Kurokesu DKMS driver repo name. drivers.sh clones it from the
+#                Kurokesu org (or a full git URL, if given). Single source of truth.
+#   options      default overlay options appended after the port (e.g. [4lane])
+#   color        true = color sensor (no mono overlay param)
+#   notes        free-form operator note
+#   info_registers (optional) curated smbus2 identity probes:
+#     - { name: "...", addr: 0xNNNN, len: N }
+#
+# [VERIFY] overlay tokens / options / info_registers per sensor against each
+# driver repo before trusting an entry.
+
+sensors:
+  - name: AR0822
+    overlay: ar0822
+    driver_repo: ar0822-rpi-driver
+    options: [4lane]          # default to 4-lane MIPI (driver README option)
+    color: true               # AR0822 is color, no mono overlay param
+    notes: "8MP rolling shutter, 4K40 / 1080p120"
+    # info_registers: none curated yet for AR0822
+
+  # --- Not yet validated on this rig (placeholders for the registry shape) ---
+  # - name: AR0234
+  #   overlay: ar0234
+  #   driver_repo: ar0234-rpi-driver
+  #   options: []
+  #   color: true             # driver auto-detects color vs mono (PR #25)
+  #   info_registers:
+  #     - { name: "HW version",           addr: 0x31FE, len: 2 }   # [VERIFY]
+  #     - { name: "Engineering revision",  addr: 0x300E, len: 2 }  # [VERIFY]
+  # - name: IMX283
+  #   overlay: imx283
+  #   driver_repo: imx283-rpi-driver
+  #   options: []
+  # - name: IMX585
+  #   overlay: imx585
+  #   driver_repo: imx585-rpi-driver
+  #   options: []
