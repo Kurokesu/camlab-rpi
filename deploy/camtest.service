@@ -1,0 +1,35 @@
+# SPDX-FileCopyrightText: Copyright (C) 2026, UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Rendered by scripts/setup/service.sh (CAMTEST_USER / CAMTEST_REPO_DIR are
+# substituted). Runs the camtest GUI fullscreen under a Cage kiosk on tty1.
+
+[Unit]
+Description=camtest camera bench tool (Kurokesu)
+After=systemd-user-sessions.service getty@tty1.service
+Conflicts=getty@tty1.service
+
+[Service]
+Type=simple
+User=CAMTEST_USER
+PAMName=camtest
+WorkingDirectory=CAMTEST_REPO_DIR
+
+TTYPath=/dev/tty1
+StandardInput=tty-fail
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=camtest
+
+Environment=XCURSOR_SIZE=1
+# Deliberately do NOT raise LIBCAMERA_LOG_LEVELS: ERROR lines (e.g. AR0822
+# embedded-data parse failures) are the integrity signal we surface.
+Environment=PYTHONUNBUFFERED=1
+
+ExecStart=/usr/bin/cage -- /usr/bin/python3 -m camtest
+
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
