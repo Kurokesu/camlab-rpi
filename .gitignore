@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Local captures / scratch
+camtest-live*.png
+*.local.png
+/tmp/
+
+# Editor
+.vscode/
+*.swp
