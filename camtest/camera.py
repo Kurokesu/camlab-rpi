@@ -61,6 +61,9 @@ class CameraEngine:
         self.sensor_mode: dict = {}
         self.current_mode: SensorMode | None = None
         self.current_fps: float | None = None
+        self.framerate = 0.0          # instantaneous fps (rpicam-style)
+        self.last_metadata: dict = {}  # latest per-frame libcamera metadata
+        self._last_ts = 0             # previous SensorTimestamp (ns), for fps
         self._started = False
         self._first_frame_cb = None
         self._first_frame_seen = False
@@ -187,6 +190,20 @@ class CameraEngine:
         self._first_frame_cb = callback
 
     def _pre_callback(self, request) -> None:
+        # Runs on the camera thread for every delivered frame. Capture the latest
+        # metadata (exposure, gains) and compute the instantaneous frame rate the
+        # same way rpicam-apps does: 1e9 / the delta between consecutive
+        # SensorTimestamps (nanoseconds). A dropped frame widens the delta and so
+        # shows up as a lower rate. The GUI samples both for the readout.
+        try:
+            self.last_metadata = request.get_metadata()
+        except Exception:  # never let telemetry break capture
+            pass
+        ts = self.last_metadata.get("SensorTimestamp")
+        if ts is not None:
+            if self._last_ts and ts != self._last_ts:
+                self.framerate = 1e9 / (ts - self._last_ts)
+            self._last_ts = ts
         if not self._first_frame_seen:
             self._first_frame_seen = True
             boottime = time.clock_gettime(time.CLOCK_BOOTTIME)
