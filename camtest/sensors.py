@@ -24,7 +24,6 @@ class Sensor:
     overlay: str
     driver_repo: str = ""
     options: tuple[str, ...] = ()
-    color: bool = True
     mono_option: str = ""
     notes: str = ""
     info_registers: tuple[InfoRegister, ...] = field(default_factory=tuple)
@@ -49,7 +48,6 @@ def _coerce_sensor(raw: dict) -> Sensor:
         overlay=str(raw["overlay"]),
         driver_repo=str(raw.get("driver_repo", "")),
         options=tuple(str(o) for o in (raw.get("options") or [])),
-        color=bool(raw.get("color", True)),
         mono_option=str(raw.get("mono_option", "")),
         notes=str(raw.get("notes", "")),
         info_registers=regs,

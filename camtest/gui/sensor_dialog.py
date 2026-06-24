@@ -3,15 +3,16 @@
 Rendered inside a ModalOverlay (not a separate window, which a Cage kiosk renders
 unreliably). Changing the sensor overlay requires a reboot (dtoverlay is read at
 boot), so the primary action is explicit about it. Port (cam0/cam1) is a per-rig
-setting; the Color/Mono variant is a per-rig choice too, shown only for sensors
-that ship in both and cannot auto-detect (Sensor.mono_capable).
+setting. The Color/Mono variant is a per-rig choice too, shown only for sensors
+that ship in both and cannot auto-detect (Sensor.mono_capable). The selected
+sensor's free-form note (Sensor.notes) is shown to the right of the title.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 
-from ..qt import QtWidgets
+from ..qt import Qt, QtWidgets
 from ..sensors import SensorRegistry
 from .widgets import SegmentedSelector
 
@@ -27,12 +28,23 @@ class SensorCard(QtWidgets.QFrame):
         self._registry = registry
         self._on_apply = on_apply
         # Remember the initially-selected sensor + its variant so re-selecting it
-        # restores the choice (other sensors default to colour).
+        # restores the choice (other sensors default to color).
         self._init_name = current_name
         self._init_mono = bool(current_mono)
 
         title = QtWidgets.QLabel("Select sensor")
         title.setObjectName("modalTitle")
+
+        # Selected sensor's note (Sensor.notes), to the right of the title so it
+        # does not split the selector rows.
+        self.notes_lbl = QtWidgets.QLabel()
+        self.notes_lbl.setObjectName("modalText")
+        self.notes_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+
+        header = QtWidgets.QHBoxLayout()
+        header.addWidget(title)
+        header.addStretch(1)
+        header.addWidget(self.notes_lbl)
 
         form = QtWidgets.QFormLayout()
         self.sensor_sel = SegmentedSelector()
@@ -52,6 +64,7 @@ class SensorCard(QtWidgets.QFrame):
         form.addRow(self.variant_lbl, self.variant_sel)
 
         self._rebuild_variant(current_name, self._init_mono)
+        self._update_notes(current_name)
 
         note = QtWidgets.QLabel(
             "Applying rewrites dtoverlay in config.txt")
@@ -71,16 +84,22 @@ class SensorCard(QtWidgets.QFrame):
         lay = QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(22, 20, 22, 18)
         lay.setSpacing(14)
-        lay.addWidget(title)
+        lay.addLayout(header)
         lay.addLayout(form)
         lay.addWidget(note)
         lay.addLayout(buttons)
 
     def _on_sensor_changed(self) -> None:
         name = self.sensor_sel.current_value()
-        # Restore the variant only for the sensor we opened on; others start colour.
+        # Restore the variant only for the sensor we opened on; others start color.
         mono = self._init_mono if name == self._init_name else False
         self._rebuild_variant(name, mono)
+        self._update_notes(name)
+
+    def _update_notes(self, sensor_name: str | None) -> None:
+        sensor = self._registry.by_name(sensor_name) if sensor_name else None
+        self.notes_lbl.setText(sensor.notes if sensor and sensor.notes else "")
+        self.notes_lbl.setVisible(bool(self.notes_lbl.text()))
 
     def _rebuild_variant(self, sensor_name: str | None, mono: bool) -> None:
         sensor = self._registry.by_name(sensor_name) if sensor_name else None
@@ -88,7 +107,7 @@ class SensorCard(QtWidgets.QFrame):
         if capable:
             self.variant_sel.set_options([("Color", False), ("Mono", True)],
                                          current=bool(mono), enabled=True)
-        else:  # colour-only or auto-detecting: nothing to choose
+        else:  # color-only or auto-detecting: nothing to choose
             self.variant_sel.set_options([("Color", False)], current=False,
                                          enabled=False)
         self.variant_lbl.setVisible(capable)
