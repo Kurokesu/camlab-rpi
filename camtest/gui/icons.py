@@ -28,6 +28,7 @@ _CODEPOINTS: dict[str, int] = {
     "photo_camera": 0xE412,
     "terminal": 0xEB8E,
     "sensors": 0xE51E,
+    "tune": 0xE429,
 }
 
 # Shown if the icon font could not be loaded.
@@ -40,6 +41,7 @@ _ASCII_FALLBACK: dict[str, str] = {
     "photo_camera": "",
     "terminal": "",
     "sensors": "",
+    "tune": "",
 }
 
 _FAMILY: str | None = None

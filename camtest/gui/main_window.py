@@ -8,10 +8,13 @@ import os
 from ..camera import CameraEngine
 from ..config_manager import ConfigManager
 from ..integrity import IntegrityMonitor, LogClassifier, StderrCapture
+from ..modes import mode_for
 from ..qt import Qt, QtWidgets, Signal, Slot
 from ..sensors import SensorRegistry
+from ..settings import SettingsStore
 from . import icons
 from .log_panel import LogPanel
+from .mode_dialog import ModeCard
 from .overlay import ModalOverlay, message_card
 from .sensor_dialog import SensorCard
 from .status_strip import StatusStrip
@@ -31,6 +34,11 @@ QPushButton { background: #2c303a; border: 1px solid #3a3f4b; border-radius: 5px
 QPushButton:hover { background: #353b47; }
 QPushButton#danger { border-color: #803126; }
 QPushButton#danger:hover { background: #50211a; }
+QPushButton#segment { background: #262a33; border: 1px solid #3a3f4b; border-radius: 5px;
+                      padding: 6px 14px; color: #c4c9d2; }
+QPushButton#segment:hover { background: #2f3540; }
+QPushButton#segment:checked { background: #3d4858; border-color: #7f8aa0; color: #ffffff; }
+QPushButton#segment:checked:disabled { background: #2f3540; border-color: #4a505c; color: #aeb4bf; }
 QCheckBox { color: #aeb4bf; spacing: 6px; }
 QCheckBox::indicator { width: 15px; height: 15px; border: 1px solid #4a505c;
                        border-radius: 3px; background: #2c303a; }
@@ -53,12 +61,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def __init__(self, engine: CameraEngine, registry: SensorRegistry,
                  config: ConfigManager, capture: StderrCapture,
-                 classifier: LogClassifier, binding_label: str = ""):
+                 classifier: LogClassifier, settings: SettingsStore,
+                 display_max_fps: float, binding_label: str = ""):
         super().__init__()
         self.engine = engine
         self.registry = registry
         self.config = config
         self.capture = capture
+        self.settings = settings
+        self.display_max_fps = display_max_fps
         self.binding_label = binding_label
         self.monitor = IntegrityMonitor(classifier)
         self._overlay: ModalOverlay | None = None
@@ -93,6 +104,9 @@ class MainWindow(QtWidgets.QMainWindow):
         controls.setSpacing(8)
         self.sensor_btn = QtWidgets.QPushButton(icons.icon("photo_camera"), " Sensor...")
         self.sensor_btn.clicked.connect(self._choose_sensor)
+        self.mode_btn = QtWidgets.QPushButton(icons.icon("tune"), " Mode...")
+        self.mode_btn.clicked.connect(self._choose_mode)
+        self.mode_btn.setEnabled(bool(self.engine.modes))
         self.log_btn = QtWidgets.QPushButton(icons.icon("terminal"), " Log")
         self.log_btn.setCheckable(True)
         self.log_btn.toggled.connect(self._toggle_log)
@@ -102,6 +116,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.shutdown_btn.clicked.connect(self._shutdown)
 
         controls.addWidget(self.sensor_btn)
+        controls.addWidget(self.mode_btn)
         controls.addStretch(1)
         controls.addWidget(self.log_btn)
         controls.addWidget(self.shutdown_btn)
@@ -139,10 +154,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.sensor_btn.setText(f"Sensor: {name} ({cur['port']})")
         detected = self.engine.info.model if self.engine.info is not None else None
         self.status.set_camera(detected, cur["overlay"])
-        if self.engine.info is not None and self.engine.sensor_mode:
-            m = self.engine.sensor_mode
+        self._refresh_mode_status()
+
+    def _refresh_mode_status(self) -> None:
+        m = self.engine.sensor_mode
+        if m and m.get("format") and m.get("size"):
             w, h = m["size"]
-            self.status.set_mode(m["format"], f"{w}x{h}")
+            self.status.set_mode(m["format"], f"{w}x{h}", self.engine.current_fps)
+        else:
+            self.status.set_mode("-", "-", None)
 
     # slots
     @Slot(float)
@@ -172,6 +192,40 @@ class MainWindow(QtWidgets.QMainWindow):
     def _show_message(self, title: str, message: str) -> None:
         self._open_modal(message_card(
             title, message, [("OK", "", self._close_modal)]))
+
+    def _choose_mode(self) -> None:
+        if not self.engine.modes:
+            self._show_message("No modes", "No selectable sensor modes were enumerated.")
+            return
+        # Capture the live preview area BEFORE the overlay hides the GL widget. It
+        # sizes the lores (display) stream of the new mode.
+        sz = self.preview.size()
+        self._mode_avail = (sz.width(), sz.height())
+        card = ModeCard(self.engine.modes, self.engine.current_mode,
+                        self.engine.current_fps, self.display_max_fps,
+                        on_apply=self._apply_mode, on_cancel=self._close_modal)
+        self._open_modal(card)
+
+    def _apply_mode(self, size: tuple[int, int], bit_depth: int, fps: float) -> None:
+        self._close_modal()
+        mode = mode_for(self.engine.modes, tuple(size), int(bit_depth))
+        if mode is None:  # re-validate at apply time
+            self._show_message("Mode unavailable", "That mode is no longer available.")
+            return
+        avail = getattr(self, "_mode_avail",
+                        (self.preview.width(), self.preview.height()))
+        try:
+            self.engine.apply_mode(mode, float(fps), avail)
+        except Exception as exc:
+            log.exception("apply mode failed")
+            self._show_message("Mode change failed", str(exc))
+            return
+        # Persist only after a successful reconfigure (never store an unrunnable
+        # config). The key is the selected sensor's overlay token.
+        overlay = self.config.get_current().get("overlay") or ""
+        self.settings.set_mode(overlay, tuple(size), int(bit_depth), float(fps))
+        self.monitor.reset()
+        self._refresh_mode_status()
 
     def _choose_sensor(self) -> None:
         cur = self.config.get_current()

@@ -15,6 +15,13 @@ User=CAMTEST_USER
 PAMName=camtest
 WorkingDirectory=CAMTEST_REPO_DIR
 
+# Writable, persistent state owned by the service user (creates /var/lib/camtest
+# and exports $STATE_DIRECTORY). Holds the boot-persistent mode/fps selection.
+# Phase 5 (read-only root) must keep this path on a writable data partition,
+# excluded from the overlay, so the selection survives reboots.
+StateDirectory=camtest
+StateDirectoryMode=0750
+
 TTYPath=/dev/tty1
 StandardInput=tty-fail
 StandardOutput=journal

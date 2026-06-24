@@ -7,6 +7,7 @@ a running error count + a rolling rate and turns prominent when > 0.
 from __future__ import annotations
 
 from ..integrity import CATEGORY_LABELS, IntegrityStats
+from ..modes import format_fps
 from ..qt import Qt, QtWidgets, Slot
 from . import icons
 
@@ -65,8 +66,11 @@ class StatusStrip(QtWidgets.QFrame):
             ic = icons.html("photo_camera", color="#aeb4bf")
             self.camera_lbl.setText(f"{ic} Camera: {detected_model}")
 
-    def set_mode(self, fmt: str, size: str) -> None:
-        self.mode_lbl.setText(f"Mode: {fmt} {size}")
+    def set_mode(self, fmt: str, size: str, fps: float | None = None) -> None:
+        text = f"Mode: {fmt} {size}"
+        if fps is not None:
+            text += f" @ {format_fps(fps)} fps"
+        self.mode_lbl.setText(text)
 
     def set_boot_time(self, seconds: float | None) -> None:
         value = f"{seconds:.1f}s" if seconds is not None else "..."

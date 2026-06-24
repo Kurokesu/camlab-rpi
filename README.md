@@ -33,9 +33,10 @@ For partial reconfigures on a dev box, run any primitive under `scripts/setup/` 
 ## What it shows
 
 - **Live preview**, hardware-accelerated via `QGlPicamera2` (PyQt5 + OpenGL).
-- **Status strip**: selected sensor + port, detected model, capture mode, boot-to-preview time.
+- **Status strip**: selected sensor + port, detected model, capture mode + fps, boot-to-preview time.
 - **Integrity indicator**: a live count + rate of camera-stack errors, prominent when non-zero (see below).
 - **Sensor selector**: pick sensor + CSI port, then apply and reboot.
+- **Mode selector**: pick resolution, bit depth, and fps at runtime; applied live and remembered across reboots.
 - **Log panel**: collapsible view of the camera-stack stderr, integrity lines highlighted.
 
 ## Integrity surfacing
@@ -66,6 +67,16 @@ Default for AR0822: 4-lane MIPI CSI. Listed as a default option in the registry.
 
 Changing the sensor rewrites the managed block and reboots, since dt overlays are read at boot. Writes go through a single scoped shim (`/usr/local/bin/camtest-apply`) the GUI may `sudo` (see `deploy/camtest-sudoers`). Nothing else is privileged.
 
+## Mode selection
+
+The **Mode...** dialog lets the operator switch the running capture mode without a reboot. The choices come straight from what libcamera reports for the sensor (`camtest/modes.py`), presented as a dependent cascade:
+
+- **Resolution** -> **Bit depth** -> **FPS**. Changing one reconciles the ones below it, so the UI can only ever offer a combination the hardware actually supports.
+- **FPS policy**: the bench rates 30 and 60, capped by the sensor mode and the display. When a mode's maximum falls between the two (e.g. 4K runs at 33.89 or 40.03 fps), that exact maximum is offered as the top option. When only one rate fits, the selector locks. The chosen rate is held exactly via `FrameDurationLimits`.
+- **Max-stress default**: with no saved selection, the heaviest runnable mode is picked (largest area, deepest bits, highest fps within the display limit), e.g. AR0822 4K / 12-bit / 33.89 fps.
+
+Applying reconfigures the pipeline (raw + full-resolution main + a lores stream scaled to the preview area) and, only on success, persists the selection per sensor. State is written unprivileged to the service's `StateDirectory` (`/var/lib/camtest/state.json`); a missing or invalid entry falls back to the max-stress default.
+
 ## Development
 
 Service control and field support go through `camtestctl`:
@@ -80,8 +91,10 @@ camtestctl log-level debug      # then: camtestctl restart
 
 Run the app directly (under a Cage session) with `python3 -m camtest`. Useful env vars:
 
-- `CAMTEST_PREVIEW_SIZE` (default `1280x720`)
 - `CAMTEST_CAMERA_NUM` (default `0`)
+- `CAMTEST_DISPLAY_MAX_FPS` override the display fps ceiling (default: screen refresh, capped at 60)
+- `CAMTEST_BUFFER_COUNT` preview buffers per stream (default `4`)
+- `CAMTEST_STATE_FILE` override the persisted mode/fps settings path
 - `CAMTEST_NO_REBOOT` apply config without rebooting (dev)
 - `CAMTEST_NO_CAPTURE` disable stderr splicing (debug)
 - `CAMTEST_QT_BINDING` `pyqt5` (default) or `pyqt6`

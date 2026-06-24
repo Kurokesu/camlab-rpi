@@ -12,6 +12,7 @@ from collections.abc import Callable
 
 from ..qt import QtWidgets
 from ..sensors import SensorRegistry
+from .widgets import SegmentedSelector
 
 
 class SensorCard(QtWidgets.QFrame):
@@ -27,22 +28,19 @@ class SensorCard(QtWidgets.QFrame):
         title.setObjectName("modalTitle")
 
         form = QtWidgets.QFormLayout()
-        self.sensor_combo = QtWidgets.QComboBox()
-        for name in registry.names:
-            self.sensor_combo.addItem(name)
-        if current_name and current_name in registry.names:
-            self.sensor_combo.setCurrentText(current_name)
+        self.sensor_sel = SegmentedSelector()
+        self.sensor_sel.set_options([(name, name) for name in registry.names],
+                                    current=current_name)
 
-        self.port_combo = QtWidgets.QComboBox()
-        self.port_combo.addItems(["cam0", "cam1"])
-        self.port_combo.setCurrentText(current_port if current_port in ("cam0", "cam1") else "cam0")
+        self.port_sel = SegmentedSelector()
+        self.port_sel.set_options([("cam0", "cam0"), ("cam1", "cam1")],
+                                  current=current_port if current_port in ("cam0", "cam1") else "cam0")
 
-        form.addRow("Sensor:", self.sensor_combo)
-        form.addRow("CSI port:", self.port_combo)
+        form.addRow("Sensor:", self.sensor_sel)
+        form.addRow("CSI port:", self.port_sel)
 
         note = QtWidgets.QLabel(
-            "Applying rewrites the dtoverlay in config.txt and reboots so the new "
-            "sensor is loaded at boot.")
+            "Applying rewrites dtoverlay in config.txt")
         note.setObjectName("modalText")
         note.setWordWrap(True)
 
@@ -65,4 +63,4 @@ class SensorCard(QtWidgets.QFrame):
         lay.addLayout(buttons)
 
     def _apply(self) -> None:
-        self._on_apply(self.sensor_combo.currentText(), self.port_combo.currentText())
+        self._on_apply(self.sensor_sel.current_value(), self.port_sel.current_value())

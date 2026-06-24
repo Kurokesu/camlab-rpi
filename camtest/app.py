@@ -10,10 +10,39 @@ from . import qt
 from .camera import CameraEngine
 from .config_manager import ConfigManager
 from .integrity import LogClassifier, NullCapture, StderrCapture
+from .modes import DEFAULT_DISPLAY_MAX_FPS, resolve_initial_mode
 from .qt import QtWidgets
 from .sensors import SensorRegistry
+from .settings import SettingsStore
 
 log = logging.getLogger("camtest")
+
+# Estimated non-preview chrome height (status strip + controls row) used to size
+# the lores stream before the window is laid out. Runtime mode changes use the
+# preview widget's real size instead.
+_CHROME_PX = 90
+
+
+def _display_limits(app) -> tuple[float, tuple[int, int]]:
+    """(display_max_fps, preview_avail_size) derived from the primary screen.
+
+    display_max_fps is capped at the bench ceiling (60) unless overridden via
+    CAMTEST_DISPLAY_MAX_FPS. avail size is the screen minus estimated chrome.
+    """
+    screen = app.primaryScreen()
+    geo = screen.geometry() if screen else None
+    avail = (geo.width(), max(1, geo.height() - _CHROME_PX)) if geo else (1280, 720)
+
+    override = os.environ.get("CAMTEST_DISPLAY_MAX_FPS")
+    if override:
+        try:
+            return float(override), avail
+        except ValueError:
+            log.warning("ignoring bad CAMTEST_DISPLAY_MAX_FPS=%r", override)
+    rate = screen.refreshRate() if screen else 0.0
+    rate = round(rate) if rate and rate >= 1 else DEFAULT_DISPLAY_MAX_FPS
+    return min(float(rate), DEFAULT_DISPLAY_MAX_FPS), avail
+
 
 _LEVELS = {
     "trace": logging.DEBUG, "debug": logging.DEBUG, "info": logging.INFO,
@@ -40,12 +69,13 @@ def main(argv: list[str] | None = None) -> int:
 
     registry = SensorRegistry.load()
     config = ConfigManager()
+    settings = SettingsStore()
 
     # Open the camera BEFORE QApplication (matches the working Phase 1 proto). Doing
     # it after QApplication lets Xwayland's EGL init first and the picamera2 GL
-    # preview surface then fails with EGL_BAD_ALLOC.
-    size = tuple(int(x) for x in os.environ.get("CAMTEST_PREVIEW_SIZE", "1280x720").lower().split("x"))
-    engine = CameraEngine(size=size)
+    # preview surface then fails with EGL_BAD_ALLOC. open() only enumerates modes.
+    # The stream is configured below once the display size is known.
+    engine = CameraEngine()
     try:
         engine.open(camera_num=int(os.environ.get("CAMTEST_CAMERA_NUM", "0")))
     except Exception as exc:
@@ -53,13 +83,27 @@ def main(argv: list[str] | None = None) -> int:
 
     app = QtWidgets.QApplication(argv if argv is not None else sys.argv)
 
+    display_max_fps, avail = _display_limits(app)
+
+    # Resolve and configure the boot mode: a valid persisted selection, else the
+    # heaviest runnable mode (max-stress default). Single configure at boot.
+    if engine.picam2 is not None and engine.modes:
+        overlay = config.get_current().get("overlay") or ""
+        mode, fps = resolve_initial_mode(
+            engine.modes, settings.get_mode(overlay), display_max_fps)
+        try:
+            engine.configure_mode(mode, fps, avail)
+        except Exception as exc:
+            log.error("camera configure failed: %s", exc)
+
     binding_label = f"{qt.BINDING}/{'QGlPicamera2' if qt.BINDING == 'pyqt5' else 'QGl6Picamera2'}"
 
     from .gui.main_window import MainWindow
-    win = MainWindow(engine, registry, config, capture, classifier, binding_label)
+    win = MainWindow(engine, registry, config, capture, classifier,
+                     settings, display_max_fps, binding_label)
     win.showFullScreen()
 
-    if engine.picam2 is not None:
+    if engine.picam2 is not None and engine.current_mode is not None:
         try:
             engine.start()
         except Exception as exc:

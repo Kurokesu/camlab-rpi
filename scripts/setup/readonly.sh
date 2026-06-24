@@ -29,4 +29,7 @@ require_root
 header "Overlay root (Phase 5 - not yet implemented)"
 warn "readonly.sh is a placeholder. Planned: overlayfs read-only root with a"
 warn "writable overlay, plus camtestctl rw/ro toggles. No changes made."
+warn "Must mount a writable data partition at /var/lib/camtest (the service's"
+warn "StateDirectory) excluded from the overlay, so the persisted mode/fps"
+warn "selection survives reboots under the read-only root."
 exit 0

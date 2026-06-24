@@ -1,17 +1,31 @@
 """CameraEngine - thin wrapper over Picamera2 for the bench preview.
 
-Owns the Picamera2 instance, configures a preview stream, builds the Qt preview
-widget, and exposes detection + a first-frame hook (for boot-to-preview timing).
-Designed to degrade gracefully: if no camera enumerates, the GUI still comes up
-and reports the fact.
+Owns the Picamera2 instance, enumerates the sensor's runtime-selectable modes,
+configures a (raw + main + lores) preview pipeline, builds the Qt preview widget,
+and exposes detection + a first-frame hook (for boot-to-preview timing). Designed
+to degrade gracefully: if no camera enumerates, the GUI still comes up and reports
+the fact.
+
+Stream topology (per mode): the raw stream carries the selected sensor mode, the
+main stream is the full-resolution ISP output (XBGR8888, exercises the pipeline),
+and the lores stream (YUV420) is scaled to the on-screen preview and is what the
+GL widget displays (display="lores"). The framerate is locked exactly by setting
+FrameDurationLimits min == max.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import time
 from dataclasses import dataclass
 
+from .modes import (
+    SensorMode,
+    enumerate_modes,
+    fps_to_frame_duration,
+    plan_lores_size,
+)
 from .qt import preview_widget_class
 
 log = logging.getLogger(__name__)
@@ -36,13 +50,18 @@ class CameraInfo:
 
 class CameraEngine:
     def __init__(self, size=(1280, 720), pixel_format="XBGR8888"):
-        self.size = tuple(size)
+        self.size = tuple(size)            # lores / display size (set on configure)
         self.pixel_format = pixel_format
         self.picam2 = None
         self.info: CameraInfo | None = None
+        self.modes: list[SensorMode] = []
         self.main_config: dict = {}
+        self.lores_config: dict = {}
         self.sensor_config: dict = {}
         self.sensor_mode: dict = {}
+        self.current_mode: SensorMode | None = None
+        self.current_fps: float | None = None
+        self._started = False
         self._first_frame_cb = None
         self._first_frame_seen = False
 
@@ -52,33 +71,77 @@ class CameraEngine:
         return [CameraInfo.from_dict(d) for d in Picamera2.global_camera_info()]
 
     def open(self, camera_num: int = 0) -> None:
+        """Open the camera and enumerate its modes. Does NOT configure a stream.
+
+        Configuration is deferred to configure_mode() so the boot mode can be
+        resolved against the persisted selection and the actual display size
+        (which need QApplication). Reading sensor_modes here also warms the
+        picamera2 cache: the first access probes every raw mode with configure()
+        as a side effect and leaves the camera on the last probed (640x480)
+        mode, so the very next configure() we issue must be the real one.
+        """
         from picamera2 import Picamera2
         infos = Picamera2.global_camera_info()
         if not infos:
             raise RuntimeError("no camera enumerated by libcamera")
         self.info = CameraInfo.from_dict(infos[camera_num])
         self.picam2 = Picamera2(camera_num)
-        # Reading sensor_modes the first time reconfigures the camera as a side
-        # effect: picamera2 probes every raw mode with configure() and leaves the
-        # camera on the last one, whose main stream falls back to the 640x480
-        # default (4:3). Warm that cache here, BEFORE we apply our own preview
-        # config, so our 1280x720 (16:9) configuration is the one that sticks.
-        _ = self.picam2.sensor_modes
+        self.modes = enumerate_modes(self.picam2.sensor_modes)
+        log.info("camera opened: %s (%s) with %d modes",
+                 self.info.model, self.info.id, len(self.modes))
+
+    @staticmethod
+    def _buffer_count() -> int:
+        try:
+            return max(1, int(os.environ.get("CAMTEST_BUFFER_COUNT", "4")))
+        except ValueError:
+            return 4
+
+    def configure_mode(self, mode: SensorMode, fps: float, avail_size) -> None:
+        """Configure raw + main + lores for a mode at a locked fps.
+
+        avail_size is the on-screen preview area in pixels. It sizes the lores
+        (display) stream to the largest size of the mode's aspect ratio that fits.
+        """
+        if self.picam2 is None:
+            raise RuntimeError("camera not opened")
+        main_size = tuple(mode.size)
+        lores_size = plan_lores_size(main_size, tuple(avail_size))
+        dur = fps_to_frame_duration(fps)
         cfg = self.picam2.create_preview_configuration(
-            main={"size": self.size, "format": self.pixel_format})
+            main={"size": main_size, "format": self.pixel_format},
+            lores={"size": lores_size, "format": "YUV420"},
+            sensor={"output_size": main_size, "bit_depth": int(mode.bit_depth)},
+            display="lores",
+            buffer_count=self._buffer_count(),
+            controls={"FrameDurationLimits": (dur, dur)},
+        )
         self.picam2.configure(cfg)
         full = self.picam2.camera_configuration()
         self.main_config = dict(full["main"])
+        self.lores_config = dict(full.get("lores") or {})
         # The "sensor" config is the actual mode libcamera selected (bit depth +
         # output size). The "main"/"raw" formats are the ISP output / PiSP
         # internal formats (XBGR8888 / *_PISP_COMP*), which do NOT match what
         # rpicam-hello --list-cameras reports. Resolve the real sensor mode so
-        # the GUI shows the same thing (e.g. SGRBG12_CSI2P 1920x1080).
-        self.sensor_config = dict(full.get("sensor", {}))
+        # the GUI shows the same thing (e.g. SGRBG12_CSI2P 3840x2160).
+        self.sensor_config = dict(full.get("sensor") or {})
         self.sensor_mode = self._match_sensor_mode(self.sensor_config)
-        log.info("camera opened: %s (%s) sensor_mode=%s main=%s",
-                 self.info.model, self.info.id,
-                 self.sensor_mode_str(), self.main_config)
+        self.current_mode = mode
+        self.current_fps = float(fps)
+        self.size = tuple(self.lores_config.get("size", lores_size))
+        log.info("configured: sensor_mode=%s fps=%.2f main=%s lores=%s",
+                 self.sensor_mode_str(), fps,
+                 self.main_config.get("size"), self.size)
+
+    def apply_mode(self, mode: SensorMode, fps: float, avail_size) -> None:
+        """Reconfigure to a new mode/fps while running (stop, configure, start)."""
+        was_started = self._started
+        if was_started:
+            self.stop()
+        self.configure_mode(mode, fps, avail_size)
+        if was_started:
+            self.start()
 
     def _match_sensor_mode(self, sensor_cfg: dict) -> dict:
         """Find the sensor_modes entry matching the configured size + bit depth.
@@ -136,8 +199,11 @@ class CameraEngine:
     def start(self) -> None:
         if self.picam2 is None:
             raise RuntimeError("camera not opened")
+        if self.current_mode is None:
+            raise RuntimeError("camera not configured (call configure_mode first)")
         self.picam2.pre_callback = self._pre_callback
         self.picam2.start()
+        self._started = True
 
     def stop(self) -> None:
         if self.picam2 is not None:
@@ -145,6 +211,8 @@ class CameraEngine:
                 self.picam2.stop()
             except Exception:
                 log.exception("camera stop failed")
+            finally:
+                self._started = False
 
     def close(self) -> None:
         if self.picam2 is not None:
