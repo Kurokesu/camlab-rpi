@@ -58,6 +58,12 @@ class CameraEngine:
             raise RuntimeError("no camera enumerated by libcamera")
         self.info = CameraInfo.from_dict(infos[camera_num])
         self.picam2 = Picamera2(camera_num)
+        # Reading sensor_modes the first time reconfigures the camera as a side
+        # effect: picamera2 probes every raw mode with configure() and leaves the
+        # camera on the last one, whose main stream falls back to the 640x480
+        # default (4:3). Warm that cache here, BEFORE we apply our own preview
+        # config, so our 1280x720 (16:9) configuration is the one that sticks.
+        _ = self.picam2.sensor_modes
         cfg = self.picam2.create_preview_configuration(
             main={"size": self.size, "format": self.pixel_format})
         self.picam2.configure(cfg)
