@@ -52,7 +52,7 @@ class ModalOverlay(QtWidgets.QWidget):
         self.deleteLater()
 
 
-Button = tuple[str, str, Callable[[], None]]  # (label, role, callback); role: "" | "danger"
+Button = tuple[str, str, Callable[[], None]]  # (label, role, callback) - role: "" | "danger"
 
 
 def message_card(title: str, message: str, buttons: list[Button]) -> QtWidgets.QFrame:

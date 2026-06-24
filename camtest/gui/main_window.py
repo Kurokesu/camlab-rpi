@@ -178,7 +178,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _open_modal(self, card) -> None:
         if self._overlay is not None:
             return  # one modal at a time
-        # The GL preview is a native window that stacks above Qt widgets; hide it
+        # The GL preview is a native window that stacks above Qt widgets. Hide it
         # so the overlay is visible, then restore it on dismiss.
         self.preview.hide()
         self._overlay = ModalOverlay(self.centralWidget(), card)
