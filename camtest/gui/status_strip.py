@@ -69,8 +69,8 @@ class StatusStrip(QtWidgets.QFrame):
         self.mode_lbl.setText(f"Mode: {fmt} {size}")
 
     def set_boot_time(self, seconds: float | None) -> None:
-        self.boot_lbl.setText(
-            f"boot-->preview: {seconds:.1f}s" if seconds is not None else "boot-->preview: ...")
+        value = f"{seconds:.1f}s" if seconds is not None else "..."
+        self.boot_lbl.setText(f"boot time: {value}")
 
     @Slot(object)
     def update_integrity(self, stats: IntegrityStats) -> None:
