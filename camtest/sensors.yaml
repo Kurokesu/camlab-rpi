@@ -20,28 +20,47 @@
 # driver repo before trusting an entry.
 
 sensors:
+  #A driver_repo marks a Kurokesu
+  # out-of-tree sensor that drivers.sh builds via DKMS (repo name under
+  # github.com/Kurokesu, the <sensor>-rpi-driver convention; override the org
+  # base with CAMTEST_DRIVER_BASE_URL). Entries without driver_repo are mainline
+  # sensors whose driver + overlay ship with Raspberry Pi OS, so drivers.sh skips
+  # them and the overlay is already in /boot/firmware/overlays.
+  - name: AR0234
+    overlay: ar0234
+    driver_repo: ar0234-rpi-driver
+    options: [4lane]          # 4-lane MIPI, driver auto-detects color vs mono
+    color: true
+    notes: "2.3MP global shutter, 1920x1200"
+
   - name: AR0822
     overlay: ar0822
     driver_repo: ar0822-rpi-driver
-    options: [4lane]          # default to 4-lane MIPI (driver README option)
+    options: [4lane]          # 4-lane MIPI
     color: true               # AR0822 is color, no mono overlay param
     notes: "8MP rolling shutter, 4K40 / 1080p120"
-    # info_registers: none curated yet for AR0822
 
-  # --- Not yet validated on this rig (placeholders for the registry shape) ---
-  # - name: AR0234
-  #   overlay: ar0234
-  #   driver_repo: ar0234-rpi-driver
-  #   options: []
-  #   color: true             # driver auto-detects color vs mono (PR #25)
-  #   info_registers:
-  #     - { name: "HW version",           addr: 0x31FE, len: 2 }   # [VERIFY]
-  #     - { name: "Engineering revision",  addr: 0x300E, len: 2 }  # [VERIFY]
-  # - name: IMX283
-  #   overlay: imx283
-  #   driver_repo: imx283-rpi-driver
-  #   options: []
-  # - name: IMX585
-  #   overlay: imx585
-  #   driver_repo: imx585-rpi-driver
-  #   options: []
+  - name: IMX283
+    overlay: imx283
+    options: []               # 4-lane only (no lane param), needs CM/Pi5
+    color: true
+    notes: "20MP, 5472x3648"
+
+  - name: IMX462
+    overlay: imx462
+    options: []               # 2-lane default (overlay also supports 4lane)
+    color: true
+    notes: "2MP Starvis, 1080p, high NIR sensitivity"
+
+  - name: IMX477
+    overlay: imx477
+    options: []
+    color: true
+    notes: "12.3MP HQ Camera, 4056x3040"
+
+  - name: IMX585
+    overlay: imx585
+    driver_repo: imx585-rpi-driver
+    options: []
+    color: true
+    notes: "8.3MP color, ~4K"
