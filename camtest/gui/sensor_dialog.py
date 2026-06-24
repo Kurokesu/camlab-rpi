@@ -1,9 +1,10 @@
-"""Sensor selection card - pick sensor + CSI port, then Apply & Reboot.
+"""Sensor selection card - pick sensor + CSI port (+ color/mono), then reboot.
 
 Rendered inside a ModalOverlay (not a separate window, which a Cage kiosk renders
 unreliably). Changing the sensor overlay requires a reboot (dtoverlay is read at
-boot), so the primary action is explicit about it. Port (cam0/cam1) is the
-secondary, rig-level setting.
+boot), so the primary action is explicit about it. Port (cam0/cam1) is a per-rig
+setting; the Color/Mono variant is a per-rig choice too, shown only for sensors
+that ship in both and cannot auto-detect (Sensor.mono_capable).
 """
 
 from __future__ import annotations
@@ -17,12 +18,18 @@ from .widgets import SegmentedSelector
 
 class SensorCard(QtWidgets.QFrame):
     def __init__(self, registry: SensorRegistry, current_name: str | None,
-                 current_port: str, on_apply: Callable[[str, str], None],
+                 current_port: str, current_mono: bool,
+                 on_apply: Callable[[str, str, bool], None],
                  on_cancel: Callable[[], None]):
         super().__init__()
         self.setObjectName("modalCard")
         self.setMinimumWidth(420)
+        self._registry = registry
         self._on_apply = on_apply
+        # Remember the initially-selected sensor + its variant so re-selecting it
+        # restores the choice (other sensors default to colour).
+        self._init_name = current_name
+        self._init_mono = bool(current_mono)
 
         title = QtWidgets.QLabel("Select sensor")
         title.setObjectName("modalTitle")
@@ -31,13 +38,20 @@ class SensorCard(QtWidgets.QFrame):
         self.sensor_sel = SegmentedSelector()
         self.sensor_sel.set_options([(name, name) for name in registry.names],
                                     current=current_name)
+        self.sensor_sel.changed.connect(self._on_sensor_changed)
 
         self.port_sel = SegmentedSelector()
         self.port_sel.set_options([("cam0", "cam0"), ("cam1", "cam1")],
                                   current=current_port if current_port in ("cam0", "cam1") else "cam0")
 
+        self.variant_lbl = QtWidgets.QLabel("Variant:")
+        self.variant_sel = SegmentedSelector()
+
         form.addRow("Sensor:", self.sensor_sel)
         form.addRow("CSI port:", self.port_sel)
+        form.addRow(self.variant_lbl, self.variant_sel)
+
+        self._rebuild_variant(current_name, self._init_mono)
 
         note = QtWidgets.QLabel(
             "Applying rewrites dtoverlay in config.txt")
@@ -62,5 +76,25 @@ class SensorCard(QtWidgets.QFrame):
         lay.addWidget(note)
         lay.addLayout(buttons)
 
+    def _on_sensor_changed(self) -> None:
+        name = self.sensor_sel.current_value()
+        # Restore the variant only for the sensor we opened on; others start colour.
+        mono = self._init_mono if name == self._init_name else False
+        self._rebuild_variant(name, mono)
+
+    def _rebuild_variant(self, sensor_name: str | None, mono: bool) -> None:
+        sensor = self._registry.by_name(sensor_name) if sensor_name else None
+        capable = bool(sensor and sensor.mono_capable)
+        if capable:
+            self.variant_sel.set_options([("Color", False), ("Mono", True)],
+                                         current=bool(mono), enabled=True)
+        else:  # colour-only or auto-detecting: nothing to choose
+            self.variant_sel.set_options([("Color", False)], current=False,
+                                         enabled=False)
+        self.variant_lbl.setVisible(capable)
+        self.variant_sel.setVisible(capable)
+
     def _apply(self) -> None:
-        self._on_apply(self.sensor_sel.current_value(), self.port_sel.current_value())
+        self._on_apply(self.sensor_sel.current_value(),
+                       self.port_sel.current_value(),
+                       bool(self.variant_sel.current_value()))

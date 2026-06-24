@@ -166,12 +166,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.first_frame.connect(self._on_first_frame)
         self.engine.on_first_frame(lambda boottime: self.first_frame.emit(boottime))
 
+    @staticmethod
+    def _is_mono(sensor, options: list[str]) -> bool:
+        """True if the sensor's mono overlay param is active in config.txt."""
+        return bool(sensor and sensor.mono_option and sensor.mono_option in options)
+
     def _populate_static(self) -> None:
         cur = self.config.get_current()
         sensor = self.registry.by_overlay(cur["overlay"]) if cur["overlay"] else None
         name = sensor.name if sensor else (cur["overlay"] or "unknown")
+        variant = ", mono" if self._is_mono(sensor, cur["options"]) else ""
         # The button is the single source of truth for the selected sensor + port.
-        self.sensor_btn.setText(f"Sensor: {name} ({cur['port']})")
+        self.sensor_btn.setText(f"Sensor: {name} ({cur['port']}{variant})")
         detected = self.engine.info.model if self.engine.info is not None else None
         self.status.set_camera(detected, cur["overlay"])
         self._refresh_mode_status()
@@ -264,18 +270,23 @@ class MainWindow(QtWidgets.QMainWindow):
     def _choose_sensor(self) -> None:
         cur = self.config.get_current()
         sensor = self.registry.by_overlay(cur["overlay"]) if cur["overlay"] else None
+        mono = self._is_mono(sensor, cur["options"])
         card = SensorCard(self.registry, sensor.name if sensor else None,
-                          cur["port"], on_apply=self._apply_sensor,
+                          cur["port"], mono, on_apply=self._apply_sensor,
                           on_cancel=self._close_modal)
         self._open_modal(card)
 
-    def _apply_sensor(self, sensor_name: str, port: str) -> None:
+    def _apply_sensor(self, sensor_name: str, port: str, mono: bool) -> None:
         self._close_modal()
         chosen = self.registry.by_name(sensor_name)
         if chosen is None:
             return
+        options = list(chosen.options)
+        if mono and chosen.mono_option and chosen.mono_option not in options:
+            options.append(chosen.mono_option)
+        variant = " (mono)" if mono and chosen.mono_option else ""
         try:
-            self.config.apply(chosen.overlay, port, list(chosen.options))
+            self.config.apply(chosen.overlay, port, options)
         except Exception as exc:  # surface the failure, do not reboot
             self._show_message("Apply failed", str(exc))
             return
@@ -283,7 +294,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._populate_static()
             self._show_message(
                 "Applied (reboot skipped)",
-                f"config.txt updated: {chosen.overlay} on {port}.\n"
+                f"config.txt updated: {chosen.overlay}{variant} on {port}.\n"
                 "CAMTEST_NO_REBOOT set - reboot manually to load it.")
             return
         from ..config_manager import reboot

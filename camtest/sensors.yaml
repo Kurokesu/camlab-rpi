@@ -10,8 +10,16 @@
 #   overlay      dtoverlay token, must exist in /boot/firmware/overlays/
 #   driver_repo  Kurokesu DKMS driver repo name. drivers.sh clones it from the
 #                Kurokesu org (or a full git URL, if given). Single source of truth.
-#   options      default overlay options appended after the port (e.g. [4lane])
-#   color        true = color sensor (no mono overlay param)
+#   options      fixed overlay params appended after the port (e.g. [4lane]). Do
+#                NOT put the mono param here; colour/mono is a per-rig runtime
+#                choice (see mono_option) made in the Select sensor modal.
+#   color        informational only (true = colour). For a mono_option sensor it
+#                is just the default variant before the operator picks one.
+#   mono_option  overlay param that selects the monochrome variant (e.g. "mono").
+#                Set it for sensors that ship in both colour and mono and do NOT
+#                auto-detect (imx585, imx462): its presence adds a Color/Mono
+#                selector to the modal and the choice is persisted in config.txt.
+#                Omit for colour-only sensors and for ar0234 (driver auto-detects).
 #   notes        free-form operator note
 #   info_registers (optional) curated smbus2 identity probes:
 #     - { name: "...", addr: 0xNNNN, len: N }
@@ -49,8 +57,9 @@ sensors:
   - name: IMX462
     overlay: imx462
     options: []               # 2-lane default (overlay also supports 4lane)
-    color: true
-    notes: "2MP Starvis, 1080p, high NIR sensitivity"
+    color: true               # colour/mono selectable (imx462lqr / imx462llr)
+    mono_option: mono
+    notes: "2MP Starvis color/mono, 1080p, high NIR sensitivity"
 
   - name: IMX477
     overlay: imx477
@@ -61,6 +70,7 @@ sensors:
   - name: IMX585
     overlay: imx585
     driver_repo: imx585-rpi-driver
-    options: []
+    options: []               # 4-lane default; colour/mono selectable, not auto-detected
     color: true
-    notes: "8.3MP color, ~4K"
+    mono_option: mono
+    notes: "8.3MP STARVIS 2 color/mono, ~4K"

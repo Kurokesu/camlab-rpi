@@ -25,12 +25,18 @@ class Sensor:
     driver_repo: str = ""
     options: tuple[str, ...] = ()
     color: bool = True
+    mono_option: str = ""
     notes: str = ""
     info_registers: tuple[InfoRegister, ...] = field(default_factory=tuple)
 
     @property
     def has_probe(self) -> bool:
         return bool(self.info_registers)
+
+    @property
+    def mono_capable(self) -> bool:
+        """True if the sensor has a selectable mono variant (overlay param)."""
+        return bool(self.mono_option)
 
 
 def _coerce_sensor(raw: dict) -> Sensor:
@@ -44,6 +50,7 @@ def _coerce_sensor(raw: dict) -> Sensor:
         driver_repo=str(raw.get("driver_repo", "")),
         options=tuple(str(o) for o in (raw.get("options") or [])),
         color=bool(raw.get("color", True)),
+        mono_option=str(raw.get("mono_option", "")),
         notes=str(raw.get("notes", "")),
         info_registers=regs,
     )
