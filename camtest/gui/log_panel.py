@@ -11,7 +11,7 @@ import collections
 import html
 
 from ..integrity import LogClassifier
-from ..qt import QtGui, QtWidgets
+from ..qt import Qt, QtGui, QtWidgets
 
 _MAX_LINES = 2000
 
@@ -27,7 +27,8 @@ class LogPanel(QtWidgets.QWidget):
         lay.setSpacing(0)
 
         header = QtWidgets.QHBoxLayout()
-        header.setContentsMargins(10, 2, 10, 2)
+        header.setContentsMargins(12, 4, 12, 4)
+        header.setSpacing(26)
         title = QtWidgets.QLabel("Log")
         title.setObjectName("logTitle")
         self.errors_only = QtWidgets.QCheckBox("errors only")
@@ -39,6 +40,9 @@ class LogPanel(QtWidgets.QWidget):
                                    "when re-checked.")
         self.autoscroll.setChecked(True)
         self.autoscroll.toggled.connect(self._on_autoscroll)
+        # Put the indicator to the right of each label (reads label-then-box).
+        for cb in (self.errors_only, self.autoscroll):
+            cb.setLayoutDirection(Qt.RightToLeft)
         clear_btn = QtWidgets.QPushButton("Clear")
         clear_btn.clicked.connect(self.clear)
         header.addWidget(title)
