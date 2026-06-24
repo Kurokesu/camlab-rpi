@@ -12,7 +12,8 @@ from ..qt import Qt, QtWidgets, Signal, Slot
 from ..sensors import SensorRegistry
 from . import icons
 from .log_panel import LogPanel
-from .sensor_dialog import SensorDialog
+from .overlay import ModalOverlay, message_card
+from .sensor_dialog import SensorCard
 from .status_strip import StatusStrip
 
 log = logging.getLogger(__name__)
@@ -39,6 +40,11 @@ QCheckBox::indicator:checked:hover { border-color: #808998; }
 QPlainTextEdit#logView { background: #15171b; border: none; color: #c4c9d2; }
 QLabel#logTitle { color: #8a909b; font-weight: 600; }
 QLabel#dialogNote { color: #8a909b; }
+QWidget#modalOverlay { background: rgba(12, 13, 16, 215); }
+QFrame#modalCard { background: #23262d; border: 1px solid #3a3f4b; border-radius: 8px; }
+QFrame#modalCard QLabel { background: transparent; }
+QLabel#modalTitle { font-size: 16px; font-weight: 600; color: #e8eaed; }
+QLabel#modalText { color: #aeb4bf; }
 """
 
 
@@ -55,6 +61,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.capture = capture
         self.binding_label = binding_label
         self.monitor = IntegrityMonitor(classifier)
+        self._overlay: ModalOverlay | None = None
 
         self.setWindowTitle("camtest")
         self.setStyleSheet(_STYLE + self._checkbox_tick_style())
@@ -146,38 +153,68 @@ class MainWindow(QtWidgets.QMainWindow):
     def _toggle_log(self, checked: bool) -> None:
         self.log_panel.setVisible(checked)
 
+    # in-window modals (a Cage kiosk renders separate top-level dialogs as a
+    # tiny unusable artifact, so everything is drawn over the main surface).
+    def _open_modal(self, card) -> None:
+        if self._overlay is not None:
+            return  # one modal at a time
+        # The GL preview is a native window that stacks above Qt widgets; hide it
+        # so the overlay is visible, then restore it on dismiss.
+        self.preview.hide()
+        self._overlay = ModalOverlay(self.centralWidget(), card)
+
+    def _close_modal(self) -> None:
+        if self._overlay is not None:
+            self._overlay.dismiss()
+            self._overlay = None
+        self.preview.show()
+
+    def _show_message(self, title: str, message: str) -> None:
+        self._open_modal(message_card(
+            title, message, [("OK", "", self._close_modal)]))
+
     def _choose_sensor(self) -> None:
         cur = self.config.get_current()
         sensor = self.registry.by_overlay(cur["overlay"]) if cur["overlay"] else None
-        dlg = SensorDialog(self.registry, sensor.name if sensor else None,
-                           cur["port"], self)
-        result = dlg.exec_() if hasattr(dlg, "exec_") else dlg.exec()
-        if not result:
-            return
-        chosen = self.registry.by_name(dlg.selected_sensor)
+        card = SensorCard(self.registry, sensor.name if sensor else None,
+                          cur["port"], on_apply=self._apply_sensor,
+                          on_cancel=self._close_modal)
+        self._open_modal(card)
+
+    def _apply_sensor(self, sensor_name: str, port: str) -> None:
+        self._close_modal()
+        chosen = self.registry.by_name(sensor_name)
         if chosen is None:
             return
         try:
-            self.config.apply(chosen.overlay, dlg.selected_port, list(chosen.options))
+            self.config.apply(chosen.overlay, port, list(chosen.options))
         except Exception as exc:  # surface the failure, do not reboot
-            QtWidgets.QMessageBox.critical(self, "Apply failed", str(exc))
+            self._show_message("Apply failed", str(exc))
             return
         if os.environ.get("CAMTEST_NO_REBOOT"):
-            QtWidgets.QMessageBox.information(
-                self, "Applied (reboot skipped)",
-                f"config.txt updated: {chosen.overlay} on {dlg.selected_port}.\n"
-                "CAMTEST_NO_REBOOT set - reboot manually to load it.")
             self._populate_static()
+            self._show_message(
+                "Applied (reboot skipped)",
+                f"config.txt updated: {chosen.overlay} on {port}.\n"
+                "CAMTEST_NO_REBOOT set - reboot manually to load it.")
             return
         from ..config_manager import reboot
         reboot()
 
     def _shutdown(self) -> None:
-        if QtWidgets.QMessageBox.question(
-                self, "Shutdown", "Power off the device?") != QtWidgets.QMessageBox.Yes:
-            return
+        self._open_modal(message_card(
+            "Shutdown", "Power off the device?",
+            [("Cancel", "", self._close_modal),
+             ("Power off", "danger", self._do_poweroff)]))
+
+    def _do_poweroff(self) -> None:
         from ..config_manager import poweroff
-        poweroff()
+        try:
+            poweroff()
+        except Exception as exc:
+            log.error("poweroff failed: %s", exc)
+            self._close_modal()
+            self._show_message("Shutdown failed", str(exc))
 
     # lifecycle
     # No quit affordance by design: this is a kiosk. Exiting drops to a blank
