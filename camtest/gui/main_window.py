@@ -9,7 +9,7 @@ from ..camera import CameraEngine
 from ..config_manager import ConfigManager
 from ..integrity import IntegrityMonitor, LogClassifier, StderrCapture
 from ..modes import mode_for
-from ..qt import Qt, QtWidgets, Signal, Slot
+from ..qt import Qt, QtCore, QtWidgets, Signal, Slot
 from ..sensors import SensorRegistry
 from ..settings import SettingsStore
 from . import icons
@@ -24,11 +24,17 @@ log = logging.getLogger(__name__)
 _STYLE = """
 QWidget { background: #1b1d22; color: #d7dae0; font-size: 13px; }
 QFrame#statusStrip { background: #23262d; border-top: 1px solid #2f333c; }
-QLabel[class="chip"] { color: #aeb4bf; }
-QLabel#integrity { font-weight: 600; padding: 2px 10px; border-radius: 4px; }
-QLabel#integrity[state="ok"]  { color: #98c379; }
-QLabel#integrity[state="warn"]{ color: #e5c07b; background: #3a3320; }
-QLabel#integrity[state="bad"] { color: #ffffff; background: #b3402f; }
+QLabel[class="chip"] { color: #aeb4bf; background: #2a2e36; border-radius: 4px;
+                       padding: 3px 9px; }
+QFrame[class="chip"] { background: #2a2e36; border-radius: 4px; }
+QFrame[class="chip"] QLabel { background: transparent; color: #aeb4bf; }
+QFrame#integrity { border-radius: 4px; }
+QFrame#integrity QLabel { background: transparent; font-weight: 600; }
+QFrame#integrity[state="ok"]   QLabel { color: #98c379; }
+QFrame#integrity[state="warn"] { background: #3a3320; }
+QFrame#integrity[state="warn"] QLabel { color: #e5c07b; }
+QFrame#integrity[state="bad"]  { background: #b3402f; }
+QFrame#integrity[state="bad"]  QLabel { color: #ffffff; }
 QPushButton { background: #2c303a; border: 1px solid #3a3f4b; border-radius: 5px;
               padding: 6px 12px; }
 QPushButton:hover { background: #353b47; }
@@ -40,8 +46,8 @@ QPushButton#segment:hover { background: #2f3540; }
 QPushButton#segment:checked { background: #3d4858; border-color: #7f8aa0; color: #ffffff; }
 QPushButton#segment:checked:disabled { background: #2f3540; border-color: #4a505c; color: #aeb4bf; }
 QCheckBox { color: #aeb4bf; spacing: 6px; }
-QCheckBox::indicator { width: 15px; height: 15px; border: 1px solid #4a505c;
-                       border-radius: 3px; background: #2c303a; }
+QCheckBox::indicator { width: 20px; height: 20px; border: 1px solid #4a505c;
+                       border-radius: 4px; background: #2c303a; }
 QCheckBox::indicator:hover { border-color: #6a7180; }
 QCheckBox::indicator:checked { border-color: #6a7180; }
 QCheckBox::indicator:checked:hover { border-color: #808998; }
@@ -115,6 +121,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.shutdown_btn.setObjectName("danger")
         self.shutdown_btn.clicked.connect(self._shutdown)
 
+        # QPushButton otherwise clamps the icon to the style's small default;
+        # set an explicit size so the larger glyph actually shows.
+        for btn in (self.sensor_btn, self.mode_btn, self.log_btn, self.shutdown_btn):
+            btn.setIconSize(QtCore.QSize(21, 21))
+
         controls.addWidget(self.sensor_btn)
         controls.addWidget(self.mode_btn)
         controls.addStretch(1)
@@ -130,12 +141,21 @@ class MainWindow(QtWidgets.QMainWindow):
         self._wire()
         self._populate_static()
 
+        # Sample the engine ~10x/sec for live telemetry: the instantaneous fps
+        # (computed rpicam-style from sensor timestamps) plus the actual exposure
+        # and gains from the per-frame metadata. 100 ms is about the fastest a
+        # changing number stays readable.
+        self._status_timer = QtCore.QTimer(self)
+        self._status_timer.setInterval(100)
+        self._status_timer.timeout.connect(self._update_status)
+        self._status_timer.start()
+
     @staticmethod
     def _checkbox_tick_style() -> str:
         # A neutral tick for the checked state (the blue fill clashed with the
         # palette). Rendered from the icon font to a PNG since Qt stylesheets
         # need an image url for sub-control glyphs.
-        path = icons.cached_png("check", 13, "#cdd3dd")
+        path = icons.cached_png("check", 17, "#cdd3dd")
         return f"QCheckBox::indicator:checked {{ image: url({path}); }}" if path else ""
 
     # wiring
@@ -160,15 +180,29 @@ class MainWindow(QtWidgets.QMainWindow):
         m = self.engine.sensor_mode
         if m and m.get("format") and m.get("size"):
             w, h = m["size"]
-            self.status.set_mode(m["format"], f"{w}x{h}", self.engine.current_fps)
+            self.status.set_mode(m["format"], f"{w}x{h}")
         else:
-            self.status.set_mode("-", "-", None)
+            self.status.set_mode("-", "-")
 
     # slots
     @Slot(float)
     def _on_first_frame(self, boottime: float) -> None:
         self.status.set_boot_time(boottime)
         log.info("first frame at boottime=%.1fs", boottime)
+
+    def _update_status(self) -> None:
+        fps = self.engine.framerate
+        self.status.set_fps(fps if fps > 0 else None)
+        md = self.engine.last_metadata
+        if md:
+            self.status.set_exposure(md.get("ExposureTime"),
+                                     md.get("AnalogueGain"),
+                                     md.get("DigitalGain"))
+            # SensorTemperature comes from the embedded-data parser and is not
+            # offered by every sensor (None -> the chip just stays hidden).
+            self.status.set_temperature(md.get("SensorTemperature"))
+        else:
+            self.status.set_exposure(None)
 
     def _toggle_log(self, checked: bool) -> None:
         self.log_panel.setVisible(checked)
@@ -256,18 +290,13 @@ class MainWindow(QtWidgets.QMainWindow):
         reboot()
 
     def _shutdown(self) -> None:
-        self._open_modal(message_card(
-            "Shutdown", "Power off the device?",
-            [("Cancel", "", self._close_modal),
-             ("Power off", "danger", self._do_poweroff)]))
-
-    def _do_poweroff(self) -> None:
+        # No confirmation by design: this is a power-cycle-heavy bench tool, so
+        # the button powers off immediately to save a click.
         from ..config_manager import poweroff
         try:
             poweroff()
         except Exception as exc:
             log.error("poweroff failed: %s", exc)
-            self._close_modal()
             self._show_message("Shutdown failed", str(exc))
 
     # lifecycle

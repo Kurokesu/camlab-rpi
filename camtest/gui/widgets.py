@@ -14,6 +14,56 @@ from typing import Any
 from ..qt import Qt, QtWidgets, Signal
 
 
+class IconChip(QtWidgets.QFrame):
+    """A pill chip with a left icon image + text as two separate widgets.
+
+    A single QLabel cannot truly vertically center an icon against text (rich
+    text aligns a font glyph to the baseline and an <img> only to keyword
+    positions, both visibly off). Laying the icon (a pixmap) and the text out as
+    two widgets in an HBox lets Qt center each one, exactly like QPushButton does
+    for its icon + text. Style the pill via the `class`/objectName.
+    """
+
+    def __init__(self, parent=None, *, object_name: str = "",
+                 chip_class: str = "chip", icon_size: int = 21):
+        super().__init__(parent)
+        if object_name:
+            self.setObjectName(object_name)
+        if chip_class:
+            self.setProperty("class", chip_class)
+        self._icon_size = icon_size
+        row = QtWidgets.QHBoxLayout(self)
+        row.setContentsMargins(9, 3, 9, 3)
+        row.setSpacing(6)
+        self.icon_lbl = QtWidgets.QLabel(self)
+        self.icon_lbl.setObjectName("chipIcon")
+        self.icon_lbl.setAlignment(Qt.AlignCenter)
+        self.text_lbl = QtWidgets.QLabel(self)
+        self.text_lbl.setObjectName("chipText")
+        row.addWidget(self.icon_lbl)
+        row.addWidget(self.text_lbl)
+
+    def icon_size(self) -> int:
+        return self._icon_size
+
+    def set_content(self, pixmap: Any, text: str) -> None:
+        """Set the icon pixmap (None/null hides it) and the (rich) text."""
+        if pixmap is not None and not pixmap.isNull():
+            self.icon_lbl.setPixmap(pixmap)
+            self.icon_lbl.show()
+        else:
+            self.icon_lbl.clear()
+            self.icon_lbl.hide()
+        self.text_lbl.setText(text)
+
+    def set_state(self, state: str) -> None:
+        """Set a `state` property and re-polish so the stylesheet re-applies."""
+        self.setProperty("state", state)
+        for w in (self, self.text_lbl, self.icon_lbl):
+            w.style().unpolish(w)
+            w.style().polish(w)
+
+
 class SegmentedSelector(QtWidgets.QWidget):
     """An exclusive row of buttons - a dropdown replacement with no popup.
 

@@ -1,14 +1,15 @@
 """Material Symbols icon helper.
 
 The bundled font (assets/MaterialSymbolsOutlined.ttf, from Google Fonts) is loaded
-once into Qt. Icons are referenced by name and rendered two ways:
+once into Qt. Icons are referenced by name and painted from the glyph:
 
-  - html(name, ...)  -> a rich-text <span> for inline use inside a QLabel, so an
-    icon can sit next to text and inherit the label's (state-driven) color.
-  - icon(name, ...)  -> a QIcon painted from the glyph, for QPushButton.setIcon.
+  - pixmap(name, ...) -> a QPixmap, for an inline icon QLabel (see IconChip).
+  - icon(name, ...)   -> a QIcon, for QPushButton.setIcon.
+  - cached_png(...)   -> a glyph rasterised to a PNG on disk, for stylesheets
+    that need an `image: url(...)` (e.g. the checkbox tick).
 
-If the font fails to load (e.g. asset missing), html() falls back to a short
-ASCII token and icon() returns an empty QIcon, so the UI degrades to text.
+If the font fails to load (e.g. asset missing), pixmap() returns a transparent
+pixmap and icon() an empty QIcon, so the UI degrades to text-only.
 """
 
 from __future__ import annotations
@@ -29,19 +30,6 @@ _CODEPOINTS: dict[str, int] = {
     "terminal": 0xEB8E,
     "sensors": 0xE51E,
     "tune": 0xE429,
-}
-
-# Shown if the icon font could not be loaded.
-_ASCII_FALLBACK: dict[str, str] = {
-    "check": "x",
-    "check_circle": "ok",
-    "error": "x",
-    "warning": "!",
-    "power_settings_new": "",
-    "photo_camera": "",
-    "terminal": "",
-    "sensors": "",
-    "tune": "",
 }
 
 _FAMILY: str | None = None
@@ -75,17 +63,6 @@ def _glyph(name: str) -> str:
     return chr(cp)
 
 
-def html(name: str, size_px: int = 16, color: str | None = None) -> str:
-    """Inline <span> for a QLabel. Omit color to inherit the label's text color."""
-    glyph = _glyph(name)
-    if not glyph:
-        return _ASCII_FALLBACK.get(name, "")
-    style = f"font-family:'{_FAMILY}';font-size:{size_px}px;"
-    if color:
-        style += f"color:{color};"
-    return f"<span style=\"{style}\">{glyph}</span>"
-
-
 def pixmap(name: str, size_px: int, color: str = "#d7dae0") -> QtGui.QPixmap:
     glyph = _glyph(name)
     pm = QtGui.QPixmap(size_px, size_px)
@@ -102,7 +79,7 @@ def pixmap(name: str, size_px: int, color: str = "#d7dae0") -> QtGui.QPixmap:
     return pm
 
 
-def icon(name: str, size_px: int = 18, color: str = "#d7dae0") -> QtGui.QIcon:
+def icon(name: str, size_px: int = 22, color: str = "#d7dae0") -> QtGui.QIcon:
     return QtGui.QIcon(pixmap(name, size_px, color))
 
 

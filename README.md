@@ -33,7 +33,7 @@ For partial reconfigures on a dev box, run any primitive under `scripts/setup/` 
 ## What it shows
 
 - **Live preview**, hardware-accelerated via `QGlPicamera2` (PyQt5 + OpenGL).
-- **Status strip**: selected sensor + port, detected model, capture mode + fps, boot-to-preview time.
+- **Status strip**: detected model, capture mode, instantaneous fps (computed rpicam-style from sensor timestamps), actual exposure + analogue/digital gain, sensor temperature (when the sensor reports it), boot-to-preview time.
 - **Integrity indicator**: a live count + rate of camera-stack errors, prominent when non-zero (see below).
 - **Sensor selector**: pick sensor + CSI port, then apply and reboot.
 - **Mode selector**: pick resolution, bit depth, and fps at runtime; applied live and remembered across reboots.
