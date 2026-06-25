@@ -42,6 +42,11 @@ class PreviewArea(QtWidgets.QWidget):
             self._live.setStyleSheet("font-size: 22px; color: #e06c75;")
         self._freeze = QtWidgets.QLabel()
         self._freeze.setAlignment(Qt.AlignCenter)
+        # The frozen still is a full-resolution pixmap. Without this its size hint
+        # inflates the stacked layout's minimum and pins the preview at full
+        # height even after it is cleared, so the log can no longer claim space.
+        self._freeze.setSizePolicy(QtWidgets.QSizePolicy.Ignored,
+                                   QtWidgets.QSizePolicy.Ignored)
         self._stack.addWidget(self._live)
         self._stack.addWidget(self._freeze)
 
