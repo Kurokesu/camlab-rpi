@@ -236,11 +236,13 @@ class MainWindow(QtWidgets.QMainWindow):
         log.info("first frame at boot time=%.1fs", boot_time)
 
     def _update_status(self) -> None:
-        fps = self.engine.framerate
-        md = self.engine.last_metadata or {}
+        # One snapshot read: #frame, fps and metadata are guaranteed to be from
+        # the same frame (the camera thread publishes them as one reference).
+        t = self.engine.telemetry
+        md = t.metadata or {}
         # rpicam-style info text: #frame (fps) exp ag dg, refreshed at 10 Hz.
-        self.status.set_telemetry(self.engine.frame_count,
-                                  fps if fps > 0 else None,
+        self.status.set_telemetry(t.frame,
+                                  t.fps if t.fps > 0 else None,
                                   md.get("ExposureTime"),
                                   md.get("AnalogueGain"),
                                   md.get("DigitalGain"))

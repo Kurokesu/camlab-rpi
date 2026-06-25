@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 import os
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .modes import (
     SensorMode,
@@ -29,6 +29,20 @@ from .modes import (
 from .qt import preview_widget_class
 
 log = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class Telemetry:
+    """One frame's live readout, published by the camera thread for the GUI.
+
+    The camera thread builds a fresh instance per frame and swaps it into
+    CameraEngine.telemetry in a single attribute assignment. The GUI reads that
+    one reference, so it always gets #frame, fps and metadata from the same
+    frame without locking (the swap is atomic under CPython).
+    """
+    frame: int = 0
+    fps: float = 0.0
+    metadata: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -61,9 +75,7 @@ class CameraEngine:
         self.sensor_mode: dict = {}
         self.current_mode: SensorMode | None = None
         self.current_fps: float | None = None
-        self.framerate = 0.0          # instantaneous fps (rpicam-style)
-        self.frame_count = 0          # libcamera request sequence (rpicam #frame)
-        self.last_metadata: dict = {}  # latest per-frame libcamera metadata
+        self.telemetry = Telemetry()  # latest per-frame snapshot (camera -> GUI)
         self._last_ts = 0             # previous SensorTimestamp (ns), for fps
         self._started = False
         self._first_frame_cb = None
@@ -205,18 +217,22 @@ class CameraEngine:
         # Camera thread, per delivered frame. fps is rpicam-style: 1e9 / the delta
         # between consecutive SensorTimestamps (ns), so a dropped frame reads as a
         # lower rate. #frame is the libcamera request sequence, not a metadata field.
+        prev = self.telemetry
         lib_req = getattr(request, "request", None)
-        if lib_req is not None:
-            self.frame_count = lib_req.sequence
+        frame = lib_req.sequence if lib_req is not None else prev.frame
         try:
-            self.last_metadata = request.get_metadata()
-        except Exception:  # never let telemetry break capture
-            pass
-        ts = self.last_metadata.get("SensorTimestamp")
+            md = request.get_metadata()
+        except Exception:  # keep the last metadata on a parse failure
+            md = prev.metadata
+        fps = prev.fps
+        ts = md.get("SensorTimestamp")
         if ts is not None:
             if self._last_ts and ts != self._last_ts:
-                self.framerate = 1e9 / (ts - self._last_ts)
+                fps = 1e9 / (ts - self._last_ts)
             self._last_ts = ts
+        # Publish the frame's readout as one snapshot so the GUI reads a
+        # consistent set (single atomic swap, no lock needed).
+        self.telemetry = Telemetry(frame=frame, fps=fps, metadata=md)
         if self._snap_cb is not None:
             cb, self._snap_cb = self._snap_cb, None
             try:
@@ -238,11 +254,10 @@ class CameraEngine:
             raise RuntimeError("camera not opened")
         if self.current_mode is None:
             raise RuntimeError("camera not configured (call configure_mode first)")
-        # Fresh run: clear the per-frame placeholders so a mode switch reads as a
-        # new capture (libcamera resets the request sequence itself on start).
-        self.frame_count = 0
+        # Fresh run: clear the last snapshot so a mode switch reads as a new
+        # capture (libcamera resets the request sequence itself on start).
+        self.telemetry = Telemetry()
         self._last_ts = 0
-        self.framerate = 0.0
         self.picam2.pre_callback = self._pre_callback
         self.picam2.start()
         self._started = True
