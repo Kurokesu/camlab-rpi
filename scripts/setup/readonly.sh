@@ -21,7 +21,8 @@
 #   1. packages   overlayroot + initramfs tooling
 #   2. data       loopback image -> /var/lib/camtest (fstab, survives the overlay)
 #   3. overlay    overlayroot.local.conf + auto_initramfs + update-initramfs
-#   4. finalise   install the finaliser script + arm the one-shot unit
+#   4. swap       force zram swap (no swapfile under the overlay)
+#   5. finalise   install the finaliser script + arm the one-shot unit
 #
 # Safe to re-run. Requires sudo. --revert undoes every stage and unlocks the box
 # (the unlock takes effect on the next reboot).
@@ -67,6 +68,11 @@ OVERLAY_CONF="/etc/overlayroot.local.conf"
 # overlay mount, exit 32), leaving the box in 'degraded' state with FAILED lines
 # on the console. See systemd issue #39558.
 REMOUNT_DROPIN="/etc/systemd/system.conf.d/overlayfs.conf"
+# rpi-swap drop-in. Trixie defaults to a /var/swap file (Mechanism auto picks
+# zram+file), which cannot be created under the tmpfs overlay (truncate fails,
+# No space left) and loops on restart. Force plain zram: compressed RAM swap, no
+# disk writes, no eMMC wear, and it removes any stale swapfile itself.
+SWAP_DROPIN="/etc/rpi/swap.conf.d/camtest-readonly.conf"
 FINALISE_SCRIPT="/usr/local/sbin/camtest-readonly-finalise"
 ONESHOT_UNIT="camtest-readonly-firstboot.service"
 
@@ -231,14 +237,26 @@ stage_overlay() {
     log "3) refreshed initramfs"
 }
 
-# Stage 4: finaliser script + one-shot unit. This is what actually locks the box
-# down, on the NEXT boot, after the writable settle-boot.
+# Stage 4: swap mechanism. Switch rpi-swap to plain zram so it never tries to
+# write a swapfile onto the read-only/tmpfs root.
+stage_swap() {
+    if [ "$REVERT" -eq 1 ]; then
+        [ -f "$SWAP_DROPIN" ] && { rm -f "$SWAP_DROPIN"; log "4) removed $SWAP_DROPIN"; }
+        return
+    fi
+    install -d -m 0755 "$(dirname "$SWAP_DROPIN")"
+    _atomic_write "$SWAP_DROPIN" '[Main]'$'\n''Mechanism=zram'$'\n'
+    log "4) wrote $SWAP_DROPIN (zram swap, no swapfile under overlay)"
+}
+
+# Stage 5: finaliser script + one-shot unit. This is what actually locks the box
+# down, on the NEXT boot, after the writable settle-boot. Must be the last stage.
 stage_finalise() {
     if [ "$REVERT" -eq 1 ]; then
         systemctl disable "$ONESHOT_UNIT" >/dev/null 2>&1 || true
         rm -f "/etc/systemd/system/$ONESHOT_UNIT" "$FINALISE_SCRIPT"
         systemctl daemon-reload 2>/dev/null || true
-        log "4) removed finaliser + one-shot unit"
+        log "5) removed finaliser + one-shot unit"
         return
     fi
 
@@ -290,12 +308,12 @@ sync
 systemctl reboot
 FINEOF
     chmod 0755 "$FINALISE_SCRIPT"
-    log "4) installed finaliser $FINALISE_SCRIPT"
+    log "5) installed finaliser $FINALISE_SCRIPT"
 
     cp "$REPO_DIR/deploy/$ONESHOT_UNIT" "/etc/systemd/system/$ONESHOT_UNIT"
     systemctl daemon-reload
     systemctl enable "$ONESHOT_UNIT" >/dev/null 2>&1 || true
-    log "4) armed $ONESHOT_UNIT (locks down on next boot)"
+    log "5) armed $ONESHOT_UNIT (locks down on next boot)"
 }
 
 if [ "$REVERT" -eq 1 ]; then
@@ -307,6 +325,7 @@ fi
 stage_packages
 stage_data
 stage_overlay
+stage_swap
 stage_finalise
 
 if [ "$REVERT" -eq 1 ]; then
