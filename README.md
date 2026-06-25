@@ -15,17 +15,17 @@ sudo apt update && sudo apt full-upgrade -y
 sudo reboot
 ```
 
-3. Download the repo zip and copy it to the rpi (from your host):
+3. Download the latest release zip from Gitea and copy it to the rpi (from your host):
 
 ```bash
-scp main.zip <username>@<hostname>:~/
+scp <version>.zip <username>@<hostname>:~/
 ```
 
 4. Unzip and install (on the rpi):
 
 ```bash
 ssh <username>@<hostname>
-unzip main.zip && cd camtest-rpi
+unzip <version>.zip && cd camtest-rpi
 sudo ./install.sh
 ```
 
