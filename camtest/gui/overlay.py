@@ -62,9 +62,13 @@ class ModalOverlay(QtWidgets.QWidget):
         outer.addStretch(1)
 
         host.installEventFilter(self)
-        # Trap Tab and Enter for the whole app while shown: a plain QWidget is not
-        # a focus scope, so without this Tab would escape into the dimmed chrome.
-        QtWidgets.QApplication.instance().installEventFilter(self)
+        # Trap Tab for the whole app while shown: a plain QWidget is not a focus
+        # scope, so without this Tab would escape into the dimmed chrome. instance()
+        # is always set here (this widget can only exist under a QApplication), but
+        # guard anyway to mirror dismiss().
+        self._app = QtWidgets.QApplication.instance()
+        if self._app is not None:
+            self._app.installEventFilter(self)
         self.setGeometry(host.rect())
         self.raise_()
         self.show()
@@ -146,9 +150,8 @@ class ModalOverlay(QtWidgets.QWidget):
 
     def dismiss(self) -> None:
         self._host.removeEventFilter(self)
-        app = QtWidgets.QApplication.instance()
-        if app is not None:
-            app.removeEventFilter(self)
+        if self._app is not None:
+            self._app.removeEventFilter(self)
         self.hide()
         self.deleteLater()
 
