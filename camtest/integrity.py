@@ -3,8 +3,9 @@
 libcamera (and its IPA proxy child) log to stderr. We splice fd 2 onto a pipe so
 we can (a) re-emit every byte to the real stderr -> journald (nothing lost) and
 (b) feed each line through a classifier. Matched lines (e.g. AR0822 embedded-data
-parse failures from a marginal CSI cable) drive a live count + rate that the
-status strip surfaces as a FACT (no pass/fail verdict, per spec).
+parse failures from a marginal CSI cable) are split by severity (error vs
+warning) into two running counts the status strip surfaces as FACTs (no pass/fail
+verdict, per spec).
 
 fd splicing must happen before Picamera2()/libcamera init so the IPA child
 inherits the redirected fd.
@@ -16,7 +17,6 @@ import collections
 import os
 import re
 import threading
-import time
 from dataclasses import dataclass, field
 
 from .qt import QtCore, Signal
@@ -41,6 +41,33 @@ CATEGORY_LABELS: dict[str, str] = {
     "v4l2_error": "V4L2 error",
 }
 
+# Severity fallback per category, used only when a matched line carries no
+# explicit libcamera level token. Corruption / driver failures are errors.
+# Transient per-frame hiccups are warnings.
+CATEGORY_SEVERITY: dict[str, str] = {
+    "embedded_data": "error",
+    "register_tags": "error",
+    "csi_crc": "error",
+    "v4l2_error": "error",
+    "frame_timeout": "warning",
+    "frame_drop": "warning",
+}
+
+# libcamera prefixes each line with a level word (e.g. "... ERROR RPI ...").
+_LEVEL_RE = re.compile(r"\b(ERROR|FATAL|WARN(?:ING)?)\b")
+
+
+def severity_for(line: str, category: str) -> str:
+    """'error' or 'warning' for a matched line.
+
+    Prefer libcamera's own level word. Fall back to the category default when a
+    matched line has none.
+    """
+    m = _LEVEL_RE.search(line)
+    if m:
+        return "error" if m.group(1) in ("ERROR", "FATAL") else "warning"
+    return CATEGORY_SEVERITY.get(category, "warning")
+
 
 class LogClassifier:
     def __init__(self, patterns: dict[str, str] | None = None):
@@ -53,17 +80,27 @@ class LogClassifier:
                 return cat
         return None
 
+    def classify_with_severity(self, line: str) -> tuple[str | None, str | None]:
+        """(category, severity) for a line, or (None, None) if it matches nothing."""
+        cat = self.classify(line)
+        if cat is None:
+            return None, None
+        return cat, severity_for(line, cat)
+
 
 @dataclass
 class IntegrityStats:
-    total: int = 0
-    rate_hz: float = 0.0
-    window_s: float = 0.0
+    errors: int = 0
+    warnings: int = 0
     by_category: dict[str, int] = field(default_factory=dict)
 
     @property
+    def total(self) -> int:
+        return self.errors + self.warnings
+
+    @property
     def healthy(self) -> bool:
-        return self.total == 0
+        return self.errors == 0 and self.warnings == 0
 
 
 class NullCapture(QtCore.QObject):
@@ -125,43 +162,44 @@ class IntegrityMonitor(QtCore.QObject):
     # NB: do NOT name a signal 'event' - it shadows QObject.event() and aborts.
 
     def __init__(self, classifier: LogClassifier | None = None,
-                 window_s: float = 3.0, emit_hz: float = 4.0, parent=None):
+                 emit_hz: float = 4.0, parent=None):
         super().__init__(parent)
         self._classifier = classifier or LogClassifier()
-        self._window_s = window_s
-        self._recent: collections.deque[float] = collections.deque()
-        self._total = 0
+        self._errors = 0
+        self._warnings = 0
         self._by_cat: collections.Counter = collections.Counter()
+        self._dirty = False
+        # Coalesce bursts: feed() runs on the capture thread for every matched
+        # line. A timer publishes the rolled-up counts only when they changed.
         self._timer = QtCore.QTimer(self)
         self._timer.setInterval(int(1000 / emit_hz))
         self._timer.timeout.connect(self._emit)
         self._timer.start()
 
     def feed(self, line: str) -> None:
-        cat = self._classifier.classify(line)
-        if not cat:
+        cat, sev = self._classifier.classify_with_severity(line)
+        if cat is None:
             return
-        now = time.monotonic()
-        self._recent.append(now)
-        self._total += 1
+        if sev == "error":
+            self._errors += 1
+        else:
+            self._warnings += 1
         self._by_cat[cat] += 1
+        self._dirty = True
         self.matched.emit(cat, line)
 
     def reset(self) -> None:
-        self._recent.clear()
-        self._total = 0
+        self._errors = 0
+        self._warnings = 0
         self._by_cat.clear()
-        self._emit()
+        self._dirty = True
 
     def _emit(self) -> None:
-        now = time.monotonic()
-        cutoff = now - self._window_s
-        while self._recent and self._recent[0] < cutoff:
-            self._recent.popleft()
-        rate = len(self._recent) / self._window_s if self._window_s else 0.0
+        if not self._dirty:
+            return
+        self._dirty = False
         self.stats_changed.emit(IntegrityStats(
-            total=self._total,
-            rate_hz=rate,
-            window_s=self._window_s,
+            errors=self._errors,
+            warnings=self._warnings,
             by_category=dict(self._by_cat),
         ))
