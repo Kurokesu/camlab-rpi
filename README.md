@@ -15,15 +15,21 @@ sudo apt update && sudo apt full-upgrade -y
 sudo reboot
 ```
 
-3. Clone and install:
+3. Download the repo zip and copy it to the rpi (from your host):
 
 ```bash
-git clone http://git.kurokesu.internal/Kurokesu-Electronics/camtest-rpi.git
-cd camtest-rpi
+scp main.zip <username>@<hostname>:~/
+```
+
+4. Unzip and install (on the rpi):
+
+```bash
+ssh <username>@<hostname>
+unzip main.zip && cd camtest-rpi
 sudo ./install.sh
 ```
 
-4. Reboot. Device auto-reboots once more on its own to init the read-only root, then camtest application starts automatically.
+5. Reboot. Device auto-reboots once more on its own to init the read-only root, then camtest application starts automatically.
 
 ```bash
 sudo reboot
