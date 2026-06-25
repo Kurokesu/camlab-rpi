@@ -66,19 +66,14 @@ class SensorCard(QtWidgets.QFrame):
         self._rebuild_variant(current_name, self._init_mono)
         self._update_notes(current_name)
 
-        note = QtWidgets.QLabel(
-            "Applying rewrites dtoverlay in config.txt")
-        note.setObjectName("modalText")
-        note.setWordWrap(True)
-
         buttons = QtWidgets.QHBoxLayout()
-        buttons.addStretch(1)
         cancel_btn = QtWidgets.QPushButton("Cancel")
         cancel_btn.clicked.connect(on_cancel)
         apply_btn = QtWidgets.QPushButton("Apply && Reboot")
         apply_btn.setObjectName("danger")
         apply_btn.clicked.connect(self._apply)
         buttons.addWidget(cancel_btn)
+        buttons.addStretch(1)
         buttons.addWidget(apply_btn)
 
         lay = QtWidgets.QVBoxLayout(self)
@@ -86,7 +81,6 @@ class SensorCard(QtWidgets.QFrame):
         lay.setSpacing(14)
         lay.addLayout(header)
         lay.addLayout(form)
-        lay.addWidget(note)
         lay.addLayout(buttons)
 
     def _on_sensor_changed(self) -> None:

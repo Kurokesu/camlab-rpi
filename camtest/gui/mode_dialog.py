@@ -66,12 +66,12 @@ class ModeCard(QtWidgets.QFrame):
         form.addRow("FPS:", self.fps_sel)
 
         buttons = QtWidgets.QHBoxLayout()
-        buttons.addStretch(1)
         cancel_btn = QtWidgets.QPushButton("Cancel")
         cancel_btn.clicked.connect(on_cancel)
         apply_btn = QtWidgets.QPushButton("Apply")
         apply_btn.clicked.connect(self._apply)
         buttons.addWidget(cancel_btn)
+        buttons.addStretch(1)
         buttons.addWidget(apply_btn)
 
         lay = QtWidgets.QVBoxLayout(self)
