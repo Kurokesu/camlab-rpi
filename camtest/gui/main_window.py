@@ -9,7 +9,7 @@ from ..camera import CameraEngine
 from ..config_manager import ConfigManager
 from ..integrity import IntegrityMonitor, LogClassifier, StderrCapture
 from ..modes import mode_for
-from ..qt import QtCore, QtWidgets, Signal, Slot
+from ..qt import Qt, QtCore, QtWidgets, Signal, Slot
 from ..sensors import SensorRegistry
 from ..settings import SettingsStore
 from . import icons
@@ -19,26 +19,28 @@ from .overlay import ModalOverlay, message_card
 from .preview_area import PreviewArea
 from .sensor_dialog import SensorCard
 from .status_strip import StatusStrip
+from .widgets import vline
 
 log = logging.getLogger(__name__)
 
+# On-screen icon size for the control-bar buttons.
+_ICON_PX = 21
+
 _STYLE = """
 QWidget { background: #1b1d22; color: #d7dae0; font-size: 13px; }
-QFrame#statusStrip { background: #23262d; border-top: 1px solid #2f333c; }
-QLabel[class="chip"] { color: #aeb4bf; background: #2a2e36; border-radius: 4px;
-                       padding: 3px 9px; }
-QFrame[class="chip"] { background: #2a2e36; border-radius: 4px; }
-QFrame[class="chip"] QLabel { background: transparent; color: #aeb4bf; }
-QFrame#integrity { border-radius: 4px; }
-QFrame#integrity QLabel { background: transparent; font-weight: 600; }
-QFrame#integrity[state="ok"]   QLabel { color: #98c379; }
-QFrame#integrity[state="warn"] { background: #3a3320; }
-QFrame#integrity[state="warn"] QLabel { color: #e5c07b; }
-QFrame#integrity[state="bad"]  { background: #b3402f; }
-QFrame#integrity[state="bad"]  QLabel { color: #ffffff; }
+QFrame#statusStrip { background: #23262d; border-bottom: 1px solid #2f333c; }
+QFrame#controls { background: #1b1d22; border-top: 1px solid #2f333c; }
+QFrame#vsep, QFrame#hsep { background: #3a3f4b; }
+QFrame#statusStrip QWidget { background: transparent; }
+QLabel#telemetry { color: #c4c9d2; }
+QLabel#bootInfo { color: #8a909b; }
+QLabel#errCount[sev="ok"], QLabel#warnCount[sev="ok"] { color: #98c379; }
+QLabel#errCount[sev="alert"]  { color: #e06c75; font-weight: 600; }
+QLabel#warnCount[sev="alert"] { color: #e5c07b; font-weight: 600; }
 QPushButton { background: #2c303a; border: 1px solid #3a3f4b; border-radius: 5px;
               padding: 6px 12px; }
 QPushButton:hover { background: #353b47; }
+QPushButton:checked { background: #3d4858; border-color: #7f8aa0; color: #ffffff; }
 QPushButton#danger { border-color: #803126; }
 QPushButton#danger:hover { background: #50211a; }
 QPushButton#segment { background: #262a33; border: 1px solid #3a3f4b; border-radius: 5px;
@@ -92,46 +94,57 @@ class MainWindow(QtWidgets.QMainWindow):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
+        # Split bars: live facts on top, controls on the bottom, preview between.
+        self.status = StatusStrip()
+        root.addWidget(self.status)
+
         # preview (live GL + frozen frost backdrop for modals)
         self.preview_area = PreviewArea(engine)
         self.preview_area.setSizePolicy(QtWidgets.QSizePolicy.Expanding,
                                         QtWidgets.QSizePolicy.Expanding)
         root.addWidget(self.preview_area, 1)
 
-        # status strip
-        self.status = StatusStrip()
-        root.addWidget(self.status)
-
-        # controls
-        controls = QtWidgets.QHBoxLayout()
-        controls.setContentsMargins(10, 6, 10, 6)
-        controls.setSpacing(8)
-        self.sensor_btn = QtWidgets.QPushButton(icons.icon("photo_camera"), " Sensor...")
+        # Sensor/Mode are merged status+chooser buttons. Shutdown is fenced behind
+        # a divider on the right so it is never a mis-click from Log.
+        controls = QtWidgets.QFrame()
+        controls.setObjectName("controls")
+        crow = QtWidgets.QHBoxLayout(controls)
+        crow.setContentsMargins(10, 6, 10, 6)
+        crow.setSpacing(8)
+        self.sensor_btn = QtWidgets.QPushButton()
         self.sensor_btn.clicked.connect(self._choose_sensor)
-        self.mode_btn = QtWidgets.QPushButton(icons.icon("tune"), " Mode...")
+        self.mode_btn = QtWidgets.QPushButton()
         self.mode_btn.clicked.connect(self._choose_mode)
         self.mode_btn.setEnabled(bool(self.engine.modes))
-        self.log_btn = QtWidgets.QPushButton(icons.icon("terminal"), " Log")
+        self.log_btn = QtWidgets.QPushButton(icons.icon("terminal", _ICON_PX), " Log")
         self.log_btn.setCheckable(True)
         self.log_btn.toggled.connect(self._toggle_log)
         self.shutdown_btn = QtWidgets.QPushButton(
-            icons.icon("power_settings_new", color="#d98b80"), " Shutdown")
+            icons.icon("power_settings_new", _ICON_PX, "#d98b80"), " Shutdown")
         self.shutdown_btn.setObjectName("danger")
         self.shutdown_btn.clicked.connect(self._shutdown)
 
-        # QPushButton otherwise clamps the icon to the style's small default;
-        # set an explicit size so the larger glyph actually shows.
+        # QPushButton clamps the icon to a small default, so set the size explicitly.
         for btn in (self.sensor_btn, self.mode_btn, self.log_btn, self.shutdown_btn):
-            btn.setIconSize(QtCore.QSize(21, 21))
+            btn.setIconSize(QtCore.QSize(_ICON_PX, _ICON_PX))
+            btn.setCursor(Qt.PointingHandCursor)
 
-        controls.addWidget(self.sensor_btn)
-        controls.addWidget(self.mode_btn)
-        controls.addStretch(1)
-        controls.addWidget(self.log_btn)
-        controls.addWidget(self.shutdown_btn)
-        root.addLayout(controls)
+        crow.addWidget(self.sensor_btn)
+        crow.addSpacing(6)
+        crow.addWidget(vline())
+        crow.addSpacing(6)
+        crow.addWidget(self.mode_btn)
+        crow.addStretch(1)
+        crow.addWidget(self.log_btn)
+        crow.addSpacing(6)
+        crow.addWidget(vline())
+        crow.addSpacing(6)
+        crow.addWidget(self.shutdown_btn)
+        root.addWidget(controls)
 
-        # log panel (collapsed by default)
+        # Log panel (collapsed by default) sits below the controls, never abutting
+        # the preview: the preview is a native EGL surface that overlaps adjacent
+        # siblings. Both stretch 1, so opening the log shrinks the preview to fit.
         self.log_panel = LogPanel(classifier)
         self.log_panel.setVisible(False)
         root.addWidget(self.log_panel, 1)
@@ -139,22 +152,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self._wire()
         self._populate_static()
 
-        # Sample the engine ~10x/sec for live telemetry: the instantaneous fps
-        # (computed rpicam-style from sensor timestamps) plus the actual exposure
-        # and gains from the per-frame metadata. 100 ms is about the fastest a
-        # changing number stays readable.
+        # Sample telemetry at 10 Hz (100 ms): about the fastest a changing number
+        # stays readable.
         self._status_timer = QtCore.QTimer(self)
         self._status_timer.setInterval(100)
         self._status_timer.timeout.connect(self._update_status)
         self._status_timer.start()
 
         # Qt commits its first surface at the layout's size hint before the
-        # compositor's fullscreen configure lands, so the window flashes small
-        # for a beat on boot. Hide that with a black, screen-sized cover: black
-        # on the compositor's black background is invisible while the window is
-        # small, and it is dropped (revealing the ready chrome) only once the
-        # window is laid out at fullscreen. Sized to the screen, not the central
-        # rect, so it covers fully regardless of the window's transient size.
+        # compositor's fullscreen configure lands, so the window flashes small on
+        # boot. A black, screen-sized cover hides that (invisible on the black
+        # background) until the window is laid out fullscreen, then it is dropped.
         self._boot_cover = QtWidgets.QWidget(central)
         self._boot_cover.setStyleSheet("background: #000;")
         screen = QtWidgets.QApplication.primaryScreen()
@@ -165,9 +173,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @staticmethod
     def _checkbox_tick_style() -> str:
-        # A neutral tick for the checked state (the blue fill clashed with the
-        # palette). Rendered from the icon font to a PNG since Qt stylesheets
-        # need an image url for sub-control glyphs.
+        # Neutral tick for the checked state, rendered from the icon font to a PNG
+        # since Qt stylesheets need an image url for sub-control glyphs.
         path = icons.cached_png("check", 17, "#cdd3dd")
         return f"QCheckBox::indicator:checked {{ image: url({path}); }}" if path else ""
 
@@ -177,7 +184,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.capture.line_received.connect(self.monitor.feed)
         self.monitor.stats_changed.connect(self.status.update_integrity)
         self.first_frame.connect(self._on_first_frame)
-        self.engine.on_first_frame(lambda boottime: self.first_frame.emit(boottime))
+        self.engine.on_first_frame(lambda boot_time: self.first_frame.emit(boot_time))
 
     @staticmethod
     def _is_mono(sensor, options: list[str]) -> bool:
@@ -185,46 +192,72 @@ class MainWindow(QtWidgets.QMainWindow):
         return bool(sensor and sensor.mono_option and sensor.mono_option in options)
 
     def _populate_static(self) -> None:
+        self._refresh_sensor_status()
+        self._refresh_mode_status()
+
+    def _refresh_sensor_status(self) -> None:
+        """Update the merged Sensor chip: selection text plus a detection glyph
+        (green check when the detected module matches, amber when it differs, red
+        when nothing is detected)."""
         cur = self.config.get_current()
         sensor = self.registry.by_overlay(cur["overlay"]) if cur["overlay"] else None
         name = sensor.name if sensor else (cur["overlay"] or "unknown")
         variant = ", mono" if self._is_mono(sensor, cur["options"]) else ""
-        # The button is the single source of truth for the selected sensor + port.
-        self.sensor_btn.setText(f"Sensor: {name} ({cur['port']}{variant})")
+        self.sensor_btn.setText(f" Sensor: {name} ({cur['port']}{variant})")
+
         detected = self.engine.info.model if self.engine.info is not None else None
-        self.status.set_camera(detected, cur["overlay"])
-        self._refresh_mode_status()
+        overlay = cur["overlay"]
+        if not detected:
+            glyph, color, tip = "error", "#e06c75", "No camera detected by libcamera."
+        elif overlay and detected.lower() == overlay.lower():
+            glyph, color, tip = "check_circle", "#98c379", f"Detected {detected} (matches selection)."
+        elif overlay:
+            glyph, color, tip = ("warning", "#e5c07b",
+                                 f"Detected {detected}, selection is {overlay}.")
+        else:
+            glyph, color, tip = "photo_camera", "#aeb4bf", f"Detected {detected}."
+        self.sensor_btn.setIcon(icons.icon(glyph, _ICON_PX, color))
+        self.sensor_btn.setToolTip(tip)
 
     def _refresh_mode_status(self) -> None:
+        """Update the merged Mode chip with the active rpicam-style mode string."""
         m = self.engine.sensor_mode
         if m and m.get("format") and m.get("size"):
             w, h = m["size"]
-            self.status.set_mode(m["format"], f"{w}x{h}")
+            self.mode_btn.setText(f" Mode: {m['format']} {w}x{h}")
         else:
-            self.status.set_mode("-", "-")
+            self.mode_btn.setText(" Mode: --")
+        self.mode_btn.setIcon(icons.icon("tune", _ICON_PX))
 
     # slots
     @Slot(float)
-    def _on_first_frame(self, boottime: float) -> None:
-        self.status.set_boot_time(boottime)
-        log.info("first frame at boottime=%.1fs", boottime)
+    def _on_first_frame(self, boot_time: float) -> None:
+        self.status.set_boot_time(boot_time)
+        log.info("first frame at boot time=%.1fs", boot_time)
 
     def _update_status(self) -> None:
         fps = self.engine.framerate
-        self.status.set_fps(fps if fps > 0 else None)
-        md = self.engine.last_metadata
-        if md:
-            self.status.set_exposure(md.get("ExposureTime"),
-                                     md.get("AnalogueGain"),
-                                     md.get("DigitalGain"))
-            # SensorTemperature comes from the embedded-data parser and is not
-            # offered by every sensor (None -> the chip just stays hidden).
-            self.status.set_temperature(md.get("SensorTemperature"))
-        else:
-            self.status.set_exposure(None)
+        md = self.engine.last_metadata or {}
+        # rpicam-style info text: #frame (fps) exp ag dg, refreshed at 10 Hz.
+        self.status.set_telemetry(self.engine.frame_count,
+                                  fps if fps > 0 else None,
+                                  md.get("ExposureTime"),
+                                  md.get("AnalogueGain"),
+                                  md.get("DigitalGain"))
+        # SensorTemperature comes from the embedded-data parser and is not
+        # offered by every sensor (None -> the last reading sticks).
+        self.status.set_temperature(md.get("SensorTemperature"))
 
     def _toggle_log(self, checked: bool) -> None:
         self.log_panel.setVisible(checked)
+        # The button is how you close it again, so make the open state read as a
+        # pressed toggle (QSS :checked) and relabel it accordingly.
+        if checked:
+            self.log_btn.setIcon(icons.icon("close", _ICON_PX))
+            self.log_btn.setText(" Close log")
+        else:
+            self.log_btn.setIcon(icons.icon("terminal", _ICON_PX))
+            self.log_btn.setText(" Log")
 
     # in-window modals (a Cage kiosk renders separate top-level dialogs as a
     # tiny unusable artifact, so everything is drawn over the main surface).

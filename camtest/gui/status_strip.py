@@ -1,21 +1,17 @@
-"""Status strip - facts about the live capture, including the integrity indicator.
+"""Status strip - the top bar of live, read-only facts about the capture.
 
-Per spec this surfaces facts, never a pass/fail verdict. The integrity chip shows
-a running error count + a rolling rate and turns prominent when > 0.
+Everything here is a FACT, never a pass/fail verdict (per spec). The left side
+mirrors rpicam-hello's default info-text (#frame (fps fps) exp ag dg) plus the
+sensor temperature. The right side carries the boot-to-preview time and two
+independent counters (errors / warnings) that stay green while clear and turn
+red / orange the moment either climbs. Rendered as flat text (no chip boxes) so
+it reads as read-only, visually distinct from the clickable controls below.
 """
 
 from __future__ import annotations
 
-from ..integrity import CATEGORY_LABELS, IntegrityStats
+from ..integrity import CATEGORY_LABELS, CATEGORY_SEVERITY, IntegrityStats
 from ..qt import QtWidgets, Slot
-from . import icons
-from .widgets import IconChip
-
-
-def _chip(parent=None) -> QtWidgets.QLabel:
-    lbl = QtWidgets.QLabel(parent)
-    lbl.setProperty("class", "chip")
-    return lbl
 
 
 class StatusStrip(QtWidgets.QFrame):
@@ -23,75 +19,61 @@ class StatusStrip(QtWidgets.QFrame):
         super().__init__(parent)
         self.setObjectName("statusStrip")
         lay = QtWidgets.QHBoxLayout(self)
-        lay.setContentsMargins(10, 4, 10, 4)
-        lay.setSpacing(14)
+        lay.setContentsMargins(12, 5, 12, 5)
+        lay.setSpacing(16)
 
-        # The selected sensor + port lives on the toolbar button (the control you
-        # click to change it). The strip only carries live, complementary facts:
-        # what libcamera actually enumerated, the mode, and boot-to-preview.
-        self.camera_lbl = IconChip(self)        # icon + text -> composite chip
-        self.mode_lbl = _chip(self)
-        # fps + exposure + gains are one cluster: all live per-frame telemetry
-        # refreshed together at 10 Hz (matches rpicam-apps' info-text grouping).
-        self.telemetry_lbl = _chip(self)
-        self.boot_lbl = _chip(self)
+        # Live per-frame telemetry, one rpicam-style string refreshed at 10 Hz.
+        self.telemetry_lbl = QtWidgets.QLabel(self)
+        self.telemetry_lbl.setObjectName("telemetry")
+        # One-shot boot-to-preview fact, plus the two integrity counters.
+        self.boot_lbl = QtWidgets.QLabel(self)
+        self.boot_lbl.setObjectName("bootInfo")
+        self.errors_lbl = QtWidgets.QLabel(self)
+        self.errors_lbl.setObjectName("errCount")
+        self.warnings_lbl = QtWidgets.QLabel(self)
+        self.warnings_lbl.setObjectName("warnCount")
 
-        for w in (self.camera_lbl, self.mode_lbl, self.telemetry_lbl,
-                  self.boot_lbl):
-            lay.addWidget(w)
+        # boot + counters anchor right. The telemetry is centred by balancing it
+        # against a left spacer kept as wide as the right cluster, so it sits at
+        # the true centre rather than the midpoint of the leftover space.
+        self._right = QtWidgets.QWidget(self)
+        rrow = QtWidgets.QHBoxLayout(self._right)
+        rrow.setContentsMargins(0, 0, 0, 0)
+        rrow.setSpacing(16)
+        rrow.addWidget(self.boot_lbl)
+        rrow.addWidget(self.errors_lbl)
+        rrow.addWidget(self.warnings_lbl)
+        self._left = QtWidgets.QWidget(self)
+
+        lay.addWidget(self._left)
         lay.addStretch(1)
+        lay.addWidget(self.telemetry_lbl)
+        lay.addStretch(1)
+        lay.addWidget(self._right)
 
+        self._frame: int | None = None
         self._fps: float | None = None
         self._exp_us: float | None = None
         self._ag: float | None = None
         self._dg: float | None = None
         self._temp: float | None = None
 
-        self.integrity_lbl = IconChip(self, object_name="integrity", chip_class="")
-        lay.addWidget(self.integrity_lbl)
-
-        self.set_camera(None, None)
-        self.set_mode("-", "-")
-        self.set_fps(None)
-        self.set_exposure(None)
+        self.set_telemetry(None, None)
         self.set_boot_time(None)
         self.update_integrity(IntegrityStats())
+        self._sync_balance()
 
-    def _camera_icon(self, name: str, color: str):
-        return icons.pixmap(name, self.camera_lbl.icon_size(), color)
+    def _sync_balance(self) -> None:
+        """Match the left spacer to the right cluster so telemetry stays centred."""
+        self._left.setFixedWidth(self._right.sizeHint().width())
 
-    def set_camera(self, detected_model: str | None, selected_overlay: str | None) -> None:
-        """Show the enumerated model + whether it matches the selected overlay."""
-        if not detected_model:
-            self.camera_lbl.set_content(
-                self._camera_icon("error", "#e06c75"),
-                "Camera: <span style='color:#e06c75'>not detected</span>")
-        elif selected_overlay and detected_model.lower() == selected_overlay.lower():
-            self.camera_lbl.set_content(
-                self._camera_icon("check_circle", "#98c379"),
-                f"Camera: {detected_model}")
-        elif selected_overlay:
-            self.camera_lbl.set_content(
-                self._camera_icon("warning", "#e5c07b"),
-                f"Camera: {detected_model} "
-                f"<span style='color:#e5c07b'>(sel: {selected_overlay})</span>")
-        else:
-            self.camera_lbl.set_content(
-                self._camera_icon("photo_camera", "#aeb4bf"),
-                f"Camera: {detected_model}")
-
-    def set_mode(self, fmt: str, size: str) -> None:
-        self.mode_lbl.setText(f"Mode: {fmt} {size}")
-
-    def set_fps(self, fps: float | None) -> None:
-        """Instantaneous frame rate (rpicam-style), sampled live by MainWindow."""
+    def set_telemetry(self, frame: int | None, fps: float | None,
+                      exposure_us: float | None = None,
+                      analogue_gain: float | None = None,
+                      digital_gain: float | None = None) -> None:
+        """Live per-frame numbers from the engine + libcamera metadata."""
+        self._frame = frame
         self._fps = fps
-        self._render_telemetry()
-
-    def set_exposure(self, exposure_us: float | None = None,
-                     analogue_gain: float | None = None,
-                     digital_gain: float | None = None) -> None:
-        """Actual per-frame exposure + gains from the libcamera metadata."""
         self._exp_us = exposure_us
         self._ag = analogue_gain
         self._dg = digital_gain
@@ -101,7 +83,7 @@ class StatusStrip(QtWidgets.QFrame):
         """Sensor temperature (degC), if the sensor reports it.
 
         Sticky: a None (sensor doesn't offer it, or a frame's embedded data
-        failed to parse) keeps the last reading instead of dropping the chip.
+        failed to parse) keeps the last reading instead of dropping it.
         """
         if temp_c is None:
             return
@@ -109,46 +91,48 @@ class StatusStrip(QtWidgets.QFrame):
         self._render_telemetry()
 
     def _render_telemetry(self) -> None:
-        """One chip for the live per-frame numbers: FPS | Exp | AG | DG | Temp."""
-        parts = [f"FPS {self._fps:.1f}" if self._fps is not None else "FPS --"]
+        frame = self._frame if self._frame is not None else 0
+        fps = f"{self._fps:.2f}" if self._fps is not None else "--.--"
+        parts = [f"#{frame} ({fps} fps)"]
         if self._exp_us is not None:
-            parts.append(f"Exp {self._exp_us / 1000.0:.2f} ms")
-            if self._ag is not None:
-                parts.append(f"AG {self._ag:.2f}")
-            if self._dg is not None:
-                parts.append(f"DG {self._dg:.2f}")
-        else:
-            parts.append("Exp --")
+            parts.append(f"exp {int(round(self._exp_us))}")
+        if self._ag is not None:
+            parts.append(f"ag {self._ag:.2f}")
+        if self._dg is not None:
+            parts.append(f"dg {self._dg:.2f}")
+        text = " ".join(parts)
         if self._temp is not None:
-            parts.append(f"Temp {self._temp:.1f}\u00b0C")
-        self.telemetry_lbl.setText(" | ".join(parts))
+            text += f" \u00b7 {self._temp:.1f}\u00b0C"
+        self.telemetry_lbl.setText(text)
 
     def set_boot_time(self, seconds: float | None) -> None:
         value = f"{seconds:.1f}s" if seconds is not None else "..."
-        self.boot_lbl.setText(f"boot time: {value}")
+        self.boot_lbl.setText(f"boot time {value}")
+        self._sync_balance()
 
     @Slot(object)
     def update_integrity(self, stats: IntegrityStats) -> None:
-        # The icon is a pixmap, so its color is baked in rather than inherited:
-        # keep it matched to the QFrame#integrity[state=...] text color.
-        size = self.integrity_lbl.icon_size()
-        if stats.healthy:
-            pm = icons.pixmap("check_circle", size, "#98c379")
-            self.integrity_lbl.set_content(pm, "INTEGRITY: clean")
-            self.integrity_lbl.set_state("ok")
-            self.integrity_lbl.setToolTip("No camera-stack integrity errors observed.")
-        else:
-            warn = stats.rate_hz == 0
-            color = "#e5c07b" if warn else "#ffffff"
-            pm = icons.pixmap("warning", size, color)
-            self.integrity_lbl.set_content(
-                pm, f"INTEGRITY: {stats.total} errs ({stats.rate_hz:.0f}/s)")
-            self.integrity_lbl.set_state("warn" if warn else "bad")
-            self.integrity_lbl.setToolTip(self._breakdown(stats))
+        self._set_counter(self.errors_lbl, stats.errors, "errors")
+        self._set_counter(self.warnings_lbl, stats.warnings, "warnings")
+        self.errors_lbl.setToolTip(self._breakdown(stats, "error"))
+        self.warnings_lbl.setToolTip(self._breakdown(stats, "warning"))
+        self._sync_balance()
 
     @staticmethod
-    def _breakdown(stats: IntegrityStats) -> str:
-        lines = ["Camera-stack integrity errors (facts, not a verdict):"]
-        for cat, n in sorted(stats.by_category.items(), key=lambda kv: -kv[1]):
-            lines.append(f"  {CATEGORY_LABELS.get(cat, cat)}: {n}")
-        return "\n".join(lines)
+    def _set_counter(label: QtWidgets.QLabel, count: int, noun: str) -> None:
+        label.setText(f"{count} {noun}")
+        label.setProperty("sev", "alert" if count > 0 else "ok")
+        label.style().unpolish(label)
+        label.style().polish(label)
+
+    @staticmethod
+    def _breakdown(stats: IntegrityStats, severity: str) -> str:
+        noun = "errors" if severity == "error" else "warnings"
+        rows = [
+            f"  {CATEGORY_LABELS.get(cat, cat)}: {n}"
+            for cat, n in sorted(stats.by_category.items(), key=lambda kv: -kv[1])
+            if n and CATEGORY_SEVERITY.get(cat) == severity
+        ]
+        if not rows:
+            return f"No camera-stack {noun} observed."
+        return f"Camera-stack {noun} (facts, not a verdict):\n" + "\n".join(rows)
