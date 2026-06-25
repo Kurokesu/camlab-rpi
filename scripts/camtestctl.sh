@@ -13,6 +13,8 @@
 #   camtestctl logs [journalctl-args]     default: last 200 lines
 #   camtestctl log-level <level>          trace|debug|info|warn|error|off
 #   camtestctl shot [path]                screenshot the live kiosk (needs grim)
+#   camtestctl net <on|off|status>        toggle networking (reversible, off for
+#                                         production, on for SSH dev)
 #   camtestctl rw                         remount root read-write   (Phase 5)
 #   camtestctl ro                         remount root read-only    (Phase 5)
 #   camtestctl help
@@ -75,6 +77,61 @@ cmd_shot() {
     log "saved $out"
 }
 
+# Networking toggle. Production runs headless with no network (faster boot, no
+# attack surface), flipped back on for remote SSH dev. We mask/unmask rather
+# than just disable, so a masked unit can't be pulled in by a dependency
+# either. Only acts on units that exist on this box.
+NET_UNITS=(
+    NetworkManager.service
+    NetworkManager-wait-online.service
+    wpa_supplicant.service
+    systemd-networkd.service
+    systemd-networkd-wait-online.service
+)
+
+_net_present() { systemctl list-unit-files "$1" >/dev/null 2>&1; }
+
+cmd_net() {
+    local action="${1:-status}"
+    case "$action" in
+        on)
+            for u in "${NET_UNITS[@]}"; do
+                _net_present "$u" || continue
+                sudo systemctl unmask "$u" >/dev/null 2>&1 || true
+            done
+            # Bring the primary manager up now so SSH survives without a reboot.
+            for u in NetworkManager.service systemd-networkd.service wpa_supplicant.service; do
+                _net_present "$u" && sudo systemctl enable --now "$u" >/dev/null 2>&1 || true
+            done
+            log "networking ON (unmasked + started). For dev/SSH."
+            ;;
+        off)
+            for u in "${NET_UNITS[@]}"; do
+                _net_present "$u" || continue
+                sudo systemctl disable --now "$u" >/dev/null 2>&1 || true
+                sudo systemctl mask "$u" >/dev/null 2>&1 || true
+            done
+            warn "networking OFF (stopped + masked). Reverse with: camtestctl net on"
+            warn "if run over SSH, this connection is about to drop."
+            ;;
+        status)
+            local any=0 en act
+            for u in "${NET_UNITS[@]}"; do
+                _net_present "$u" || continue
+                any=1
+                # is-enabled/is-active print a word to stdout but exit nonzero
+                # for disabled/inactive units. Keep the word, drop the exit code
+                # (the trailing || true stops set -e aborting on that exit).
+                en="$(systemctl is-enabled "$u" 2>/dev/null || true)"; [ -n "$en" ] || en="n/a"
+                act="$(systemctl is-active "$u" 2>/dev/null || true)"; [ -n "$act" ] || act="inactive"
+                printf "%-42s %s / %s\n" "$u" "$en" "$act"
+            done
+            [ "$any" -eq 1 ] || log "no known network units present on this box"
+            ;;
+        *) die "net: expected on|off|status (got '$action')" ;;
+    esac
+}
+
 cmd_rw() { warn "read-only root not configured yet (Phase 5)."; }
 cmd_ro() { warn "read-only root not configured yet (Phase 5)."; }
 
@@ -89,6 +146,7 @@ case "$cmd" in
     logs)           cmd_logs "$@" ;;
     log-level)      cmd_log_level "$@" ;;
     shot)           cmd_shot "$@" ;;
+    net)            cmd_net "$@" ;;
     rw)             cmd_rw ;;
     ro)             cmd_ro ;;
     -h|--help|help) help_text ;;
