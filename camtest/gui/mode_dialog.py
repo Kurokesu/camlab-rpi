@@ -27,7 +27,7 @@ from ..modes import (
     resolutions,
 )
 from ..qt import QtWidgets
-from .widgets import SegmentedSelector
+from .widgets import SegmentedSelector, hline
 
 
 class ModeCard(QtWidgets.QFrame):
@@ -79,6 +79,7 @@ class ModeCard(QtWidgets.QFrame):
         lay.setSpacing(14)
         lay.addWidget(title)
         lay.addLayout(form)
+        lay.addWidget(hline())
         lay.addLayout(buttons)
 
     def _on_res_changed(self) -> None:

@@ -14,7 +14,7 @@ from collections.abc import Callable
 
 from ..qt import Qt, QtWidgets
 from ..sensors import SensorRegistry
-from .widgets import SegmentedSelector
+from .widgets import SegmentedSelector, hline
 
 
 class SensorCard(QtWidgets.QFrame):
@@ -81,6 +81,7 @@ class SensorCard(QtWidgets.QFrame):
         lay.setSpacing(14)
         lay.addLayout(header)
         lay.addLayout(form)
+        lay.addWidget(hline())
         lay.addLayout(buttons)
 
     def _on_sensor_changed(self) -> None:
