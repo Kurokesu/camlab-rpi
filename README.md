@@ -98,3 +98,4 @@ Run the app directly (under a Cage session) with `python3 -m camtest`. Useful en
 - `CAMTEST_NO_REBOOT` apply config without rebooting (dev)
 - `CAMTEST_NO_CAPTURE` disable stderr splicing (debug)
 - `CAMTEST_QT_BINDING` `pyqt5` (default) or `pyqt6`
+- `QT_QPA_PLATFORM` defaults to `wayland` under a Wayland session (maps fullscreen without the Xwayland small-window flash); set explicitly to force a platform

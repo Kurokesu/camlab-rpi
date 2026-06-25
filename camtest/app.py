@@ -62,6 +62,14 @@ def _setup_logging() -> None:
 def main(argv: list[str] | None = None) -> int:
     _setup_logging()
 
+    # Prefer the native Wayland platform under a Wayland session (e.g. Cage).
+    # Qt5 defaults to xcb (Xwayland), where the window maps at its X11 size and
+    # is only then fullscreened - a visible small-window flash on every boot. A
+    # native Wayland client gets the fullscreen size in its first configure, so
+    # it maps fullscreen immediately. Explicit QT_QPA_PLATFORM still wins.
+    if os.environ.get("WAYLAND_DISPLAY") and "QT_QPA_PLATFORM" not in os.environ:
+        os.environ["QT_QPA_PLATFORM"] = "wayland"
+
     # Splice stderr BEFORE libcamera/Picamera2 init so the IPA child inherits it.
     # StderrCapture is a plain QObject and is safe to build before QApplication.
     capture = NullCapture() if os.environ.get("CAMTEST_NO_CAPTURE") else StderrCapture()
@@ -103,11 +111,9 @@ def main(argv: list[str] | None = None) -> int:
                      settings, display_max_fps, binding_label)
     win.showFullScreen()
 
-    if engine.picam2 is not None and engine.current_mode is not None:
-        try:
-            engine.start()
-        except Exception as exc:
-            log.error("camera start failed: %s", exc)
+    # The camera is started by the window once it reaches fullscreen (see
+    # MainWindow). Starting it here, before the event loop runs, would block with
+    # the window still mapped at its initial size and look like a boot glitch.
 
     rc = app.exec_() if hasattr(app, "exec_") else app.exec()
 

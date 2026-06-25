@@ -80,6 +80,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.monitor = IntegrityMonitor(classifier)
         self._overlay: ModalOverlay | None = None
         self._pending_card: QtWidgets.QWidget | None = None
+        self._boot_cover: QtWidgets.QWidget | None = None
+        self._engine_started = False
 
         self.setWindowTitle("camtest")
         self.setStyleSheet(_STYLE + self._checkbox_tick_style())
@@ -145,6 +147,21 @@ class MainWindow(QtWidgets.QMainWindow):
         self._status_timer.setInterval(100)
         self._status_timer.timeout.connect(self._update_status)
         self._status_timer.start()
+
+        # Qt commits its first surface at the layout's size hint before the
+        # compositor's fullscreen configure lands, so the window flashes small
+        # for a beat on boot. Hide that with a black, screen-sized cover: black
+        # on the compositor's black background is invisible while the window is
+        # small, and it is dropped (revealing the ready chrome) only once the
+        # window is laid out at fullscreen. Sized to the screen, not the central
+        # rect, so it covers fully regardless of the window's transient size.
+        self._boot_cover = QtWidgets.QWidget(central)
+        self._boot_cover.setStyleSheet("background: #000;")
+        screen = QtWidgets.QApplication.primaryScreen()
+        sg = screen.geometry() if screen is not None else central.rect()
+        self._boot_cover.setGeometry(0, 0, sg.width(), sg.height())
+        self._boot_cover.raise_()
+        QtCore.QTimer.singleShot(3000, self._reveal)  # fallback if never resized
 
     @staticmethod
     def _checkbox_tick_style() -> str:
@@ -317,6 +334,37 @@ class MainWindow(QtWidgets.QMainWindow):
             self._show_message("Shutdown failed", str(exc))
 
     # lifecycle
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if self._boot_cover is None:
+            return
+        screen = self.screen() or QtWidgets.QApplication.primaryScreen()
+        if screen is not None and self.width() >= screen.geometry().width() - 1:
+            self._reveal()
+
+    def _reveal(self) -> None:
+        # Window is laid out at fullscreen: drop the boot cover to reveal the
+        # ready chrome, then start the camera one tick later so that frame paints
+        # first (the blocking start would otherwise freeze the just-revealed
+        # chrome before it shows).
+        if self._boot_cover is None:
+            return
+        self._boot_cover.hide()
+        self._boot_cover.deleteLater()
+        self._boot_cover = None
+        QtCore.QTimer.singleShot(0, self._start_engine)
+
+    def _start_engine(self) -> None:
+        if self._engine_started:
+            return
+        self._engine_started = True
+        if self.engine.picam2 is None or self.engine.current_mode is None:
+            return
+        try:
+            self.engine.start()
+        except Exception as exc:
+            log.error("camera start failed: %s", exc)
+
     # No quit affordance by design: this is a kiosk. Exiting drops to a blank
     # tty, which an operator never wants. Stop it with `camtestctl stop`.
     def closeEvent(self, event) -> None:
