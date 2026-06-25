@@ -34,6 +34,7 @@ QFrame#vsep, QFrame#hsep { background: #3a3f4b; }
 QFrame#statusStrip QWidget { background: transparent; }
 QLabel#telemetry { color: #c4c9d2; }
 QLabel#bootInfo { color: #8a909b; }
+QLabel#version { color: #8a909b; }
 QLabel#errCount[sev="ok"], QLabel#warnCount[sev="ok"] { color: #98c379; }
 QLabel#errCount[sev="alert"]  { color: #e06c75; font-weight: 600; }
 QLabel#warnCount[sev="alert"] { color: #e5c07b; font-weight: 600; }

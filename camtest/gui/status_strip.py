@@ -10,6 +10,7 @@ it reads as read-only, visually distinct from the clickable controls below.
 
 from __future__ import annotations
 
+from .. import __version__
 from ..integrity import CATEGORY_LABELS, CATEGORY_SEVERITY, IntegrityStats
 from ..qt import QtWidgets, Slot
 
@@ -34,8 +35,8 @@ class StatusStrip(QtWidgets.QFrame):
         self.warnings_lbl.setObjectName("warnCount")
 
         # boot + counters anchor right. The telemetry is centred by balancing it
-        # against a left spacer kept as wide as the right cluster, so it sits at
-        # the true centre rather than the midpoint of the leftover space.
+        # against a left zone kept as wide as the right cluster, so it sits at the
+        # true centre rather than the midpoint of the leftover space.
         self._right = QtWidgets.QWidget(self)
         rrow = QtWidgets.QHBoxLayout(self._right)
         rrow.setContentsMargins(0, 0, 0, 0)
@@ -43,7 +44,17 @@ class StatusStrip(QtWidgets.QFrame):
         rrow.addWidget(self.boot_lbl)
         rrow.addWidget(self.errors_lbl)
         rrow.addWidget(self.warnings_lbl)
+
+        # Build version on the left so the operator can read the running build at a
+        # glance. It lives in the balanced left zone, so telemetry stays centred.
+        self.version_lbl = QtWidgets.QLabel(f"v{__version__}", self)
+        self.version_lbl.setObjectName("version")
         self._left = QtWidgets.QWidget(self)
+        lrow = QtWidgets.QHBoxLayout(self._left)
+        lrow.setContentsMargins(0, 0, 0, 0)
+        lrow.setSpacing(16)
+        lrow.addWidget(self.version_lbl)
+        lrow.addStretch(1)
 
         lay.addWidget(self._left)
         lay.addStretch(1)
@@ -64,8 +75,11 @@ class StatusStrip(QtWidgets.QFrame):
         self._sync_balance()
 
     def _sync_balance(self) -> None:
-        """Match the left spacer to the right cluster so telemetry stays centred."""
-        self._left.setFixedWidth(self._right.sizeHint().width())
+        """Keep telemetry centred: the left zone matches the right cluster's width,
+        but never narrower than the version text it holds (so it cannot clip)."""
+        width = max(self._right.sizeHint().width(),
+                    self.version_lbl.sizeHint().width())
+        self._left.setFixedWidth(width)
 
     def set_telemetry(self, frame: int | None, fps: float | None,
                       exposure_us: float | None = None,
