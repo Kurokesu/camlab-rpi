@@ -65,15 +65,16 @@ done
 
 require_root
 
-# DKMS builds against the running kernel. If an apt upgrade installed a newer
-# kernel but the box has not rebooted, uname -r is still the old one, so the
-# modules we build now would not load after the next reboot. Refuse to build
-# until the box is on the latest kernel. The newest /lib/modules entry is the
-# latest installed kernel.
-running_kernel="$(uname -r)"
-latest_kernel="$(ls -1 /lib/modules 2>/dev/null | sort -V | tail -1)"
-if [ -n "$latest_kernel" ] && [ "$latest_kernel" != "$running_kernel" ]; then
-    die "running kernel ($running_kernel) is not the latest installed ($latest_kernel). Reboot first, then re-run."
+# DKMS builds against the running kernel. If an apt upgrade installed a new
+# kernel but the box has not rebooted, the modules we build now would not load
+# after the next reboot. Use the canonical reboot-required flag (set by the
+# kernel package post-install) rather than comparing /lib/modules entries, which
+# carries several flavors (rpi-2712, rpi-v8) of the same version and would
+# misfire on a CM5 running the 2712 flavor. The package list lives in the .pkgs
+# companion; we only block when a kernel package is the reason.
+if [ -f /run/reboot-required ] \
+   && grep -qiE 'linux-image|raspi-firmware|rpi-.*kernel' /run/reboot-required.pkgs 2>/dev/null; then
+    die "a kernel update is pending a reboot ($(uname -r) is running). Reboot first, then re-run."
 fi
 
 FW_OVERLAYS="/boot/firmware/overlays"
