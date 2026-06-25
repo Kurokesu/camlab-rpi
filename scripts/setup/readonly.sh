@@ -62,6 +62,11 @@ DATA_MNT="/var/lib/camtest"
 # image costs its full size on disk).
 DATA_SIZE_MB="${CAMTEST_DATA_SIZE_MB:-32}"
 OVERLAY_CONF="/etc/overlayroot.local.conf"
+# Drop-in that forces the legacy mount API. Without it, systemd-remount-fs fails
+# under overlayroot on Trixie (the new kernel mount API cannot reconfigure an
+# overlay mount, exit 32), leaving the box in 'degraded' state with FAILED lines
+# on the console. See systemd issue #39558.
+REMOUNT_DROPIN="/etc/systemd/system.conf.d/overlayfs.conf"
 FINALISE_SCRIPT="/usr/local/sbin/camtest-readonly-finalise"
 ONESHOT_UNIT="camtest-readonly-firstboot.service"
 
@@ -176,6 +181,7 @@ stage_data() {
 stage_overlay() {
     if [ "$REVERT" -eq 1 ]; then
         [ -f "$OVERLAY_CONF" ] && { rm -f "$OVERLAY_CONF"; log "3) removed $OVERLAY_CONF"; }
+        [ -f "$REMOUNT_DROPIN" ] && { rm -f "$REMOUNT_DROPIN"; log "3) removed $REMOUNT_DROPIN"; }
         _strip_block "$CONFIG_TXT"
         # Drop the disable token too, so a clean revert leaves cmdline.txt as it was.
         sed -i 's/ *overlayroot=disabled//g' "$CMDLINE_TXT"
@@ -188,6 +194,14 @@ stage_overlay() {
     # (including our /var/lib/camtest loop) read-only too.
     _atomic_write "$OVERLAY_CONF" 'overlayroot="tmpfs:recurse=0"'$'\n'
     log "3) wrote $OVERLAY_CONF (tmpfs:recurse=0)"
+
+    # Force the legacy mount API so systemd-remount-fs does not fail under the
+    # overlay (Trixie/systemd #39558). Keeps the box out of 'degraded' state and
+    # off the FAILED console lines.
+    install -d -m 0755 "$(dirname "$REMOUNT_DROPIN")"
+    _atomic_write "$REMOUNT_DROPIN" \
+        '[Manager]'$'\n''DefaultEnvironment="LIBMOUNT_FORCE_MOUNT2=always"'$'\n'
+    log "3) wrote $REMOUNT_DROPIN (legacy mount API for remount-fs)"
 
     # auto_initramfs=1 makes the firmware load the initramfs that carries the
     # overlay hook. Managed block so it is reversible.
