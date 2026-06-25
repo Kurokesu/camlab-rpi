@@ -62,6 +62,7 @@ class CameraEngine:
         self.current_mode: SensorMode | None = None
         self.current_fps: float | None = None
         self.framerate = 0.0          # instantaneous fps (rpicam-style)
+        self.frame_count = 0          # libcamera request sequence (rpicam #frame)
         self.last_metadata: dict = {}  # latest per-frame libcamera metadata
         self._last_ts = 0             # previous SensorTimestamp (ns), for fps
         self._started = False
@@ -124,11 +125,9 @@ class CameraEngine:
         full = self.picam2.camera_configuration()
         self.main_config = dict(full["main"])
         self.lores_config = dict(full.get("lores") or {})
-        # The "sensor" config is the actual mode libcamera selected (bit depth +
-        # output size). The "main"/"raw" formats are the ISP output / PiSP
-        # internal formats (XBGR8888 / *_PISP_COMP*), which do NOT match what
-        # rpicam-hello --list-cameras reports. Resolve the real sensor mode so
-        # the GUI shows the same thing (e.g. SGRBG12_CSI2P 3840x2160).
+        # The main/raw formats are ISP/PiSP internal (XBGR8888 / *_PISP_COMP*) and
+        # do not match what rpicam-hello --list-cameras reports, so resolve the
+        # actual sensor mode libcamera selected for the GUI to display.
         self.sensor_config = dict(full.get("sensor") or {})
         self.sensor_mode = self._match_sensor_mode(self.sensor_config)
         self.current_mode = mode
@@ -177,17 +176,16 @@ class CameraEngine:
         return "?"
 
     def make_preview_widget(self, software=False):
-        # IMPORTANT: create the widget WITHOUT a parent. QGlPicamera2 allocates its
-        # EGL window surface in __init__ via winId(). A top-level widget gets a valid
-        # native X window, while an unrealized child parent yields EGL_BAD_ALLOC. The
-        # layout reparents it afterwards (matches the working Phase 1 proto).
+        # Create the widget WITHOUT a parent: QGlPicamera2 allocates its EGL surface
+        # in __init__ via winId(), and an unrealized child parent yields
+        # EGL_BAD_ALLOC. The layout reparents it afterwards.
         cls = preview_widget_class(software=software)
         w, h = self.size
         widget = cls(self.picam2, width=w, height=h, keep_ar=True)
         return widget
 
     def on_first_frame(self, callback) -> None:
-        """Register a one-shot callback(boottime_s) fired on the first captured frame."""
+        """Register a one-shot callback(boot_time_s) fired on the first captured frame."""
         self._first_frame_cb = callback
 
     def request_snapshot(self, callback) -> bool:
@@ -204,11 +202,12 @@ class CameraEngine:
         return True
 
     def _pre_callback(self, request) -> None:
-        # Runs on the camera thread for every delivered frame. Capture the latest
-        # metadata (exposure, gains) and compute the instantaneous frame rate the
-        # same way rpicam-apps does: 1e9 / the delta between consecutive
-        # SensorTimestamps (nanoseconds). A dropped frame widens the delta and so
-        # shows up as a lower rate. The GUI samples both for the readout.
+        # Camera thread, per delivered frame. fps is rpicam-style: 1e9 / the delta
+        # between consecutive SensorTimestamps (ns), so a dropped frame reads as a
+        # lower rate. #frame is the libcamera request sequence, not a metadata field.
+        lib_req = getattr(request, "request", None)
+        if lib_req is not None:
+            self.frame_count = lib_req.sequence
         try:
             self.last_metadata = request.get_metadata()
         except Exception:  # never let telemetry break capture
@@ -227,10 +226,10 @@ class CameraEngine:
                 log.exception("freeze-frame grab failed")
         if not self._first_frame_seen:
             self._first_frame_seen = True
-            boottime = time.clock_gettime(time.CLOCK_BOOTTIME)
+            boot_time = time.clock_gettime(time.CLOCK_BOOTTIME)
             if self._first_frame_cb:
                 try:
-                    self._first_frame_cb(boottime)
+                    self._first_frame_cb(boot_time)
                 except Exception:  # never let UI timing break capture
                     log.exception("first-frame callback failed")
 
@@ -239,6 +238,11 @@ class CameraEngine:
             raise RuntimeError("camera not opened")
         if self.current_mode is None:
             raise RuntimeError("camera not configured (call configure_mode first)")
+        # Fresh run: clear the per-frame placeholders so a mode switch reads as a
+        # new capture (libcamera resets the request sequence itself on start).
+        self.frame_count = 0
+        self._last_ts = 0
+        self.framerate = 0.0
         self.picam2.pre_callback = self._pre_callback
         self.picam2.start()
         self._started = True
