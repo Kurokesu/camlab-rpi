@@ -1,11 +1,14 @@
-"""Sensor selection card - pick sensor + CSI port (+ color/mono), then reboot.
+"""Sensor selection card - pick sensor + CSI port (+ color/mono), then shut down.
 
 Rendered inside a ModalDialog (not a separate window, which a Cage kiosk renders
 unreliably). Changing the sensor overlay requires a reboot (dtoverlay is read at
-boot), so the primary action is explicit about it. Port (cam0/cam1) is a per-rig
-setting. The Color/Mono variant is a per-rig choice too, shown only for sensors
-that ship in both and cannot auto-detect (Sensor.mono_capable). The selected
-sensor's free-form note (Sensor.notes) is shown to the right of the title.
+boot), but a swap means physically changing the sensor, which needs the box
+powered off anyway. So apply writes config.txt and shuts down: the operator
+swaps the sensor while it is off, then powers back on to the new overlay. Port
+(cam0/cam1) is a per-rig setting. The Color/Mono variant is a per-rig choice too,
+shown only for sensors that ship in both and cannot auto-detect
+(Sensor.mono_capable). The selected sensor's free-form note (Sensor.notes) is
+shown to the right of the title.
 """
 
 from __future__ import annotations
@@ -69,10 +72,10 @@ class SensorCard(QtWidgets.QFrame):
         buttons = QtWidgets.QHBoxLayout()
         cancel_btn = QtWidgets.QPushButton("Cancel")
         cancel_btn.clicked.connect(on_cancel)
-        apply_btn = QtWidgets.QPushButton("Apply && Reboot")
+        apply_btn = QtWidgets.QPushButton("Apply && Shutdown")
         apply_btn.setObjectName("danger")
         apply_btn.clicked.connect(self._apply)
-        # Apply here reboots, so a bare Enter must not trigger it: Cancel is the
+        # Apply here powers off, so a bare Enter must not trigger it: Cancel is the
         # primary target (what Enter hits before tabbing to a button). Applying
         # needs a deliberate Tab-to-Apply then Enter, or a click.
         self.primary_button = cancel_btn

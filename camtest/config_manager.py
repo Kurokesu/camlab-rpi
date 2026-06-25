@@ -160,10 +160,6 @@ class ConfigManager:
         return out
 
 
-def reboot() -> None:
-    subprocess.run(["sudo", "systemctl", "reboot"], check=True)
-
-
 def poweroff() -> None:
     subprocess.run(["sudo", "systemctl", "poweroff"], check=True)
 

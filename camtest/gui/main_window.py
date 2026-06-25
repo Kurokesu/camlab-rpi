@@ -409,18 +409,20 @@ class MainWindow(QtWidgets.QMainWindow):
         variant = " (mono)" if mono and chosen.mono_option else ""
         try:
             self.config.apply(chosen.overlay, port, options)
-        except Exception as exc:  # surface the failure, do not reboot
+        except Exception as exc:  # surface the failure, do not power off
             self._show_message("Apply failed", str(exc))
             return
         if os.environ.get("CAMTEST_NO_REBOOT"):
             self._populate_static()
             self._show_message(
-                "Applied (reboot skipped)",
+                "Applied (shutdown skipped)",
                 f"config.txt updated: {chosen.overlay}{variant} on {port}.\n"
-                "CAMTEST_NO_REBOOT set - reboot manually to load it.")
+                "CAMTEST_NO_REBOOT set - power off and swap the sensor manually.")
             return
-        from ..config_manager import reboot
-        reboot()
+        # A sensor swap needs the box off, so power down rather than reboot: the
+        # operator swaps while it is off, then powers on to the new overlay.
+        from ..config_manager import poweroff
+        poweroff()
 
     def _shutdown(self) -> None:
         # No confirmation by design: this is a power-cycle-heavy bench tool, so
