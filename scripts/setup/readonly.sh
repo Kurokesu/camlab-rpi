@@ -3,9 +3,9 @@
 # Copyright (C) 2026, UAB Kurokesu
 #
 # Overlay (read-only) root (Phase 5). Makes the rootfs tolerant of yanked power -
-# the field failure mode for a bench tool. NOT yet implemented, to be validated
-# on the eventual NVMe rootfs, not the working eMMC, and always run LAST in
-# install.sh (and skippable via install.sh --no-readonly).
+# the field failure mode for a bench tool. NOT yet implemented. Targets the eMMC
+# rootfs (the shipping medium) and always runs LAST in install.sh (and skippable
+# via install.sh --no-readonly).
 # Requires sudo.
 #
 # Usage: sudo scripts/setup/readonly.sh

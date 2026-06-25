@@ -41,6 +41,8 @@ Networking is reversible: reach the rig over SSH during setup, ship it with no n
 
 Run directly under a Cage session with `python3 -m camtest`. Sensors live in `camtest/sensors.yaml`. CSI port lives in a managed block in `/boot/firmware/config.txt`. Boot is tuned by `scripts/setup/boot.sh` (run during install, `--revert` undoes it). Each script under `scripts/setup/` is idempotent and self-documenting (`--help`).
 
+Ships from eMMC. NVMe was tested and dropped: it boots ~1s slower (~16s vs ~15s power-on to preview, from the NVMe controller init the CM5 eMMC fast-path skips) and the bench tool needs neither the capacity nor the bandwidth.
+
 Useful env vars:
 
 - `CAMTEST_CAMERA_NUM` (default `0`)
