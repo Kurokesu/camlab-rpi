@@ -65,6 +65,17 @@ done
 
 require_root
 
+# DKMS builds against the running kernel. If an apt upgrade installed a newer
+# kernel but the box has not rebooted, uname -r is still the old one, so the
+# modules we build now would not load after the next reboot. Refuse to build
+# until the box is on the latest kernel. The newest /lib/modules entry is the
+# latest installed kernel.
+running_kernel="$(uname -r)"
+latest_kernel="$(ls -1 /lib/modules 2>/dev/null | sort -V | tail -1)"
+if [ -n "$latest_kernel" ] && [ "$latest_kernel" != "$running_kernel" ]; then
+    die "running kernel ($running_kernel) is not the latest installed ($latest_kernel). Reboot first, then re-run."
+fi
+
 FW_OVERLAYS="/boot/firmware/overlays"
 BUILD_ROOT="$CAMTEST_HOME/kurokesu-drivers"
 

@@ -8,7 +8,14 @@ Bench tool for validating Kurokesu RPi camera modules.
 ## Setup
 
 1. Flash Raspberry Pi OS Lite Trixie (64-bit) and boot.
-2. Clone and install:
+2. Update the OS, then reboot:
+
+```bash
+sudo apt update && sudo apt full-upgrade -y
+sudo reboot
+```
+
+3. Clone and install:
 
 ```bash
 git clone http://git.kurokesu.internal/Kurokesu-Electronics/camtest-rpi.git
@@ -16,7 +23,7 @@ cd camtest-rpi
 sudo ./install.sh
 ```
 
-3. Reboot. The box reboots once more on its own to init the read-only root, then the kiosk starts automatically.
+4. Reboot. Device auto-reboots once more on its own to init the read-only root, then camtest application starts automatically.
 
 ```bash
 sudo reboot
