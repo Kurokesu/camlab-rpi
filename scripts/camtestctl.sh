@@ -132,8 +132,33 @@ cmd_net() {
     esac
 }
 
-cmd_rw() { warn "read-only root not configured yet (Phase 5)."; }
-cmd_ro() { warn "read-only root not configured yet (Phase 5)."; }
+# Read-only root toggle. The overlay is driven by an overlayroot=disabled token on
+# the kernel command line: present = writable, absent = read-only. We flip the
+# token in cmdline.txt (remounting the boot partition writable to do so) and the
+# change takes effect on the next reboot. A no-op if overlayroot was never set up.
+FW_DIR="${CAMTEST_FW_DIR:-/boot/firmware}"
+CMDLINE="$FW_DIR/cmdline.txt"
+
+_overlay_present() { [ -f /etc/overlayroot.local.conf ]; }
+
+cmd_rw() {
+    _overlay_present || { warn "read-only root not set up (run scripts/setup/readonly.sh)"; return; }
+    if grep -q 'overlayroot=disabled' "$CMDLINE"; then
+        log "already set to boot writable (overlayroot=disabled). Reboot if not already."
+        return
+    fi
+    sudo mount -o remount,rw "$FW_DIR" 2>/dev/null || true
+    # Append the token to the single cmdline line (space-separated, no newline).
+    sudo sed -i 's/[[:space:]]*$/ overlayroot=disabled/' "$CMDLINE"
+    log "writable on next boot. Apply: sudo reboot   (then camtestctl ro to re-lock)"
+}
+
+cmd_ro() {
+    _overlay_present || { warn "read-only root not set up (run scripts/setup/readonly.sh)"; return; }
+    sudo mount -o remount,rw "$FW_DIR" 2>/dev/null || true
+    sudo sed -i 's/ *overlayroot=disabled//g' "$CMDLINE"
+    log "read-only on next boot. Apply: sudo reboot"
+}
 
 cmd="${1:-help}"
 shift || true

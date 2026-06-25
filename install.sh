@@ -77,8 +77,10 @@ log "Symlinked /usr/local/bin/camtestctl -> $REPO_DIR/scripts/camtestctl.sh"
 
 if [ "$DO_READONLY" -eq 1 ]; then
     "$REPO_DIR/scripts/setup/readonly.sh"
+    READONLY_STAGED=1
 else
     log "Skipping overlay-root (--no-readonly)"
+    READONLY_STAGED=0
 fi
 
 header "Installation complete"
@@ -98,3 +100,11 @@ Quick commands:
 
 Install log: $LOG_FILE
 EOF
+
+if [ "$READONLY_STAGED" -eq 1 ]; then
+    cat <<'EOF'
+
+Read-only root: your reboot triggers one more automatic reboot to lock it in.
+Dev toggle: camtestctl rw / ro.
+EOF
+fi

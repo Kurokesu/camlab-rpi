@@ -16,7 +16,7 @@ cd camtest-rpi
 sudo ./install.sh
 ```
 
-3. Reboot. Kiosk starts automatically.
+3. Reboot. The box reboots once more on its own to init the read-only root, then the kiosk starts automatically.
 
 ```bash
 sudo reboot
@@ -35,6 +35,8 @@ camtestctl restart
 camtestctl shot                 # screenshot the live kiosk (needs grim)
 camtestctl log-level debug      # then: camtestctl restart
 camtestctl net off|on|status    # toggle networking (off for production)
+camtestctl rw                   # boot writable next time (for edits)
+camtestctl ro                   # boot read-only next time (production)
 ```
 
 Networking is reversible: reach the rig over SSH during setup, ship it with no network. `camtestctl net off` drops the connection immediately. Reverse from the console with `camtestctl net on`.
@@ -42,6 +44,8 @@ Networking is reversible: reach the rig over SSH during setup, ship it with no n
 Run directly under a Cage session with `python3 -m camtest`. Sensors live in `camtest/sensors.yaml`. CSI port lives in a managed block in `/boot/firmware/config.txt`. Boot is tuned by `scripts/setup/boot.sh` (run during install, `--revert` undoes it). Each script under `scripts/setup/` is idempotent and self-documenting (`--help`).
 
 Ships from eMMC. NVMe was tested and dropped: it boots ~1s slower (~16s vs ~15s power-on to preview, from the NVMe controller init the CM5 eMMC fast-path skips) and the bench tool needs neither the capacity nor the bandwidth.
+
+Root is read-only (overlayfs, RAM upper) so a yanked power cable can't corrupt it. `scripts/setup/readonly.sh` sets it up during install and arms a one-shot that locks down on the first reboot after first-boot tasks settle, so the operator does nothing extra. Sensor selections persist on a small loopback data partition at `/var/lib/camtest`, outside the overlay. For edits: `camtestctl rw`, reboot, change, `camtestctl ro`, reboot.
 
 Useful env vars:
 
