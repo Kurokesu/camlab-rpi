@@ -9,13 +9,14 @@ from ..camera import CameraEngine
 from ..config_manager import ConfigManager
 from ..integrity import IntegrityMonitor, LogClassifier, StderrCapture
 from ..modes import mode_for
-from ..qt import Qt, QtCore, QtWidgets, Signal, Slot
+from ..qt import QtCore, QtWidgets, Signal, Slot
 from ..sensors import SensorRegistry
 from ..settings import SettingsStore
 from . import icons
 from .log_panel import LogPanel
 from .mode_dialog import ModeCard
 from .overlay import ModalOverlay, message_card
+from .preview_area import PreviewArea
 from .sensor_dialog import SensorCard
 from .status_strip import StatusStrip
 
@@ -54,7 +55,6 @@ QCheckBox::indicator:checked:hover { border-color: #808998; }
 QPlainTextEdit#logView { background: #15171b; border: none; color: #c4c9d2; }
 QLabel#logTitle { color: #8a909b; font-weight: 600; }
 QLabel#dialogNote { color: #8a909b; }
-QWidget#modalOverlay { background: rgba(12, 13, 16, 215); }
 QFrame#modalCard { background: #23262d; border: 1px solid #3a3f4b; border-radius: 8px; }
 QFrame#modalCard QLabel { background: transparent; }
 QLabel#modalTitle { font-size: 16px; font-weight: 600; color: #e8eaed; }
@@ -79,6 +79,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.binding_label = binding_label
         self.monitor = IntegrityMonitor(classifier)
         self._overlay: ModalOverlay | None = None
+        self._pending_card: QtWidgets.QWidget | None = None
 
         self.setWindowTitle("camtest")
         self.setStyleSheet(_STYLE + self._checkbox_tick_style())
@@ -89,16 +90,11 @@ class MainWindow(QtWidgets.QMainWindow):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # preview
-        if engine.picam2 is not None:
-            self.preview = engine.make_preview_widget()
-        else:
-            self.preview = QtWidgets.QLabel("No camera detected")
-            self.preview.setAlignment(Qt.AlignCenter)
-            self.preview.setStyleSheet("font-size: 22px; color: #e06c75;")
-        self.preview.setSizePolicy(QtWidgets.QSizePolicy.Expanding,
-                                   QtWidgets.QSizePolicy.Expanding)
-        root.addWidget(self.preview, 1)
+        # preview (live GL + frozen frost backdrop for modals)
+        self.preview_area = PreviewArea(engine)
+        self.preview_area.setSizePolicy(QtWidgets.QSizePolicy.Expanding,
+                                        QtWidgets.QSizePolicy.Expanding)
+        root.addWidget(self.preview_area, 1)
 
         # status strip
         self.status = StatusStrip()
@@ -216,18 +212,30 @@ class MainWindow(QtWidgets.QMainWindow):
     # in-window modals (a Cage kiosk renders separate top-level dialogs as a
     # tiny unusable artifact, so everything is drawn over the main surface).
     def _open_modal(self, card) -> None:
-        if self._overlay is not None:
-            return  # one modal at a time
-        # The GL preview is a native window that stacks above Qt widgets. Hide it
-        # so the overlay is visible, then restore it on dismiss.
-        self.preview.hide()
-        self._overlay = ModalOverlay(self.centralWidget(), card)
+        if self._overlay is not None or self._pending_card is not None:
+            return  # one modal at a time (a snapshot may be in flight)
+        self._pending_card = card
+        # Swap the live GL preview for a frosted still, then present the overlay
+        # (a native window would otherwise stack above it). With no camera,
+        # present right away over a full dim.
+        if not self.preview_area.enter_freeze(self._present_pending):
+            self._present_pending()
+
+    def _present_pending(self) -> None:
+        card = self._pending_card
+        self._pending_card = None
+        if card is None:
+            return  # stale (closed before the snapshot landed)
+        # Leave the frozen-preview area undimmed so the frost reads at full
+        # strength. The surrounding chrome stays dimmed for focus.
+        clear = self.preview_area.geometry() if self.preview_area.is_frozen else None
+        self._overlay = ModalOverlay(self.centralWidget(), card, clear_rect=clear)
 
     def _close_modal(self) -> None:
         if self._overlay is not None:
             self._overlay.dismiss()
             self._overlay = None
-        self.preview.show()
+        self.preview_area.exit_freeze()
 
     def _show_message(self, title: str, message: str) -> None:
         self._open_modal(message_card(
@@ -239,8 +247,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         # Capture the live preview area BEFORE the overlay hides the GL widget. It
         # sizes the lores (display) stream of the new mode.
-        sz = self.preview.size()
-        self._mode_avail = (sz.width(), sz.height())
+        self._mode_avail = self.preview_area.lores_size()
         card = ModeCard(self.engine.modes, self.engine.current_mode,
                         self.engine.current_fps, self.display_max_fps,
                         on_apply=self._apply_mode, on_cancel=self._close_modal)
@@ -252,8 +259,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if mode is None:  # re-validate at apply time
             self._show_message("Mode unavailable", "That mode is no longer available.")
             return
-        avail = getattr(self, "_mode_avail",
-                        (self.preview.width(), self.preview.height()))
+        avail = getattr(self, "_mode_avail", self.preview_area.lores_size())
         try:
             self.engine.apply_mode(mode, float(fps), avail)
         except Exception as exc:

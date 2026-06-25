@@ -67,6 +67,7 @@ class CameraEngine:
         self._started = False
         self._first_frame_cb = None
         self._first_frame_seen = False
+        self._snap_cb = None          # one-shot freeze-frame grab (camera thread)
 
     @staticmethod
     def detect() -> list[CameraInfo]:
@@ -189,6 +190,19 @@ class CameraEngine:
         """Register a one-shot callback(boottime_s) fired on the first captured frame."""
         self._first_frame_cb = callback
 
+    def request_snapshot(self, callback) -> bool:
+        """Ask for a one-shot freeze-frame grabbed from the next delivered frame.
+
+        callback(pil_image) fires once on the camera thread. Grabbing the
+        already-delivered frame instead of a separate capture_image avoids a
+        pipeline round-trip, so the live preview does not hitch. Returns False if
+        not running.
+        """
+        if self.picam2 is None or not self._started:
+            return False
+        self._snap_cb = callback
+        return True
+
     def _pre_callback(self, request) -> None:
         # Runs on the camera thread for every delivered frame. Capture the latest
         # metadata (exposure, gains) and compute the instantaneous frame rate the
@@ -204,6 +218,13 @@ class CameraEngine:
             if self._last_ts and ts != self._last_ts:
                 self.framerate = 1e9 / (ts - self._last_ts)
             self._last_ts = ts
+        if self._snap_cb is not None:
+            cb, self._snap_cb = self._snap_cb, None
+            try:
+                # The main (ISP RGB) buffer: make_image can't convert YUV420 lores.
+                cb(request.make_image("main"))
+            except Exception:  # never let the freeze-frame break capture
+                log.exception("freeze-frame grab failed")
         if not self._first_frame_seen:
             self._first_frame_seen = True
             boottime = time.clock_gettime(time.CLOCK_BOOTTIME)

@@ -14,17 +14,24 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from ..qt import Qt, QtCore, QtWidgets
+from ..qt import QtCore, QtGui, QtWidgets
+
+_DIM = QtGui.QColor(12, 13, 16, 165)
 
 
 class ModalOverlay(QtWidgets.QWidget):
-    """Covers its host, dims it, blocks input, and centers a card widget."""
+    """Covers its host, dims it, blocks input, and centers a card widget.
 
-    def __init__(self, host: QtWidgets.QWidget, card: QtWidgets.QWidget):
+    The dim skips an optional clear_rect (the frozen-preview area) so a frosted
+    backdrop reads at full strength while the surrounding chrome stays dimmed.
+    """
+
+    def __init__(self, host: QtWidgets.QWidget, card: QtWidgets.QWidget,
+                 clear_rect: QtCore.QRect | None = None):
         super().__init__(host)
         self._host = host
+        self._clear_rect = clear_rect
         self.setObjectName("modalOverlay")
-        self.setAttribute(Qt.WA_StyledBackground, True)
 
         outer = QtWidgets.QVBoxLayout(self)
         outer.setContentsMargins(40, 40, 40, 40)
@@ -40,6 +47,15 @@ class ModalOverlay(QtWidgets.QWidget):
         self.setGeometry(host.rect())
         self.raise_()
         self.show()
+
+    def paintEvent(self, event) -> None:
+        painter = QtGui.QPainter(self)
+        if self._clear_rect is not None and self._clear_rect.isValid():
+            # Dim everything but the frozen-preview rect.
+            region = QtGui.QRegion(self.rect()).subtracted(
+                QtGui.QRegion(self._clear_rect))
+            painter.setClipRegion(region)
+        painter.fillRect(self.rect(), _DIM)
 
     def eventFilter(self, obj, event) -> bool:
         if obj is self._host and event.type() == QtCore.QEvent.Resize:

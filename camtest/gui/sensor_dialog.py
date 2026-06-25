@@ -91,7 +91,7 @@ class SensorCard(QtWidgets.QFrame):
 
     def _on_sensor_changed(self) -> None:
         name = self.sensor_sel.current_value()
-        # Restore the variant only for the sensor we opened on; others start color.
+        # Restore the variant only for the sensor we opened on. Others start color.
         mono = self._init_mono if name == self._init_name else False
         self._rebuild_variant(name, mono)
         self._update_notes(name)
