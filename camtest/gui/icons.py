@@ -3,7 +3,7 @@
 The bundled font (assets/MaterialSymbolsOutlined.ttf, from Google Fonts) is loaded
 once into Qt. Icons are referenced by name and painted from the glyph:
 
-  - pixmap(name, ...) -> a QPixmap, for an inline icon QLabel (see IconChip).
+  - pixmap(name, ...) -> a QPixmap, for an inline icon QLabel.
   - icon(name, ...)   -> a QIcon, for QPushButton.setIcon.
   - cached_png(...)   -> a glyph rasterised to a PNG on disk, for stylesheets
     that need an `image: url(...)` (e.g. the checkbox tick).
@@ -30,6 +30,7 @@ _CODEPOINTS: dict[str, int] = {
     "terminal": 0xEB8E,
     "sensors": 0xE51E,
     "tune": 0xE429,
+    "close": 0xE5CD,
 }
 
 _FAMILY: str | None = None
