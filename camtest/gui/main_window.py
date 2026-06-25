@@ -9,7 +9,7 @@ from ..camera import CameraEngine
 from ..config_manager import ConfigManager
 from ..integrity import IntegrityMonitor, LogClassifier, StderrCapture
 from ..modes import mode_for
-from ..qt import Qt, QtCore, QtWidgets, Signal, Slot
+from ..qt import Qt, QtCore, QtGui, QtWidgets, Signal, Slot
 from ..sensors import SensorRegistry
 from ..settings import SettingsStore
 from . import icons
@@ -41,13 +41,21 @@ QPushButton { background: #2c303a; border: 1px solid #3a3f4b; border-radius: 5px
               padding: 6px 12px; }
 QPushButton:hover { background: #353b47; }
 QPushButton:checked { background: #3d4858; border-color: #7f8aa0; color: #ffffff; }
+QPushButton:focus { border-color: #7aa2f7; background: #353b47; outline: none; }
 QPushButton#danger { border-color: #803126; }
 QPushButton#danger:hover { background: #50211a; }
-QPushButton#segment { background: #262a33; border: 1px solid #3a3f4b; border-radius: 5px;
+QPushButton#danger:focus { border-color: #e06c75; background: #50211a; outline: none; }
+QPushButton#segment { background: #262a33; border: 1px solid #3a3f4b; border-radius: 0;
                       padding: 6px 14px; color: #c4c9d2; }
+QPushButton#segment[pos="mid"], QPushButton#segment[pos="last"] { margin-left: -1px; }
+QPushButton#segment[pos="first"] { border-top-left-radius: 6px; border-bottom-left-radius: 6px; }
+QPushButton#segment[pos="last"] { border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
+QPushButton#segment[pos="only"] { border-radius: 6px; }
 QPushButton#segment:hover { background: #2f3540; }
 QPushButton#segment:checked { background: #3d4858; border-color: #7f8aa0; color: #ffffff; }
 QPushButton#segment:checked:disabled { background: #2f3540; border-color: #4a505c; color: #aeb4bf; }
+QPushButton#segment:focus { border-color: #7aa2f7; background: #2f3949; outline: none; }
+QPushButton#segment:checked:focus { border-color: #9db8ff; background: #45526a; color: #ffffff; }
 QCheckBox { color: #aeb4bf; spacing: 6px; }
 QCheckBox::indicator { width: 20px; height: 20px; border: 1px solid #4a505c;
                        border-radius: 4px; background: #2c303a; }
@@ -90,6 +98,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
         central = QtWidgets.QWidget()
         self.setCentralWidget(central)
+        # Focus sink: clicking empty chrome (or boot) parks focus here instead of
+        # on a control, so no button shows a stray highlight until the operator
+        # actually tabs to one. ClickFocus also pulls focus off a button on click.
+        central.setFocusPolicy(Qt.ClickFocus)
         root = QtWidgets.QVBoxLayout(central)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
@@ -125,9 +137,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.shutdown_btn.clicked.connect(self._shutdown)
 
         # QPushButton clamps the icon to a small default, so set the size explicitly.
+        # TabFocus (not the default StrongFocus): these are reachable by Tab but a
+        # mouse click does not leave a lingering focus ring on them.
         for btn in (self.sensor_btn, self.mode_btn, self.log_btn, self.shutdown_btn):
             btn.setIconSize(QtCore.QSize(_ICON_PX, _ICON_PX))
             btn.setCursor(Qt.PointingHandCursor)
+            btn.setFocusPolicy(Qt.TabFocus)
 
         crow.addWidget(self.sensor_btn)
         crow.addSpacing(6)
@@ -151,6 +166,20 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._wire()
         self._populate_static()
+        # Start with focus on the inert sink so nothing is highlighted until Tab.
+        central.setFocus(Qt.OtherFocusReason)
+
+        # Window shortcuts fire regardless of which child holds focus, so they
+        # cover both the main screen and the in-window modal overlay (a plain
+        # QWidget with no default-button routing of its own). _on_escape is
+        # tiered (modal -> log -> shutdown); _on_return clicks the focused button.
+        esc = QtWidgets.QShortcut(QtGui.QKeySequence(Qt.Key_Escape), self)
+        esc.setContext(Qt.WindowShortcut)
+        esc.activated.connect(self._on_escape)
+        for seq in (Qt.Key_Return, Qt.Key_Enter):
+            sc = QtWidgets.QShortcut(QtGui.QKeySequence(seq), self)
+            sc.setContext(Qt.WindowShortcut)
+            sc.activated.connect(self._on_return)
 
         # Sample telemetry at 10 Hz (100 ms): about the fastest a changing number
         # stays readable.
@@ -261,10 +290,40 @@ class MainWindow(QtWidgets.QMainWindow):
             self.log_btn.setIcon(icons.icon("terminal", _ICON_PX))
             self.log_btn.setText(" Log")
 
+    @property
+    def _modal_active(self) -> bool:
+        """A modal is open or a snapshot is in flight to open one."""
+        return self._overlay is not None or self._pending_card is not None
+
+    def _on_return(self) -> None:
+        # Activate the focused button. Inside a modal, fall back to the card's
+        # primary button so Enter works even before tabbing onto a button. Outside
+        # a modal, no-op when focus is on the inert sink (no stray clicks).
+        focused = QtWidgets.QApplication.focusWidget()
+        if isinstance(focused, QtWidgets.QPushButton) and focused.isEnabled():
+            focused.click()
+            return
+        if self._overlay is not None:
+            primary = getattr(self._overlay.card, "primary_button", None)
+            if primary is not None and primary.isEnabled():
+                primary.click()
+
+    def _on_escape(self) -> None:
+        # Tiered: close the frontmost layer if one is open (modal, then log),
+        # otherwise it is the kill switch - immediate poweroff, like the Shutdown
+        # button (no confirm by design on this power-cycle tool). Called both by
+        # the overlay (modal up) and the window Escape shortcut (no modal).
+        if self._modal_active:
+            self._close_modal()
+        elif self.log_btn.isChecked():
+            self.log_btn.setChecked(False)
+        else:
+            self._shutdown()
+
     # in-window modals (a Cage kiosk renders separate top-level dialogs as a
     # tiny unusable artifact, so everything is drawn over the main surface).
     def _open_modal(self, card) -> None:
-        if self._overlay is not None or self._pending_card is not None:
+        if self._modal_active:
             return  # one modal at a time (a snapshot may be in flight)
         self._pending_card = card
         # Swap the live GL preview for a frosted still, then present the overlay
@@ -281,6 +340,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # Leave the frozen-preview area undimmed so the frost reads at full
         # strength. The surrounding chrome stays dimmed for focus.
         clear = self.preview_area.geometry() if self.preview_area.is_frozen else None
+        # The overlay traps Tab and swallows backdrop clicks; Enter/Escape come
+        # from MainWindow's window shortcuts (they fire regardless of focus).
         self._overlay = ModalOverlay(self.centralWidget(), card, clear_rect=clear)
 
     def _close_modal(self) -> None:
@@ -288,6 +349,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self._overlay.dismiss()
             self._overlay = None
         self.preview_area.exit_freeze()
+        # Park focus back on the inert sink so no control is left highlighted
+        # (Qt would otherwise restore focus to whatever had it before the modal).
+        self.centralWidget().setFocus(Qt.OtherFocusReason)
 
     def _show_message(self, title: str, message: str) -> None:
         self._open_modal(message_card(

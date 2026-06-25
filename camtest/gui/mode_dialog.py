@@ -1,6 +1,6 @@
 """Sensor mode selection card - Resolution -> Bit depth -> FPS cascade.
 
-Rendered inside a ModalOverlay using inline SegmentedSelectors (not dropdowns,
+Rendered inside a ModalDialog using inline SegmentedSelectors (not dropdowns,
 whose popups misplace under the Cage kiosk). The three selectors are dependent:
 changing the resolution reconciles the bit-depth row (keeping the current depth
 if it still exists, else snapping to the deepest), and any change upstream
@@ -70,6 +70,8 @@ class ModeCard(QtWidgets.QFrame):
         cancel_btn.clicked.connect(on_cancel)
         apply_btn = QtWidgets.QPushButton("Apply")
         apply_btn.clicked.connect(self._apply)
+        # Apply is safe (no reboot), so it is the primary Enter target.
+        self.primary_button = apply_btn
         buttons.addWidget(cancel_btn)
         buttons.addStretch(1)
         buttons.addWidget(apply_btn)

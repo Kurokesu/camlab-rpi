@@ -1,6 +1,6 @@
 """Sensor selection card - pick sensor + CSI port (+ color/mono), then reboot.
 
-Rendered inside a ModalOverlay (not a separate window, which a Cage kiosk renders
+Rendered inside a ModalDialog (not a separate window, which a Cage kiosk renders
 unreliably). Changing the sensor overlay requires a reboot (dtoverlay is read at
 boot), so the primary action is explicit about it. Port (cam0/cam1) is a per-rig
 setting. The Color/Mono variant is a per-rig choice too, shown only for sensors
@@ -72,6 +72,10 @@ class SensorCard(QtWidgets.QFrame):
         apply_btn = QtWidgets.QPushButton("Apply && Reboot")
         apply_btn.setObjectName("danger")
         apply_btn.clicked.connect(self._apply)
+        # Apply here reboots, so a bare Enter must not trigger it: Cancel is the
+        # primary target (what Enter hits before tabbing to a button). Applying
+        # needs a deliberate Tab-to-Apply then Enter, or a click.
+        self.primary_button = cancel_btn
         buttons.addWidget(cancel_btn)
         buttons.addStretch(1)
         buttons.addWidget(apply_btn)

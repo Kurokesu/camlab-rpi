@@ -41,13 +41,18 @@ class SegmentedSelector(QtWidgets.QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        # A fused segmented control: a row of buttons whose shared borders collapse
+        # into single hairlines (via a -1px left margin) and which round only their
+        # outer corners, so the row reads as one control - "pick one". Each button
+        # rounds itself (no parent-pill clipping artifacts). Arrow keys move within
+        # the exclusive group (the radio convention).
         self._values: list[Any] = []
         self._group = QtWidgets.QButtonGroup(self)
         self._group.setExclusive(True)
         self._group.idClicked.connect(lambda _id: self.changed.emit())
         self._row = QtWidgets.QHBoxLayout(self)
         self._row.setContentsMargins(0, 0, 0, 0)
-        self._row.setSpacing(6)
+        self._row.setSpacing(0)
 
     def set_options(self, options: list[tuple[str, Any]], current: Any = None,
                     enabled: bool = True, stretch: bool = True) -> None:
@@ -67,9 +72,21 @@ class SegmentedSelector(QtWidgets.QWidget):
                 w.deleteLater()
 
         self._values = [value for _text, value in options]
+        last = len(options) - 1
         for i, (text, _value) in enumerate(options):
             btn = QtWidgets.QPushButton(text)
             btn.setObjectName("segment")
+            # Position drives which outer corners round; non-first buttons overlap
+            # the previous border by 1px so the shared edge is a single hairline.
+            if last == 0:
+                pos = "only"
+            elif i == 0:
+                pos = "first"
+            elif i == last:
+                pos = "last"
+            else:
+                pos = "mid"
+            btn.setProperty("pos", pos)
             btn.setCheckable(True)
             btn.setCursor(Qt.PointingHandCursor)
             btn.setEnabled(enabled)
@@ -90,3 +107,7 @@ class SegmentedSelector(QtWidgets.QWidget):
     def current_value(self) -> Any:
         bid = self._group.checkedId()
         return self._values[bid] if 0 <= bid < len(self._values) else None
+
+    def checked_button(self) -> "QtWidgets.QAbstractButton | None":
+        """The selected segment, the selector's single Tab stop."""
+        return self._group.checkedButton()
