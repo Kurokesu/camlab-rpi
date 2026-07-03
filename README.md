@@ -1,6 +1,6 @@
 # camlab
 
-Bench tool for validating Kurokesu RPi camera modules.
+Kiosk app for previewing and testing Kurokesu camera modules on Raspberry Pi.
 
 > [!NOTE]
 > Target: Raspberry Pi CM5 + IO board (or a Pi 5), Raspberry Pi OS Lite Trixie (64-bit).
@@ -15,7 +15,7 @@ sudo apt update && sudo apt full-upgrade -y
 sudo reboot
 ```
 
-3. Download the latest release zip from Gitea and copy it to the rpi (from your host):
+3. Download the latest release zip from [GitHub releases](https://github.com/Kurokesu/camlab-rpi/releases) and copy it to the rpi (from your host):
 
 ```bash
 scp <version>.zip <username>@<hostname>:~/
@@ -56,7 +56,7 @@ Networking is reversible: reach the rig over SSH during setup, ship it with no n
 
 Run directly under a Cage session with `python3 -m camlab`. Sensors live in `camlab/sensors.yaml`. CSI port lives in a managed block in `/boot/firmware/config.txt`. Boot is tuned by `scripts/setup/boot.sh` (run during install, `--revert` undoes it). Each script under `scripts/setup/` is idempotent and self-documenting (`--help`).
 
-Ships from eMMC. NVMe was tested and dropped: it boots ~1s slower (~16s vs ~15s power-on to preview, from the NVMe controller init the CM5 eMMC fast-path skips) and the bench tool needs neither the capacity nor the bandwidth.
+Ships from eMMC. NVMe was tested and dropped: it boots ~1s slower (~16s vs ~15s power-on to preview, from the NVMe controller init the CM5 eMMC fast-path skips) and the app needs neither the capacity nor the bandwidth.
 
 Root is read-only (overlayfs, RAM upper) so a yanked power cable can't corrupt it. `scripts/setup/readonly.sh` sets it up during install and arms a one-shot that locks down on the first reboot after first-boot tasks settle, so the operator does nothing extra. Sensor selections persist on a small loopback data partition at `/var/lib/camlab`, outside the overlay. For edits: `camlabctl rw`, reboot, change, `camlabctl ro`, reboot.
 
