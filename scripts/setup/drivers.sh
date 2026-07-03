@@ -15,18 +15,18 @@
 
 set -euo pipefail
 
-CAMTEST_TAG="drivers"
+CAMLAB_TAG="drivers"
 
 # shellcheck source=../common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../common.sh"
 
-# Driver repos come from the sensor registry (camtest/sensors.yaml) so adding a
+# Driver repos come from the sensor registry (camlab/sensors.yaml) so adding a
 # sensor is a single edit there. Each entry's driver_repo is a repo name under
 # the Kurokesu org (a full git URL is also accepted). Override the org base with
-# CAMTEST_DRIVER_BASE_URL if a driver lives elsewhere.
+# CAMLAB_DRIVER_BASE_URL if a driver lives elsewhere.
 REPO_DIR="$(resolve_repo_dir)"
-SENSORS_YAML="$REPO_DIR/camtest/sensors.yaml"
-DRIVER_BASE_URL="${CAMTEST_DRIVER_BASE_URL:-https://github.com/Kurokesu}"
+SENSORS_YAML="$REPO_DIR/camlab/sensors.yaml"
+DRIVER_BASE_URL="${CAMLAB_DRIVER_BASE_URL:-https://github.com/Kurokesu}"
 
 python3 -c 'import yaml' 2>/dev/null \
     || die "python3-yaml not installed (run scripts/setup/deps.sh first)"
@@ -78,7 +78,7 @@ if [ -f /run/reboot-required ] \
 fi
 
 FW_OVERLAYS="/boot/firmware/overlays"
-BUILD_ROOT="$CAMTEST_HOME/kurokesu-drivers"
+BUILD_ROOT="$CAMLAB_HOME/kurokesu-drivers"
 
 header "Installing sensor drivers: ${SENSORS[*]}"
 
@@ -94,7 +94,7 @@ elif [ -d /boot/overlays ] && [ ! -L /boot/overlays ]; then
     warn "Driver overlays may land in the wrong place; verify after build."
 fi
 
-install -d -o "$CAMTEST_USER" -g "$CAMTEST_USER" "$BUILD_ROOT"
+install -d -o "$CAMLAB_USER" -g "$CAMLAB_USER" "$BUILD_ROOT"
 
 for sensor in "${SENSORS[@]}"; do
     repo="${DRIVER_REPO[$sensor]:-}"
@@ -104,10 +104,10 @@ for sensor in "${SENSORS[@]}"; do
     header "Driver: $sensor"
     if [ -d "$dir/.git" ]; then
         log "Updating $dir"
-        sudo -u "$CAMTEST_USER" git -C "$dir" pull --ff-only || warn "git pull failed; using existing checkout"
+        sudo -u "$CAMLAB_USER" git -C "$dir" pull --ff-only || warn "git pull failed; using existing checkout"
     else
         log "Cloning $repo"
-        sudo -u "$CAMTEST_USER" git clone "$repo" "$dir"
+        sudo -u "$CAMLAB_USER" git clone "$repo" "$dir"
     fi
 
     log "Running $sensor setup.sh (dkms add/build/install)"

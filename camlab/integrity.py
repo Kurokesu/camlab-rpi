@@ -104,7 +104,7 @@ class IntegrityStats:
 
 
 class NullCapture(QtCore.QObject):
-    """Drop-in that does no fd splicing (debug: CAMTEST_NO_CAPTURE=1)."""
+    """Drop-in that does no fd splicing (debug: CAMLAB_NO_CAPTURE=1)."""
 
     line_received = Signal(str)
 

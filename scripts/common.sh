@@ -2,23 +2,23 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026, UAB Kurokesu
 #
-# Shared helpers sourced by install.sh, scripts/camtestctl.sh, and the
+# Shared helpers sourced by install.sh, scripts/camlabctl.sh, and the
 # scripts/setup/* primitives.
 #
 # Provides: colored logging (log/warn/die/header), repo-root resolution
-# (for callers under scripts/setup/), and camtest-owner detection that
+# (for callers under scripts/setup/), and camlab-owner detection that
 # works under sudo.
 #
-# Lifted from cinepi-kurokesu/scripts/common.sh, tag swapped to camtest.
+# Lifted from cinepi-kurokesu/scripts/common.sh, tag swapped to camlab.
 
 # Terminal colors. Detect TTY on first source and pin the result via
-# CAMTEST_COLOR so child scripts keep colors even after a parent (e.g.
+# CAMLAB_COLOR so child scripts keep colors even after a parent (e.g.
 # install.sh) redirects stdout through a tee pipe.
-if [ -z "${CAMTEST_COLOR:-}" ] && [ -t 1 ]; then
-    export CAMTEST_COLOR=1
+if [ -z "${CAMLAB_COLOR:-}" ] && [ -t 1 ]; then
+    export CAMLAB_COLOR=1
 fi
 
-if [ -n "${CAMTEST_COLOR:-}" ]; then
+if [ -n "${CAMLAB_COLOR:-}" ]; then
     _C_RED=$'\033[0;31m'
     _C_GREEN=$'\033[0;32m'
     _C_YELLOW=$'\033[1;33m'
@@ -28,22 +28,22 @@ else
     _C_RED=''; _C_GREEN=''; _C_YELLOW=''; _C_CYAN=''; _C_RESET=''
 fi
 
-# Each primitive sets CAMTEST_TAG before sourcing this file (or falls back to "camtest").
-: "${CAMTEST_TAG:=camtest}"
+# Each primitive sets CAMLAB_TAG before sourcing this file (or falls back to "camlab").
+: "${CAMLAB_TAG:=camlab}"
 
-# camtest owner - whoever ran sudo (if applicable), else the current user.
+# camlab owner - whoever ran sudo (if applicable), else the current user.
 if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
-    CAMTEST_USER="$SUDO_USER"
+    CAMLAB_USER="$SUDO_USER"
 else
-    CAMTEST_USER="$(whoami)"
+    CAMLAB_USER="$(whoami)"
 fi
 
-CAMTEST_UID="$(id -u "$CAMTEST_USER")"
-CAMTEST_HOME="$(getent passwd "$CAMTEST_USER" | cut -d: -f6)"
+CAMLAB_UID="$(id -u "$CAMLAB_USER")"
+CAMLAB_HOME="$(getent passwd "$CAMLAB_USER" | cut -d: -f6)"
 
-log()    { echo -e "${_C_GREEN}[${CAMTEST_TAG}]${_C_RESET} $*"; }
-warn()   { echo -e "${_C_YELLOW}[${CAMTEST_TAG}]${_C_RESET} $*" >&2; }
-die()    { echo -e "${_C_RED}[${CAMTEST_TAG}]${_C_RESET} $*" >&2; exit 1; }
+log()    { echo -e "${_C_GREEN}[${CAMLAB_TAG}]${_C_RESET} $*"; }
+warn()   { echo -e "${_C_YELLOW}[${CAMLAB_TAG}]${_C_RESET} $*" >&2; }
+die()    { echo -e "${_C_RED}[${CAMLAB_TAG}]${_C_RESET} $*" >&2; exit 1; }
 header() { echo; echo -e "${_C_CYAN}=== $* ===${_C_RESET}"; echo; }
 
 # Resolve the repository root from a caller at scripts/setup/*.

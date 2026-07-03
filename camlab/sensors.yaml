@@ -1,4 +1,4 @@
-# camtest sensor registry - curated, human-maintained source of truth.
+# camlab sensor registry - curated, human-maintained source of truth.
 #
 # Each entry drives the sensor selector and how ConfigManager composes the
 # managed dtoverlay line in /boot/firmware/config.txt. The CSI port (cam0/cam1)

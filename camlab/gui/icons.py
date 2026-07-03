@@ -99,7 +99,7 @@ def cached_png(name: str, size_px: int, color: str = "#d7dae0") -> str | None:
     cached = _PNG_CACHE.get(key)
     if cached and os.path.exists(cached):
         return cached
-    out_dir = os.path.join(tempfile.gettempdir(), "camtest-icons")
+    out_dir = os.path.join(tempfile.gettempdir(), "camlab-icons")
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, f"{name}-{size_px}-{color.lstrip('#')}.png")
     pixmap(name, size_px, color).save(path, "PNG")

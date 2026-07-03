@@ -3,12 +3,12 @@
 The whole app imports Qt from here so switching bindings (PyQt5 <-> PyQt6) is a
 one-file change. Phase 1 settled on PyQt5 / QGlPicamera2 (Debian-recommended,
 verified working under Cage as a native Wayland EGL client on this CM5). Override
-with CAMTEST_QT_BINDING=pyqt6 if ever needed.
+with CAMLAB_QT_BINDING=pyqt6 if ever needed.
 """
 
 import os
 
-BINDING = os.environ.get("CAMTEST_QT_BINDING", "pyqt5").lower()
+BINDING = os.environ.get("CAMLAB_QT_BINDING", "pyqt5").lower()
 
 if BINDING == "pyqt6":
     from PyQt6 import QtCore, QtGui, QtWidgets  # noqa: F401

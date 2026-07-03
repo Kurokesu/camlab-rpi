@@ -3,13 +3,13 @@
 A tiny atomic JSON file. Selections are keyed by the sensor's dtoverlay token so
 each sensor remembers its own last mode. Writes are unprivileged (no sudo): the
 file lives on a dedicated writable data directory that survives an eventual
-read-only root (Phase 5 mounts a data partition at /var/lib/camtest, excluded
+read-only root (Phase 5 mounts a data partition at /var/lib/camlab, excluded
 from the overlay).
 
 Path resolution, first hit wins:
-  1. $CAMTEST_STATE_FILE         (explicit override, e.g. for tests)
-  2. $STATE_DIRECTORY/state.json (set by systemd StateDirectory=camtest)
-  3. /var/lib/camtest/state.json (fallback for manual runs)
+  1. $CAMLAB_STATE_FILE         (explicit override, e.g. for tests)
+  2. $STATE_DIRECTORY/state.json (set by systemd StateDirectory=camlab)
+  3. /var/lib/camlab/state.json (fallback for manual runs)
 
 Reads never raise: a missing or corrupt file is treated as "no saved selection".
 Writes never raise: a read-only or full filesystem logs a warning and is ignored,
@@ -30,14 +30,14 @@ _VERSION = 1
 
 
 def default_state_file() -> Path:
-    override = os.environ.get("CAMTEST_STATE_FILE")
+    override = os.environ.get("CAMLAB_STATE_FILE")
     if override:
         return Path(override)
     state_dir = os.environ.get("STATE_DIRECTORY")
     if state_dir:
         # systemd may pass a colon-separated list. The first entry is ours.
         return Path(state_dir.split(":")[0]) / "state.json"
-    return Path("/var/lib/camtest/state.json")
+    return Path("/var/lib/camlab/state.json")
 
 
 class SettingsStore:

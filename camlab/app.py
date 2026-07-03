@@ -15,7 +15,7 @@ from .qt import QtWidgets
 from .sensors import SensorRegistry
 from .settings import SettingsStore
 
-log = logging.getLogger("camtest")
+log = logging.getLogger("camlab")
 
 # Estimated non-preview chrome height (status strip + controls row) used to size
 # the lores stream before the window is laid out. Runtime mode changes use the
@@ -27,18 +27,18 @@ def _display_limits(app) -> tuple[float, tuple[int, int]]:
     """(display_max_fps, preview_avail_size) derived from the primary screen.
 
     display_max_fps is capped at the bench ceiling (60) unless overridden via
-    CAMTEST_DISPLAY_MAX_FPS. avail size is the screen minus estimated chrome.
+    CAMLAB_DISPLAY_MAX_FPS. avail size is the screen minus estimated chrome.
     """
     screen = app.primaryScreen()
     geo = screen.geometry() if screen else None
     avail = (geo.width(), max(1, geo.height() - _CHROME_PX)) if geo else (1280, 720)
 
-    override = os.environ.get("CAMTEST_DISPLAY_MAX_FPS")
+    override = os.environ.get("CAMLAB_DISPLAY_MAX_FPS")
     if override:
         try:
             return float(override), avail
         except ValueError:
-            log.warning("ignoring bad CAMTEST_DISPLAY_MAX_FPS=%r", override)
+            log.warning("ignoring bad CAMLAB_DISPLAY_MAX_FPS=%r", override)
     rate = screen.refreshRate() if screen else 0.0
     rate = round(rate) if rate and rate >= 1 else DEFAULT_DISPLAY_MAX_FPS
     return min(float(rate), DEFAULT_DISPLAY_MAX_FPS), avail
@@ -52,7 +52,7 @@ _LEVELS = {
 
 
 def _setup_logging() -> None:
-    level = _LEVELS.get(os.environ.get("CAMTEST_LOG_LEVEL", "info").lower(), logging.INFO)
+    level = _LEVELS.get(os.environ.get("CAMLAB_LOG_LEVEL", "info").lower(), logging.INFO)
     logging.basicConfig(
         level=level, stream=sys.stderr,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
@@ -72,7 +72,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # Splice stderr BEFORE libcamera/Picamera2 init so the IPA child inherits it.
     # StderrCapture is a plain QObject and is safe to build before QApplication.
-    capture = NullCapture() if os.environ.get("CAMTEST_NO_CAPTURE") else StderrCapture()
+    capture = NullCapture() if os.environ.get("CAMLAB_NO_CAPTURE") else StderrCapture()
     classifier = LogClassifier()
 
     registry = SensorRegistry.load()
@@ -85,7 +85,7 @@ def main(argv: list[str] | None = None) -> int:
     # The stream is configured below once the display size is known.
     engine = CameraEngine()
     try:
-        engine.open(camera_num=int(os.environ.get("CAMTEST_CAMERA_NUM", "0")))
+        engine.open(camera_num=int(os.environ.get("CAMLAB_CAMERA_NUM", "0")))
     except Exception as exc:
         log.error("camera open failed: %s", exc)
 

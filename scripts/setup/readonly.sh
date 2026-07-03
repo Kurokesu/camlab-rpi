@@ -9,17 +9,17 @@
 #
 # The kiosk still needs to remember its per-sensor mode/fps selection, so a small
 # loopback ext4 image on the writable boot partition is mounted at the service
-# state dir (/var/lib/camtest), outside the overlay. overlayroot uses recurse=0
+# state dir (/var/lib/camlab), outside the overlay. overlayroot uses recurse=0
 # so it never forces that mount read-only.
 #
 # This script STAGES everything writable but does NOT lock the box down inline.
-# It installs and enables a one-shot finaliser (camtest-readonly-firstboot) that
+# It installs and enables a one-shot finaliser (camlab-readonly-firstboot) that
 # locks down on the next boot, after first-boot tasks settle. So a normal
 # install.sh + one reboot ends up read-only with no extra operator steps.
 #
 # Stages, each idempotent:
 #   1. packages   overlayroot + initramfs tooling
-#   2. data       loopback image -> /var/lib/camtest (fstab, survives the overlay)
+#   2. data       loopback image -> /var/lib/camlab (fstab, survives the overlay)
 #   3. overlay    overlayroot.local.conf + auto_initramfs + update-initramfs
 #   4. swap       force zram swap (no swapfile under the overlay)
 #   5. finalise   install the finaliser script + arm the one-shot unit
@@ -37,7 +37,7 @@ set -euo pipefail
 # mkfs/losetup/blkid live in sbin, off the non-login PATH.
 PATH="/usr/sbin:/sbin:/usr/bin:/bin:$PATH"
 
-CAMTEST_TAG="readonly"
+CAMLAB_TAG="readonly"
 
 # shellcheck source=../common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../common.sh"
@@ -53,15 +53,15 @@ done
 
 require_root
 
-FW_DIR="${CAMTEST_FW_DIR:-/boot/firmware}"
+FW_DIR="${CAMLAB_FW_DIR:-/boot/firmware}"
 CONFIG_TXT="$FW_DIR/config.txt"
 CMDLINE_TXT="$FW_DIR/cmdline.txt"
-DATA_IMG="$FW_DIR/camtest-data.img"
-DATA_MNT="/var/lib/camtest"
+DATA_IMG="$FW_DIR/camlab-data.img"
+DATA_MNT="/var/lib/camlab"
 # The data is a few hundred bytes of JSON. 32MB is already wildly generous and
 # fits the cramped FAT boot partition (which cannot hold sparse files, so the
 # image costs its full size on disk).
-DATA_SIZE_MB="${CAMTEST_DATA_SIZE_MB:-32}"
+DATA_SIZE_MB="${CAMLAB_DATA_SIZE_MB:-32}"
 OVERLAY_CONF="/etc/overlayroot.local.conf"
 # Drop-in that forces the legacy mount API. Without it, systemd-remount-fs fails
 # under overlayroot on Trixie (the new kernel mount API cannot reconfigure an
@@ -72,21 +72,21 @@ REMOUNT_DROPIN="/etc/systemd/system.conf.d/overlayfs.conf"
 # zram+file), which cannot be created under the tmpfs overlay (truncate fails,
 # No space left) and loops on restart. Force plain zram: compressed RAM swap, no
 # disk writes, no eMMC wear, and it removes any stale swapfile itself.
-SWAP_DROPIN="/etc/rpi/swap.conf.d/camtest-readonly.conf"
-FINALISE_SCRIPT="/usr/local/sbin/camtest-readonly-finalise"
-ONESHOT_UNIT="camtest-readonly-firstboot.service"
+SWAP_DROPIN="/etc/rpi/swap.conf.d/camlab-readonly.conf"
+FINALISE_SCRIPT="/usr/local/sbin/camlab-readonly-finalise"
+ONESHOT_UNIT="camlab-readonly-firstboot.service"
 
 # Managed-block markers, same convention as boot.sh, so edits to shared files are
 # greppable, idempotent and cleanly removable.
-BEGIN="# >>> camtest readonly (do not edit) >>>"
-END="# <<< camtest readonly <<<"
+BEGIN="# >>> camlab readonly (do not edit) >>>"
+END="# <<< camlab readonly <<<"
 
 REPO_DIR="$(resolve_repo_dir)"
 
 # Atomic write preserving mode of an existing file.
 _atomic_write() {
     local path="$1" content="$2" tmp
-    tmp="$(mktemp "${path}.camtest-XXXXXX")"
+    tmp="$(mktemp "${path}.camlab-XXXXXX")"
     printf '%s' "$content" > "$tmp"
     if [ -f "$path" ]; then chmod --reference="$path" "$tmp" 2>/dev/null || true; fi
     mv -f "$tmp" "$path"
@@ -116,7 +116,7 @@ stage_packages() {
         overlayroot initramfs-tools busybox-static >/dev/null
 }
 
-# Stage 2: loopback data partition mounted at /var/lib/camtest.
+# Stage 2: loopback data partition mounted at /var/lib/camlab.
 # Created on the writable boot partition so it survives the read-only overlay.
 stage_data() {
     if [ "$REVERT" -eq 1 ]; then
@@ -139,11 +139,11 @@ stage_data() {
         local free_mb
         free_mb="$(df -m --output=avail "$FW_DIR" | tail -1 | tr -d ' ')"
         if [ "$free_mb" -lt "$((DATA_SIZE_MB + 16))" ]; then
-            die "2) not enough room on $FW_DIR (${free_mb}MB free, need ~$((DATA_SIZE_MB + 16))MB). Lower CAMTEST_DATA_SIZE_MB."
+            die "2) not enough room on $FW_DIR (${free_mb}MB free, need ~$((DATA_SIZE_MB + 16))MB). Lower CAMLAB_DATA_SIZE_MB."
         fi
         log "2) creating ${DATA_SIZE_MB}MB data image at $DATA_IMG"
         truncate -s "${DATA_SIZE_MB}M" "$DATA_IMG"
-        mkfs.ext4 -q -L camtest-data "$DATA_IMG"
+        mkfs.ext4 -q -L camlab-data "$DATA_IMG"
     else
         log "2) data image already present, keeping it"
     fi
@@ -152,7 +152,7 @@ stage_data() {
     # from blocking boot; x-systemd ordering puts the mount before the service.
     if ! grep -qF "$BEGIN" /etc/fstab; then
         local block
-        block="$(printf '%s\n%s %s ext4 loop,nofail,x-systemd.before=camtest.service 0 2\n%s' \
+        block="$(printf '%s\n%s %s ext4 loop,nofail,x-systemd.before=camlab.service 0 2\n%s' \
                  "$BEGIN" "$DATA_IMG" "$DATA_MNT" "$END")"
         printf '\n%s\n' "$block" >> /etc/fstab
         log "2) added fstab mount $DATA_IMG -> $DATA_MNT"
@@ -161,7 +161,7 @@ stage_data() {
     fi
 
     # Mount now (writable root) and migrate any existing state into the image, so
-    # nothing is lost and camtest can read/write straight away.
+    # nothing is lost and camlab can read/write straight away.
     mkdir -p "$DATA_MNT"
     if ! mountpoint -q "$DATA_MNT"; then
         # Preserve pre-existing contents across the first mount.
@@ -179,8 +179,8 @@ stage_data() {
     fi
     # Marker the one-shot unit keys off (ConditionPathExists) to confirm the
     # writable data mount is actually live before it ever locks the box down.
-    touch "$DATA_MNT/.camtest-data"
-    chown "$CAMTEST_USER":"$CAMTEST_USER" "$DATA_MNT" 2>/dev/null || true
+    touch "$DATA_MNT/.camlab-data"
+    chown "$CAMLAB_USER":"$CAMLAB_USER" "$DATA_MNT" 2>/dev/null || true
 }
 
 # Stage 3: overlay configuration (staged, not active until the finaliser locks in).
@@ -197,7 +197,7 @@ stage_overlay() {
     fi
 
     # recurse=0 is load-bearing: without it the overlay drives every other mount
-    # (including our /var/lib/camtest loop) read-only too.
+    # (including our /var/lib/camlab loop) read-only too.
     _atomic_write "$OVERLAY_CONF" 'overlayroot="tmpfs:recurse=0"'$'\n'
     log "3) wrote $OVERLAY_CONF (tmpfs:recurse=0)"
 
@@ -272,38 +272,38 @@ PATH="/usr/sbin:/sbin:/usr/bin:/bin:$PATH"
 FW_DIR="/boot/firmware"
 CMDLINE="$FW_DIR/cmdline.txt"
 
-logger -t camtest-readonly "finaliser starting"
+logger -t camlab-readonly "finaliser starting"
 
 # Only act during the staged-but-disabled settle-boot. If the disable token is
 # gone the overlay is already engaged (or was never staged) - nothing to do.
 if ! grep -q 'overlayroot=disabled' "$CMDLINE"; then
-    logger -t camtest-readonly "overlay not in disabled-settle state, nothing to do"
-    systemctl disable camtest-readonly-firstboot.service >/dev/null 2>&1 || true
+    logger -t camlab-readonly "overlay not in disabled-settle state, nothing to do"
+    systemctl disable camlab-readonly-firstboot.service >/dev/null 2>&1 || true
     exit 0
 fi
 
 # Refuse to lock down unless the persistent data mount is actually writable,
 # otherwise the kiosk would lose its state with no way to write it.
-if ! mountpoint -q /var/lib/camtest; then
-    logger -t camtest-readonly "ABORT: /var/lib/camtest not mounted, leaving box writable"
+if ! mountpoint -q /var/lib/camlab; then
+    logger -t camlab-readonly "ABORT: /var/lib/camlab not mounted, leaving box writable"
     exit 1
 fi
-if ! touch /var/lib/camtest/.write-probe 2>/dev/null; then
-    logger -t camtest-readonly "ABORT: /var/lib/camtest not writable, leaving box writable"
+if ! touch /var/lib/camlab/.write-probe 2>/dev/null; then
+    logger -t camlab-readonly "ABORT: /var/lib/camlab not writable, leaving box writable"
     exit 1
 fi
-rm -f /var/lib/camtest/.write-probe
+rm -f /var/lib/camlab/.write-probe
 
 # Clear any leftover maintenance disable token so the overlay engages next boot.
 if grep -q 'overlayroot=disabled' "$CMDLINE"; then
     mount -o remount,rw "$FW_DIR" 2>/dev/null || true
     sed -i 's/ *overlayroot=disabled//g' "$CMDLINE"
-    logger -t camtest-readonly "cleared overlayroot=disabled from cmdline"
+    logger -t camlab-readonly "cleared overlayroot=disabled from cmdline"
 fi
 
 # Disable self BEFORE rebooting so a wedged overlay can never loop-reboot.
-systemctl disable camtest-readonly-firstboot.service >/dev/null 2>&1 || true
-logger -t camtest-readonly "locked in, rebooting into read-only root"
+systemctl disable camlab-readonly-firstboot.service >/dev/null 2>&1 || true
+logger -t camlab-readonly "locked in, rebooting into read-only root"
 sync
 systemctl reboot
 FINEOF
@@ -333,5 +333,5 @@ if [ "$REVERT" -eq 1 ]; then
 else
     log "Staged. The next reboot settles first-boot tasks, then the finaliser"
     log "locks the root read-only and reboots once more, automatically."
-    log "Dev toggle afterwards: camtestctl rw  /  camtestctl ro"
+    log "Dev toggle afterwards: camlabctl rw  /  camlabctl ro"
 fi

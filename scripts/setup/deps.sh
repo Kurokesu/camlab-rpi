@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026, UAB Kurokesu
 #
-# Install camtest APT dependencies: the Kurokesu libcamera/rpicam-apps fork, the
+# Install camlab APT dependencies: the Kurokesu libcamera/rpicam-apps fork, the
 # Python preview/GUI stack (picamera2 + PyQt5 + OpenGL), Cage, and DKMS build
 # tools. Run archive.sh first so the +krks packages are available/preferred.
 # Safe to re-run. Requires sudo.
@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-CAMTEST_TAG="deps"
+CAMLAB_TAG="deps"
 
 # shellcheck source=../common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../common.sh"
@@ -25,7 +25,7 @@ done
 
 require_root
 
-header "Installing camtest apt dependencies"
+header "Installing camlab apt dependencies"
 
 log "Updating package lists..."
 apt-get update

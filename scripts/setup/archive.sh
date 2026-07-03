@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-CAMTEST_TAG="archive"
+CAMLAB_TAG="archive"
 
 # shellcheck source=../common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../common.sh"

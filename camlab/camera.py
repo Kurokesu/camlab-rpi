@@ -110,7 +110,7 @@ class CameraEngine:
     @staticmethod
     def _buffer_count() -> int:
         try:
-            return max(1, int(os.environ.get("CAMTEST_BUFFER_COUNT", "4")))
+            return max(1, int(os.environ.get("CAMLAB_BUFFER_COUNT", "4")))
         except ValueError:
             return 4
 

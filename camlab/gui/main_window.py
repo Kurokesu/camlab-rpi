@@ -94,7 +94,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._boot_cover: QtWidgets.QWidget | None = None
         self._engine_started = False
 
-        self.setWindowTitle("camtest")
+        self.setWindowTitle("camlab")
         self.setStyleSheet(_STYLE + self._checkbox_tick_style())
 
         central = QtWidgets.QWidget()
@@ -413,12 +413,12 @@ class MainWindow(QtWidgets.QMainWindow):
         except Exception as exc:  # surface the failure, do not power off
             self._show_message("Apply failed", str(exc))
             return
-        if os.environ.get("CAMTEST_NO_REBOOT"):
+        if os.environ.get("CAMLAB_NO_REBOOT"):
             self._populate_static()
             self._show_message(
                 "Applied (shutdown skipped)",
                 f"config.txt updated: {chosen.overlay}{variant} on {port}.\n"
-                "CAMTEST_NO_REBOOT set - power off and swap the sensor manually.")
+                "CAMLAB_NO_REBOOT set - power off and swap the sensor manually.")
             return
         # A sensor swap needs the box off, so power down rather than reboot: the
         # operator swaps while it is off, then powers on to the new overlay.
@@ -468,7 +468,7 @@ class MainWindow(QtWidgets.QMainWindow):
             log.error("camera start failed: %s", exc)
 
     # No quit affordance by design: this is a kiosk. Exiting drops to a blank
-    # tty, which an operator never wants. Stop it with `camtestctl stop`.
+    # tty, which an operator never wants. Stop it with `camlabctl stop`.
     def closeEvent(self, event) -> None:
         try:
             self.engine.stop()

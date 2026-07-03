@@ -2,35 +2,35 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026, UAB Kurokesu
 #
-# camtestctl - control tool for camtest.service.
+# camlabctl - control tool for camlab.service.
 # Use for post-install verification, dev iteration, and field support.
 #
 # Usage:
-#   camtestctl start
-#   camtestctl stop
-#   camtestctl restart
-#   camtestctl status
-#   camtestctl logs [journalctl-args]     default: last 200 lines
-#   camtestctl log-level <level>          trace|debug|info|warn|error|off
-#   camtestctl shot [path]                screenshot the live kiosk (needs grim)
-#   camtestctl net <on|off|status>        toggle networking (reversible, off for
+#   camlabctl start
+#   camlabctl stop
+#   camlabctl restart
+#   camlabctl status
+#   camlabctl logs [journalctl-args]     default: last 200 lines
+#   camlabctl log-level <level>          trace|debug|info|warn|error|off
+#   camlabctl shot [path]                screenshot the live kiosk (needs grim)
+#   camlabctl net <on|off|status>        toggle networking (reversible, off for
 #                                         production, on for SSH dev)
-#   camtestctl rw                         remount root read-write   (Phase 5)
-#   camtestctl ro                         remount root read-only    (Phase 5)
-#   camtestctl help
+#   camlabctl rw                         remount root read-write   (Phase 5)
+#   camlabctl ro                         remount root read-only    (Phase 5)
+#   camlabctl help
 #
-# log-level writes a systemd drop-in (Environment=CAMTEST_LOG_LEVEL). The app
+# log-level writes a systemd drop-in (Environment=CAMLAB_LOG_LEVEL). The app
 # reads this on startup - restart the service to apply.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
-CAMTEST_TAG="camtestctl"
+CAMLAB_TAG="camlabctl"
 
 # shellcheck source=common.sh
 source "$SCRIPT_DIR/common.sh"
 
-SERVICE="camtest.service"
+SERVICE="camlab.service"
 DROPIN_DIR="/etc/systemd/system/${SERVICE}.d"
 LOG_LEVEL_DROPIN="${DROPIN_DIR}/log-level.conf"
 
@@ -40,7 +40,7 @@ cmd_restart() { sudo systemctl restart "$SERVICE"; }
 cmd_status()  { systemctl status "$SERVICE" --no-pager; }
 
 cmd_logs() {
-    local args=(-u "$SERVICE" -t camtest --no-pager)
+    local args=(-u "$SERVICE" -t camlab --no-pager)
     if [ "$#" -eq 0 ]; then
         args+=(-n 200)
     else
@@ -60,20 +60,20 @@ cmd_log_level() {
     sudo install -d -m 0755 "$DROPIN_DIR"
     sudo tee "$LOG_LEVEL_DROPIN" >/dev/null <<EOF
 [Service]
-Environment=CAMTEST_LOG_LEVEL=$level
+Environment=CAMLAB_LOG_LEVEL=$level
 EOF
     sudo systemctl daemon-reload
-    log "wrote $LOG_LEVEL_DROPIN (CAMTEST_LOG_LEVEL=$level)"
-    log "restart to apply: camtestctl restart"
+    log "wrote $LOG_LEVEL_DROPIN (CAMLAB_LOG_LEVEL=$level)"
+    log "restart to apply: camlabctl restart"
 }
 
 cmd_shot() {
     command -v grim >/dev/null || die "grim not installed (sudo apt install grim)"
-    local out="${1:-/tmp/camtest-$(date +%Y%m%d-%H%M%S).png}"
+    local out="${1:-/tmp/camlab-$(date +%Y%m%d-%H%M%S).png}"
     local sock
-    sock="$(ls -1 "/run/user/$CAMTEST_UID"/wayland-* 2>/dev/null | grep -v '\.lock$' | head -n1)"
-    [ -n "$sock" ] || die "no wayland socket for uid $CAMTEST_UID (is camtest running?)"
-    XDG_RUNTIME_DIR="/run/user/$CAMTEST_UID" WAYLAND_DISPLAY="$(basename "$sock")" grim "$out"
+    sock="$(ls -1 "/run/user/$CAMLAB_UID"/wayland-* 2>/dev/null | grep -v '\.lock$' | head -n1)"
+    [ -n "$sock" ] || die "no wayland socket for uid $CAMLAB_UID (is camlab running?)"
+    XDG_RUNTIME_DIR="/run/user/$CAMLAB_UID" WAYLAND_DISPLAY="$(basename "$sock")" grim "$out"
     log "saved $out"
 }
 
@@ -111,7 +111,7 @@ cmd_net() {
                 sudo systemctl disable --now "$u" >/dev/null 2>&1 || true
                 sudo systemctl mask "$u" >/dev/null 2>&1 || true
             done
-            warn "networking OFF (stopped + masked). Reverse with: camtestctl net on"
+            warn "networking OFF (stopped + masked). Reverse with: camlabctl net on"
             warn "if run over SSH, this connection is about to drop."
             ;;
         status)
@@ -136,7 +136,7 @@ cmd_net() {
 # the kernel command line: present = writable, absent = read-only. We flip the
 # token in cmdline.txt (remounting the boot partition writable to do so) and the
 # change takes effect on the next reboot. A no-op if overlayroot was never set up.
-FW_DIR="${CAMTEST_FW_DIR:-/boot/firmware}"
+FW_DIR="${CAMLAB_FW_DIR:-/boot/firmware}"
 CMDLINE="$FW_DIR/cmdline.txt"
 
 _overlay_present() { [ -f /etc/overlayroot.local.conf ]; }
@@ -150,7 +150,7 @@ cmd_rw() {
     sudo mount -o remount,rw "$FW_DIR" 2>/dev/null || true
     # Append the token to the single cmdline line (space-separated, no newline).
     sudo sed -i 's/[[:space:]]*$/ overlayroot=disabled/' "$CMDLINE"
-    log "writable on next boot. Apply: sudo reboot   (then camtestctl ro to re-lock)"
+    log "writable on next boot. Apply: sudo reboot   (then camlabctl ro to re-lock)"
 }
 
 cmd_ro() {
@@ -175,5 +175,5 @@ case "$cmd" in
     rw)             cmd_rw ;;
     ro)             cmd_ro ;;
     -h|--help|help) help_text ;;
-    *)              die "unknown command: $cmd (try 'camtestctl help')" ;;
+    *)              die "unknown command: $cmd (try 'camlabctl help')" ;;
 esac

@@ -9,18 +9,18 @@
 # up read-only. ExecStart points at the finaliser script readonly.sh drops in.
 
 [Unit]
-Description=camtest read-only root finaliser (one-shot, self-disabling)
+Description=camlab read-only root finaliser (one-shot, self-disabling)
 # Run late, after the persistent data mount and normal startup are up.
-After=multi-user.target var-lib-camtest.mount
-Wants=var-lib-camtest.mount
+After=multi-user.target var-lib-camlab.mount
+Wants=var-lib-camlab.mount
 # Only meaningful while the data mount is healthy. The finaliser itself re-checks
 # writability and only acts when the overlay is staged-but-disabled, so it is a
 # no-op on an already-read-only boot (and it disables itself after locking in).
-ConditionPathExists=/var/lib/camtest/.camtest-data
+ConditionPathExists=/var/lib/camlab/.camlab-data
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/sbin/camtest-readonly-finalise
+ExecStart=/usr/local/sbin/camlab-readonly-finalise
 RemainAfterExit=no
 
 [Install]

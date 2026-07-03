@@ -2,10 +2,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026, UAB Kurokesu
 #
-# camtest installer
+# camlab installer
 # Thin orchestrator over scripts/setup/* primitives.
 #
-# Installs camtest as a kiosk that auto-starts on boot (camtest.service): live
+# Installs camlab as a kiosk that auto-starts on boot (camlab.service): live
 # camera preview, sensor selection, and signal-integrity surfacing. For partial
 # reconfigures on a dev box, call individual primitives under scripts/setup/.
 #
@@ -23,8 +23,8 @@
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LOG_FILE="/var/log/camtest-install.log"
-CAMTEST_TAG="install"
+LOG_FILE="/var/log/camlab-install.log"
+CAMLAB_TAG="install"
 
 # shellcheck source=scripts/common.sh
 source "$REPO_DIR/scripts/common.sh"
@@ -44,7 +44,7 @@ done
 require_root
 
 exec > >(tee -a "$LOG_FILE") 2>&1
-header "camtest install started at $(date)"
+header "camlab install started at $(date)"
 log "Logging to $LOG_FILE"
 
 header "Platform check"
@@ -58,7 +58,7 @@ if [ -f /etc/os-release ]; then
     . /etc/os-release
     log "OS: ${PRETTY_NAME:-unknown}"
 fi
-log "Install user: $CAMTEST_USER (uid=$CAMTEST_UID)"
+log "Install user: $CAMLAB_USER (uid=$CAMLAB_UID)"
 
 # Orchestrate setup primitives. Each is safe to re-run standalone. Order:
 # configure everything first, enable the service last. Overlay-root is last of
@@ -71,9 +71,9 @@ log "Install user: $CAMTEST_USER (uid=$CAMTEST_UID)"
 "$REPO_DIR/scripts/setup/boot.sh"
 "$REPO_DIR/scripts/setup/service.sh" --enable
 
-header "Installing camtestctl command"
-ln -sf "$REPO_DIR/scripts/camtestctl.sh" /usr/local/bin/camtestctl
-log "Symlinked /usr/local/bin/camtestctl -> $REPO_DIR/scripts/camtestctl.sh"
+header "Installing camlabctl command"
+ln -sf "$REPO_DIR/scripts/camlabctl.sh" /usr/local/bin/camlabctl
+log "Symlinked /usr/local/bin/camlabctl -> $REPO_DIR/scripts/camlabctl.sh"
 
 if [ "$DO_READONLY" -eq 1 ]; then
     "$REPO_DIR/scripts/setup/readonly.sh"
@@ -85,18 +85,18 @@ fi
 
 header "Installation complete"
 cat <<EOF
-camtest installed.
+camlab installed.
 
-  User:    $CAMTEST_USER
-  Service: camtest.service (enabled, auto-starts on boot)
+  User:    $CAMLAB_USER
+  Service: camlab.service (enabled, auto-starts on boot)
   Repo:    $REPO_DIR
 
 Quick commands:
   sudo reboot                 # boot into the kiosk (loads the sensor overlay)
-  camtestctl status           # service state
-  camtestctl logs -f          # tail logs
-  camtestctl shot             # screenshot the live kiosk
-  camtestctl restart          # apply code changes
+  camlabctl status           # service state
+  camlabctl logs -f          # tail logs
+  camlabctl shot             # screenshot the live kiosk
+  camlabctl restart          # apply code changes
 
 Install log: $LOG_FILE
 EOF
@@ -105,6 +105,6 @@ if [ "$READONLY_STAGED" -eq 1 ]; then
     cat <<'EOF'
 
 Read-only root: your reboot triggers one more automatic reboot to lock it in.
-Dev toggle: camtestctl rw / ro.
+Dev toggle: camlabctl rw / ro.
 EOF
 fi

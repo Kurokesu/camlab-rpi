@@ -11,7 +11,7 @@
 # We deliberately leave console/bootloader logging on (BOOT_UART, no quiet): for
 # an internal bench tool the boot log is useful operator feedback while waiting,
 # and disabling it bought no measurable time.
-# Networking stays under operator control via camtestctl net on|off, not here,
+# Networking stays under operator control via camlabctl net on|off, not here,
 # so dev keeps SSH. Re-running is a no-op. --revert undoes every stage.
 # Safe to re-run. Requires sudo. A reboot is needed for the changes to take hold.
 #
@@ -22,7 +22,7 @@
 
 set -euo pipefail
 
-CAMTEST_TAG="boot"
+CAMLAB_TAG="boot"
 
 # shellcheck source=../common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../common.sh"
@@ -38,17 +38,17 @@ done
 
 require_root
 
-FW_DIR="${CAMTEST_FW_DIR:-/boot/firmware}"
+FW_DIR="${CAMLAB_FW_DIR:-/boot/firmware}"
 CONFIG_TXT="$FW_DIR/config.txt"
 
-# Managed block markers, mirroring camtest.config_manager so the edits are
+# Managed block markers, mirroring camlab.config_manager so the edits are
 # greppable, idempotent and cleanly removable.
-BEGIN="# >>> camtest boot (do not edit) >>>"
-END="# <<< camtest boot <<<"
+BEGIN="# >>> camlab boot (do not edit) >>>"
+END="# <<< camlab boot <<<"
 
 # systemd units the kiosk never uses (only those present are touched). Left out
 # on purpose: journald (logs), logind (Cage/PAM session), and avahi/mDNS (LAN
-# name resolution, off the critical path). Drop networking with camtestctl net
+# name resolution, off the critical path). Drop networking with camlabctl net
 # off for production instead of masking those.
 MASK_UNITS=(
     NetworkManager-wait-online.service
@@ -73,7 +73,7 @@ _unit_present() { systemctl list-unit-files "$1" >/dev/null 2>&1; }
 # Atomic write preserving mode/owner of an existing file.
 _atomic_write() {
     local path="$1" content="$2" tmp
-    tmp="$(mktemp "${path}.camtest-XXXXXX")"
+    tmp="$(mktemp "${path}.camlab-XXXXXX")"
     printf '%s' "$content" > "$tmp"
     if [ -f "$path" ]; then chmod --reference="$path" "$tmp" 2>/dev/null || true; fi
     mv -f "$tmp" "$path"
@@ -89,7 +89,7 @@ stage_config() {
     kept="${kept%$'\n'}"  # trim one trailing newline before we re-add spacing
     if [ "$REVERT" -eq 1 ]; then
         _atomic_write "$CONFIG_TXT" "${kept}"$'\n'
-        log "A) config.txt: removed camtest boot block"
+        log "A) config.txt: removed camlab boot block"
         return
     fi
     local block
@@ -164,5 +164,5 @@ if [ "$REVERT" -eq 1 ]; then
     log "Revert complete. Reboot to restore stock boot behaviour."
 else
     log "Done. Reboot to measure: sudo reboot"
-    log "Networking is unchanged here. Toggle it with: camtestctl net off|on"
+    log "Networking is unchanged here. Toggle it with: camlabctl net off|on"
 fi

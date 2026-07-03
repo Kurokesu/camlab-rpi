@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-CAMTEST_TAG="journald"
+CAMLAB_TAG="journald"
 
 # shellcheck source=../common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../common.sh"
@@ -26,13 +26,13 @@ done
 require_root
 
 DROPIN_DIR="/etc/systemd/journald.conf.d"
-DROPIN="$DROPIN_DIR/camtest.conf"
+DROPIN="$DROPIN_DIR/camlab.conf"
 
 header "Configuring journald"
 
 install -d -m 0755 "$DROPIN_DIR"
 cat > "$DROPIN" <<'EOF'
-# camtest: bound journal size (managed)
+# camlab: bound journal size (managed)
 [Journal]
 SystemMaxUse=200M
 RuntimeMaxUse=64M

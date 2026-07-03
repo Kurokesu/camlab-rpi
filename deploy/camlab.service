@@ -1,39 +1,39 @@
 # SPDX-FileCopyrightText: Copyright (C) 2026, UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Rendered by scripts/setup/service.sh (CAMTEST_USER / CAMTEST_REPO_DIR are
-# substituted). Runs the camtest GUI fullscreen under a Cage kiosk on tty1.
+# Rendered by scripts/setup/service.sh (CAMLAB_USER / CAMLAB_REPO_DIR are
+# substituted). Runs the camlab GUI fullscreen under a Cage kiosk on tty1.
 
 [Unit]
-Description=camtest camera bench tool (Kurokesu)
+Description=camlab camera bench tool (Kurokesu)
 After=systemd-user-sessions.service getty@tty1.service
 Conflicts=getty@tty1.service
 
 [Service]
 Type=simple
-User=CAMTEST_USER
-PAMName=camtest
-WorkingDirectory=CAMTEST_REPO_DIR
+User=CAMLAB_USER
+PAMName=camlab
+WorkingDirectory=CAMLAB_REPO_DIR
 
-# Writable, persistent state owned by the service user (creates /var/lib/camtest
+# Writable, persistent state owned by the service user (creates /var/lib/camlab
 # and exports $STATE_DIRECTORY). Holds the boot-persistent mode/fps selection.
 # Phase 5 (read-only root) must keep this path on a writable data partition,
 # excluded from the overlay, so the selection survives reboots.
-StateDirectory=camtest
+StateDirectory=camlab
 StateDirectoryMode=0750
 
 TTYPath=/dev/tty1
 StandardInput=tty-fail
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=camtest
+SyslogIdentifier=camlab
 
 Environment=XCURSOR_SIZE=1
 # Deliberately do NOT raise LIBCAMERA_LOG_LEVELS: ERROR lines (e.g. AR0822
 # embedded-data parse failures) are the integrity signal we surface.
 Environment=PYTHONUNBUFFERED=1
 
-ExecStart=/usr/bin/cage -- /usr/bin/python3 -m camtest
+ExecStart=/usr/bin/cage -- /usr/bin/python3 -m camlab
 
 Restart=on-failure
 RestartSec=2

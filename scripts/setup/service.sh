@@ -2,19 +2,19 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026, UAB Kurokesu
 #
-# Install camtest.service (systemd unit) + its PAM config.
+# Install camlab.service (systemd unit) + its PAM config.
 # Safe to re-run. Requires sudo.
 #
 # Usage:
 #   sudo scripts/setup/service.sh             # install unit, do NOT enable at boot
 #   sudo scripts/setup/service.sh --enable    # install AND enable at boot (used by install.sh)
 #
-# The unit is rendered from deploy/camtest.service. Cage needs a valid logind
+# The unit is rendered from deploy/camlab.service. Cage needs a valid logind
 # session on the tty, which the PAM stack (pam_systemd) provides.
 
 set -euo pipefail
 
-CAMTEST_TAG="service"
+CAMLAB_TAG="service"
 
 # shellcheck source=../common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../common.sh"
@@ -32,19 +32,19 @@ require_root
 
 REPO_DIR="$(resolve_repo_dir)"
 
-header "Installing camtest.service"
-log "repo=$REPO_DIR user=$CAMTEST_USER uid=$CAMTEST_UID enable-at-boot=$ENABLE_AT_BOOT"
+header "Installing camlab.service"
+log "repo=$REPO_DIR user=$CAMLAB_USER uid=$CAMLAB_UID enable-at-boot=$ENABLE_AT_BOOT"
 
-systemctl stop camtest.service 2>/dev/null || true
+systemctl stop camlab.service 2>/dev/null || true
 
 sed \
-    -e "s|CAMTEST_USER|$CAMTEST_USER|g" \
-    -e "s|CAMTEST_REPO_DIR|$REPO_DIR|g" \
-    "$REPO_DIR/deploy/camtest.service" \
-    > /etc/systemd/system/camtest.service
-log "Rendered /etc/systemd/system/camtest.service"
+    -e "s|CAMLAB_USER|$CAMLAB_USER|g" \
+    -e "s|CAMLAB_REPO_DIR|$REPO_DIR|g" \
+    "$REPO_DIR/deploy/camlab.service" \
+    > /etc/systemd/system/camlab.service
+log "Rendered /etc/systemd/system/camlab.service"
 
-cat > /etc/pam.d/camtest <<'PAMEOF'
+cat > /etc/pam.d/camlab <<'PAMEOF'
 auth       required pam_unix.so
 auth       required pam_env.so
 account    required pam_unix.so
@@ -52,16 +52,16 @@ session    required pam_unix.so
 session    required pam_loginuid.so
 session    optional pam_systemd.so
 PAMEOF
-log "Wrote /etc/pam.d/camtest"
+log "Wrote /etc/pam.d/camlab"
 
 systemctl daemon-reload
 log "systemctl daemon-reload"
 
 if [ "$ENABLE_AT_BOOT" -eq 1 ]; then
-    systemctl enable camtest.service
-    log "Enabled camtest.service for boot"
+    systemctl enable camlab.service
+    log "Enabled camlab.service for boot"
 else
-    log "Unit installed but NOT enabled at boot. Use 'sudo systemctl enable camtest.service' to enable."
+    log "Unit installed but NOT enabled at boot. Use 'sudo systemctl enable camlab.service' to enable."
 fi
 
 log "Done."

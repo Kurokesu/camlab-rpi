@@ -1,4 +1,4 @@
-# camtest runtime Python deps.
+# camlab runtime Python deps.
 #
 # On the target these come from APT (system packages), NOT pip, because
 # picamera2 / python3-libcamera / PyQt5 are tightly coupled to the Kurokesu

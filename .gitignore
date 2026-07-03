@@ -6,7 +6,7 @@ __pycache__/
 venv/
 
 # Local captures / scratch
-camtest-live*.png
+camlab-live*.png
 *.local.png
 /tmp/
 

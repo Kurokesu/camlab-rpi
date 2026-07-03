@@ -3,15 +3,15 @@
 The managed block is the single source of truth for the selected sensor overlay
 and the rig CSI port:
 
-    # >>> camtest managed (do not edit) >>>
+    # >>> camlab managed (do not edit) >>>
     camera_auto_detect=0
     dtoverlay=ar0822,cam0,4lane
-    # <<< camtest managed <<<
+    # <<< camlab managed <<<
 
 Reading is unprivileged (config.txt is world-readable). Writing needs root, so
-the GUI shells out to this module's CLI via sudo (see deploy/camtest-sudoers):
+the GUI shells out to this module's CLI via sudo (see deploy/camlab-sudoers):
 
-    sudo /usr/bin/python3 -m camtest.config_manager set \
+    sudo /usr/bin/python3 -m camlab.config_manager set \
         --overlay ar0822 --port cam0 --options 4lane
 
 Port convention (RPi/Kurokesu overlays): base overlay == cam1 (no param),
@@ -26,17 +26,17 @@ import subprocess
 import sys
 from pathlib import Path
 
-CONFIG_PATH = Path(os.environ.get("CAMTEST_CONFIG_TXT", "/boot/firmware/config.txt"))
-OVERLAYS_DIR = Path(os.environ.get("CAMTEST_OVERLAYS_DIR", "/boot/firmware/overlays"))
+CONFIG_PATH = Path(os.environ.get("CAMLAB_CONFIG_TXT", "/boot/firmware/config.txt"))
+OVERLAYS_DIR = Path(os.environ.get("CAMLAB_OVERLAYS_DIR", "/boot/firmware/overlays"))
 
-BEGIN = "# >>> camtest managed (do not edit) >>>"
-END = "# <<< camtest managed <<<"
+BEGIN = "# >>> camlab managed (do not edit) >>>"
+END = "# <<< camlab managed <<<"
 
 VALID_PORTS = ("cam0", "cam1")
 
 # Privileged shim installed by scripts/setup/config.sh. The only thing the GUI is
-# allowed to sudo for the config write (see deploy/camtest-sudoers).
-APPLY_BIN = "/usr/local/bin/camtest-apply"
+# allowed to sudo for the config write (see deploy/camlab-sudoers).
+APPLY_BIN = "/usr/local/bin/camlab-apply"
 
 
 class ConfigError(Exception):
@@ -108,7 +108,7 @@ class ConfigManager:
         if os.path.exists(APPLY_BIN):
             cmd = ["sudo", APPLY_BIN, "set", "--overlay", token, "--port", port]
         else:  # dev fallback when the shim is not installed
-            cmd = ["sudo", sys.executable, "-m", "camtest.config_manager",
+            cmd = ["sudo", sys.executable, "-m", "camlab.config_manager",
                    "set", "--overlay", token, "--port", port]
         for o in (options or []):
             cmd += ["--options", o]
@@ -129,7 +129,7 @@ class ConfigManager:
         self._atomic_write(new_text)
 
     def _atomic_write(self, text: str) -> None:
-        tmp = self.config_path.with_suffix(self.config_path.suffix + ".camtest-tmp")
+        tmp = self.config_path.with_suffix(self.config_path.suffix + ".camlab-tmp")
         tmp.write_text(text)
         os.replace(tmp, self.config_path)
 
@@ -165,7 +165,7 @@ def poweroff() -> None:
 
 
 def _main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="camtest.config_manager")
+    ap = argparse.ArgumentParser(prog="camlab.config_manager")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p_set = sub.add_parser("set", help="rewrite the managed block (root)")
     p_set.add_argument("--overlay", required=True)

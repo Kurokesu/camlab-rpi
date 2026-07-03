@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026, UAB Kurokesu
 #
-# Rendered to /etc/sudoers.d/camtest by scripts/setup/config.sh (CAMTEST_USER
+# Rendered to /etc/sudoers.d/camlab by scripts/setup/config.sh (CAMLAB_USER
 # substituted). Minimal, scoped NOPASSWD rights for the kiosk GUI:
 #   - the config-write shim (managed block in config.txt)
 #   - poweroff (both a sensor swap and operator shutdown power the box off)
 # Nothing else. Installed with visudo -c validation.
 
-CAMTEST_USER ALL=(root) NOPASSWD: /usr/local/bin/camtest-apply
-CAMTEST_USER ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff
+CAMLAB_USER ALL=(root) NOPASSWD: /usr/local/bin/camlab-apply
+CAMLAB_USER ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff
