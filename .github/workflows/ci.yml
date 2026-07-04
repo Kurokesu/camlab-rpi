@@ -1,0 +1,25 @@
+# Fast hardware-free checks
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    name: Checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compile python
+        run: python3 -m compileall -q camlab
+
+      - name: Shellcheck
+        run: git ls-files '*.sh' | xargs shellcheck
+
+      - name: Parse sensors.yaml
+        run: |
+          pip install pyyaml
+          python3 -c "import yaml; yaml.safe_load(open('camlab/sensors.yaml'))"
