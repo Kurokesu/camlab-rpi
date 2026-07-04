@@ -38,7 +38,9 @@ else
     CAMLAB_USER="$(whoami)"
 fi
 
+# shellcheck disable=SC2034  # consumed by scripts that source this file
 CAMLAB_UID="$(id -u "$CAMLAB_USER")"
+# shellcheck disable=SC2034
 CAMLAB_HOME="$(getent passwd "$CAMLAB_USER" | cut -d: -f6)"
 
 log()    { echo -e "${_C_GREEN}[${CAMLAB_TAG}]${_C_RESET} $*"; }

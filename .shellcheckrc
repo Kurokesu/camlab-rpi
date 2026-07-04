@@ -1,0 +1,2 @@
+# Sourced files use runtime-computed paths shellcheck cannot follow.
+disable=SC1091

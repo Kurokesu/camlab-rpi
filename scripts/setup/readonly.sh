@@ -37,6 +37,7 @@ set -euo pipefail
 # mkfs/losetup/blkid live in sbin, off the non-login PATH.
 PATH="/usr/sbin:/sbin:/usr/bin:/bin:$PATH"
 
+# shellcheck disable=SC2034  # log tag read by common.sh
 CAMLAB_TAG="readonly"
 
 # shellcheck source=../common.sh

@@ -22,6 +22,7 @@
 
 set -euo pipefail
 
+# shellcheck disable=SC2034  # log tag read by common.sh
 CAMLAB_TAG="boot"
 
 # shellcheck source=../common.sh
@@ -122,7 +123,9 @@ stage_systemd() {
             log "B) removed /etc/cloud/cloud-init.disabled"
             changed=1
         fi
-        [ "$changed" -eq 1 ] && systemctl daemon-reload || true
+        if [ "$changed" -eq 1 ]; then
+            systemctl daemon-reload || true
+        fi
         log "B) systemd: unmasked/re-enabled units (reboot to take effect)"
         return
     fi
@@ -148,7 +151,9 @@ stage_systemd() {
         log "B) touched /etc/cloud/cloud-init.disabled"
         changed=1
     fi
-    [ "$changed" -eq 1 ] && systemctl daemon-reload || true
+    if [ "$changed" -eq 1 ]; then
+        systemctl daemon-reload || true
+    fi
 }
 
 if [ "$REVERT" -eq 1 ]; then

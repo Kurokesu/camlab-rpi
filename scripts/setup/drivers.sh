@@ -15,6 +15,7 @@
 
 set -euo pipefail
 
+# shellcheck disable=SC2034  # log tag read by common.sh
 CAMLAB_TAG="drivers"
 
 # shellcheck source=../common.sh

@@ -17,6 +17,7 @@
 
 set -euo pipefail
 
+# shellcheck disable=SC2034  # log tag read by common.sh
 CAMLAB_TAG="config"
 
 # shellcheck source=../common.sh

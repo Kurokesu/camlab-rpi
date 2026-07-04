@@ -25,6 +25,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
+# shellcheck disable=SC2034  # log tag read by common.sh
 CAMLAB_TAG="camlabctl"
 
 # shellcheck source=common.sh
@@ -71,7 +72,13 @@ cmd_shot() {
     command -v grim >/dev/null || die "grim not installed (sudo apt install grim)"
     local out="${1:-/tmp/camlab-$(date +%Y%m%d-%H%M%S).png}"
     local sock
-    sock="$(ls -1 "/run/user/$CAMLAB_UID"/wayland-* 2>/dev/null | grep -v '\.lock$' | head -n1)"
+    sock=""
+    for s in "/run/user/$CAMLAB_UID"/wayland-*; do
+        [ -e "$s" ] || continue
+        case "$s" in *.lock) continue ;; esac
+        sock="$s"
+        break
+    done
     [ -n "$sock" ] || die "no wayland socket for uid $CAMLAB_UID (is camlab running?)"
     XDG_RUNTIME_DIR="/run/user/$CAMLAB_UID" WAYLAND_DISPLAY="$(basename "$sock")" grim "$out"
     log "saved $out"
@@ -101,7 +108,8 @@ cmd_net() {
             done
             # Bring the primary manager up now so SSH survives without a reboot.
             for u in NetworkManager.service systemd-networkd.service wpa_supplicant.service; do
-                _net_present "$u" && sudo systemctl enable --now "$u" >/dev/null 2>&1 || true
+                _net_present "$u" || continue
+                sudo systemctl enable --now "$u" >/dev/null 2>&1 || true
             done
             log "networking ON (unmasked + started). For dev/SSH."
             ;;
