@@ -60,7 +60,7 @@ Ships from eMMC. NVMe was tested and dropped: it boots ~1s slower (~16s vs ~15s 
 
 Root is read-only (overlayfs, RAM upper) so a yanked power cable can't corrupt it. `scripts/setup/readonly.sh` sets it up during install and arms a one-shot that locks down on the first reboot after first-boot tasks settle, so the operator does nothing extra. Sensor selections persist on a small loopback data partition at `/var/lib/camlab`, outside the overlay. For edits: `camlabctl rw`, reboot, change, `camlabctl ro`, reboot.
 
-Useful env vars:
+### Environment variables
 
 - `CAMLAB_CAMERA_NUM` (default `0`)
 - `CAMLAB_DISPLAY_MAX_FPS` display fps ceiling (default: screen refresh, capped at 60)
