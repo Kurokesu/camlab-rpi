@@ -48,7 +48,7 @@ sensors:
 
   - name: IMX462
     overlay: imx462
-    options: []               # 2-lane default (overlay also supports 4lane)
+    options: [4lane]          # 4-lane MIPI
     mono_option: mono         # color/mono selectable (imx462lqr / imx462llr)
     notes: "2MP rolling shutter, 1920x1080"
 
