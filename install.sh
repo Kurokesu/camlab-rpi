@@ -28,7 +28,7 @@ CAMLAB_TAG="install"
 
 # Dev-clone clutter pruned from the /opt/camlab copy. Release zips
 # (git archive) don't have it.
-DEV_CLUTTER=(.git .github .venv .gitignore .shellcheckrc .gitattributes pyproject.toml)
+DEV_CLUTTER=(.git .github .venv .gitignore .shellcheckrc .gitattributes pyproject.toml docs)
 
 # shellcheck source=scripts/common.sh
 source "$REPO_DIR/scripts/common.sh"
