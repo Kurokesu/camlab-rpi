@@ -34,7 +34,7 @@ PORT_ARGS=()
 for arg in "$@"; do
     case "$arg" in
         --no-readonly) DO_READONLY=0 ;;
-        --port) die "use --port=cam1 form" ;;
+        --port) die "use --port=cam0 form" ;;
         --port=*) PORT_ARGS=(--port "${arg#*=}") ;;
         -h|--help) help_text; exit 0 ;;
         *) die "Unknown argument: $arg" ;;
