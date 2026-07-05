@@ -48,13 +48,9 @@ header "camlab install started at $(date)"
 log "Logging to $LOG_FILE"
 
 header "Platform check"
-MODEL=""
-if [ -f /proc/device-tree/model ]; then
-    MODEL="$(tr -d '\0' < /proc/device-tree/model)"
-    log "Model: $MODEL"
-fi
+MODEL="$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || true)"
 case "$MODEL" in
-    "Raspberry Pi"*) ;;
+    "Raspberry Pi"*) log "Model: $MODEL" ;;
     *) die "Raspberry Pi required (detected: ${MODEL:-unknown hardware})" ;;
 esac
 ARCH="$(uname -m)"
