@@ -65,8 +65,9 @@ log "Architecture: $ARCH"
 log "OS: ${PRETTY_NAME:-unknown}"
 [ "${VERSION_CODENAME:-}" = "trixie" ] \
     || die "unsupported OS: ${PRETTY_NAME:-unknown} (need Raspberry Pi OS Lite Trixie, 64-bit)"
-# Desktop image marker. A desktop session would fight the kiosk for tty1.
-if dpkg -s raspberrypi-ui-mods >/dev/null 2>&1; then
+# Desktop images boot to graphical.target and the session would fight the
+# kiosk for tty1. Lite boots to multi-user.target.
+if [ "$(systemctl get-default)" = "graphical.target" ]; then
     die "Raspberry Pi OS Desktop detected. Use the Lite image."
 fi
 log "Install user: $CAMLAB_USER (uid=$CAMLAB_UID)"
