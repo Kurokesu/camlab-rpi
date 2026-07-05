@@ -19,7 +19,7 @@ git tag -a v0.2.0 -m "v0.2.0"
 git push origin v0.2.0
 ```
 
-3. The release workflow builds zip file and publishes GitHub release with generated notes. It fails if the tag does not match `__version__`, fix the mismatch and re-tag.
+3. Release workflow builds `camlab-rpi.zip` and publishes GitHub release with generated notes.
 4. Bump `__version__` to the next expected minor with `-dev` (for example `0.3.0-dev`) in a follow-up commit. An intervening patch release may change the plan.
 
 Tags with a hyphen (`v1.0.0-beta.1`) are published as pre-releases automatically.
