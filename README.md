@@ -1,9 +1,12 @@
 # camlab
 
-Kiosk app for previewing and testing Kurokesu camera modules on Raspberry Pi.
+[![CI](https://github.com/Kurokesu/camlab-rpi/actions/workflows/ci.yml/badge.svg)](https://github.com/Kurokesu/camlab-rpi/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Kurokesu/camlab-rpi?include_prereleases&label=release)](https://github.com/Kurokesu/camlab-rpi/releases)
+![OS](https://img.shields.io/badge/OS-RPi%20Trixie%20Lite-blue?logo=raspberrypi&logoColor=c51a4a)
+![HW](https://img.shields.io/badge/HW-CM5%20%7C%20Pi%205-blue?logo=raspberrypi&logoColor=c51a4a)
+![Sensors](https://img.shields.io/badge/sensors-AR0234%20%7C%20AR0822%20%7C%20IMX283%20%7C%20IMX462%20%7C%20IMX477%20%7C%20IMX585-blue)
 
-> [!NOTE]
-> Target: Raspberry Pi CM5 + IO board (or a Pi 5), Raspberry Pi OS Lite Trixie (64-bit).
+Kiosk app for previewing and testing Kurokesu camera modules on Raspberry Pi.
 
 ## Setup
 
