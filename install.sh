@@ -26,6 +26,10 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_FILE="/var/log/camlab-install.log"
 CAMLAB_TAG="install"
 
+# Dev-clone clutter pruned from the /opt/camlab copy. Release zips
+# (git archive) don't have it.
+DEV_CLUTTER=(.git .github .venv .gitignore .shellcheckrc .gitattributes pyproject.toml)
+
 # shellcheck source=scripts/common.sh
 source "$REPO_DIR/scripts/common.sh"
 
@@ -77,9 +81,9 @@ if [ "$REPO_DIR" != "$APP_DIR" ]; then
     rm -rf "$STAGE_DIR"
     mkdir -p "$STAGE_DIR"
     cp -a "$REPO_DIR/." "$STAGE_DIR/"
-    # Dev-clone clutter, release zips (git archive) don't have it.
-    rm -rf "$STAGE_DIR/.git" "$STAGE_DIR/.github" "$STAGE_DIR/.venv" \
-        "$STAGE_DIR/.gitignore" "$STAGE_DIR/.shellcheckrc" "$STAGE_DIR/.gitattributes"
+    for item in "${DEV_CLUTTER[@]}"; do
+        rm -rf "$STAGE_DIR/$item"
+    done
     find "$STAGE_DIR" -type d -name __pycache__ -prune -exec rm -rf {} +
     chown -R root:root "$STAGE_DIR"
     rm -rf "$APP_DIR"

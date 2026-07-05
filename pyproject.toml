@@ -1,0 +1,6 @@
+# Tooling config only, install stays script-based (install.sh).
+
+[tool.ruff]
+# Trixie ships Python 3.13
+target-version = "py313"
+line-length = 100
