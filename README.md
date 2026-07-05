@@ -35,7 +35,7 @@ sudo ./install.sh
 sudo reboot
 ```
 
-`install.sh` adds Kurokesu camera stack, sensor drivers, overlay config and kiosk service. Prompts for CSI port (`cam0`/`cam1`). Pass `--port=cam0` to skip.
+`install.sh` adds Kurokesu camera stack, sensor drivers, overlay config and kiosk service. CSI port defaults to `cam1` (override with `--port=cam0`) and stays switchable in the GUI. App is copied to `/opt/camlab` and runs from there.
 
 ## Development
 

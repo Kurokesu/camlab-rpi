@@ -5,20 +5,20 @@
 # camlab installer
 # Thin orchestrator over scripts/setup/* primitives.
 #
-# Installs camlab as a kiosk that auto-starts on boot (camlab.service): live
-# camera preview, sensor selection, and signal-integrity surfacing. For partial
-# reconfigures on a dev box, call individual primitives under scripts/setup/.
+# Installs camlab to /opt/camlab as a kiosk that auto-starts on boot
+# (camlab.service). For partial reconfigures, call individual primitives
+# under scripts/setup/.
 #
 # Usage:
-#   sudo ./install.sh                     # full install (interactive port prompt)
-#   sudo ./install.sh --port cam0         # non-interactive port
-#   sudo ./install.sh --no-readonly       # skip the overlay-root step (Phase 5)
+#   sudo ./install.sh                     # full install (port defaults to cam1)
+#   sudo ./install.sh --port=cam0         # override CSI port to cam0
+#   sudo ./install.sh --no-readonly       # keep root fs writable (dev install)
 #   ./install.sh --help                   # this message
 #
 # Requirements:
-#   - Raspberry Pi CM5 (or Pi 5) + IO board
+#   - Raspberry Pi CM5 + IO board, or a Pi 5
 #   - Raspberry Pi OS Lite Trixie (64-bit, Debian 13)
-#   - Internet connection (apt + git)
+#   - Internet connection (apt)
 
 set -euo pipefail
 
@@ -34,7 +34,7 @@ PORT_ARGS=()
 for arg in "$@"; do
     case "$arg" in
         --no-readonly) DO_READONLY=0 ;;
-        --port) die "use --port=cam0 form" ;;
+        --port) die "use --port=cam1 form" ;;
         --port=*) PORT_ARGS=(--port "${arg#*=}") ;;
         -h|--help) help_text; exit 0 ;;
         *) die "Unknown argument: $arg" ;;
@@ -48,35 +48,57 @@ header "camlab install started at $(date)"
 log "Logging to $LOG_FILE"
 
 header "Platform check"
+MODEL=""
 if [ -f /proc/device-tree/model ]; then
-    log "Model: $(tr -d '\0' < /proc/device-tree/model)"
+    MODEL="$(tr -d '\0' < /proc/device-tree/model)"
+    log "Model: $MODEL"
 fi
+case "$MODEL" in
+    "Raspberry Pi"*) ;;
+    *) die "Raspberry Pi required (detected: ${MODEL:-unknown hardware})" ;;
+esac
 ARCH="$(uname -m)"
 [ "$ARCH" = "aarch64" ] || die "64-bit OS required (detected: $ARCH)"
 log "Architecture: $ARCH"
-if [ -f /etc/os-release ]; then
-    . /etc/os-release
-    log "OS: ${PRETTY_NAME:-unknown}"
+[ -f /etc/os-release ] || die "cannot detect OS (/etc/os-release missing)"
+. /etc/os-release
+log "OS: ${PRETTY_NAME:-unknown}"
+[ "${VERSION_CODENAME:-}" = "trixie" ] \
+    || die "unsupported OS: ${PRETTY_NAME:-unknown} (need Raspberry Pi OS Lite Trixie, 64-bit)"
+# Desktop image marker. A desktop session would fight the kiosk for tty1.
+if dpkg -s raspberrypi-ui-mods >/dev/null 2>&1; then
+    die "Raspberry Pi OS Desktop detected. Use the Lite image."
 fi
 log "Install user: $CAMLAB_USER (uid=$CAMLAB_UID)"
 
-# Orchestrate setup primitives. Each is safe to re-run standalone. Order:
-# configure everything first, enable the service last. Overlay-root is last of
-# all so a partial/interrupted install never leaves a read-only box mid-setup.
-"$REPO_DIR/scripts/setup/archive.sh"
-"$REPO_DIR/scripts/setup/deps.sh"
-"$REPO_DIR/scripts/setup/drivers.sh"
-"$REPO_DIR/scripts/setup/config.sh" "${PORT_ARGS[@]}"
-"$REPO_DIR/scripts/setup/journald.sh"
-"$REPO_DIR/scripts/setup/boot.sh"
-"$REPO_DIR/scripts/setup/service.sh" --enable
+# Fixed app location. Re-run from $APP_DIR itself skips the copy.
+APP_DIR="/opt/camlab"
+if [ "$REPO_DIR" != "$APP_DIR" ]; then
+    header "Installing app to $APP_DIR"
+    rm -rf "$APP_DIR"
+    mkdir -p "$APP_DIR"
+    cp -a "$REPO_DIR/." "$APP_DIR/"
+    chown -R root:root "$APP_DIR"
+    log "Copied $REPO_DIR -> $APP_DIR"
+fi
+# Precompile, the service user cannot write bytecode into the root-owned tree.
+python3 -m compileall -q "$APP_DIR/camlab"
+
+# Setup primitives run from $APP_DIR so every rendered path points there.
+# Overlay-root last, so a partial install never leaves a read-only box.
+"$APP_DIR/scripts/setup/deps.sh"
+"$APP_DIR/scripts/setup/drivers.sh"
+"$APP_DIR/scripts/setup/config.sh" "${PORT_ARGS[@]}"
+"$APP_DIR/scripts/setup/journald.sh"
+"$APP_DIR/scripts/setup/boot.sh"
+"$APP_DIR/scripts/setup/service.sh" --enable
 
 header "Installing camlabctl command"
-ln -sf "$REPO_DIR/scripts/camlabctl.sh" /usr/local/bin/camlabctl
-log "Symlinked /usr/local/bin/camlabctl -> $REPO_DIR/scripts/camlabctl.sh"
+ln -sf "$APP_DIR/scripts/camlabctl.sh" /usr/local/bin/camlabctl
+log "Symlinked /usr/local/bin/camlabctl -> $APP_DIR/scripts/camlabctl.sh"
 
 if [ "$DO_READONLY" -eq 1 ]; then
-    "$REPO_DIR/scripts/setup/readonly.sh"
+    "$APP_DIR/scripts/setup/readonly.sh"
     READONLY_STAGED=1
 else
     log "Skipping overlay-root (--no-readonly)"
@@ -89,7 +111,7 @@ camlab installed.
 
   User:    $CAMLAB_USER
   Service: camlab.service (enabled, auto-starts on boot)
-  Repo:    $REPO_DIR
+  App:     $APP_DIR
 
 Quick commands:
   sudo reboot                 # boot into the kiosk (loads the sensor overlay)
