@@ -28,8 +28,8 @@ require_root
 
 header "Installing camlab apt dependencies"
 
-# Official archive setup script: installs the signing key (fingerprint
-# verified), writes the deb822 source and refreshes apt (--update).
+# Official archive setup script. It installs the signing key, verifies its
+# fingerprint, writes deb822 source and refreshes apt (--update).
 log "Enabling Kurokesu apt archive..."
 ARCHIVE_SETUP="$(mktemp)"
 curl -fsSL https://apt.kurokesu.com/setup.sh -o "$ARCHIVE_SETUP"
