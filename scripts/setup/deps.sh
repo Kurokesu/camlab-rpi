@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026, UAB Kurokesu
 #
-# Install camlab APT dependencies: the Kurokesu libcamera/rpicam-apps fork, the
-# Python preview/GUI stack (picamera2 + PyQt5 + OpenGL), Cage, and DKMS build
-# tools. Run archive.sh first so the +krks packages are available/preferred.
+# Install camlab APT dependencies: Kurokesu apt archive, Kurokesu
+# libcamera/rpicam-apps fork, Python preview/GUI stack (picamera2 + PyQt5 +
+# OpenGL) and Cage.
 # Safe to re-run. Requires sudo.
 #
 # Usage: sudo scripts/setup/deps.sh
@@ -28,8 +28,13 @@ require_root
 
 header "Installing camlab apt dependencies"
 
-log "Updating package lists..."
-apt-get update
+# Official archive setup script: installs the signing key (fingerprint
+# verified), writes the deb822 source and refreshes apt (--update).
+log "Enabling Kurokesu apt archive..."
+ARCHIVE_SETUP="$(mktemp)"
+curl -fsSL https://apt.kurokesu.com/setup.sh -o "$ARCHIVE_SETUP"
+sh "$ARCHIVE_SETUP" --update
+rm -f "$ARCHIVE_SETUP"
 
 # Kurokesu libcamera/rpicam-apps fork (epoch-forced +krks). Pulls
 # libcamera0.7 / libcamera-ipa / python3-libcamera as dependencies.
@@ -47,11 +52,5 @@ apt-get install -y \
 # Kiosk compositor.
 log "Installing Cage kiosk compositor..."
 apt-get install -y cage
-
-# DKMS + toolchain for the out-of-tree sensor drivers. --no-install-recommends
-# keeps dkms from pulling a large recommended set we don't need on a bench box.
-log "Installing DKMS + build tools..."
-apt-get install -y --no-install-recommends dkms
-apt-get install -y git build-essential device-tree-compiler
 
 log "Done. All apt dependencies installed."

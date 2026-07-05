@@ -22,7 +22,7 @@ class InfoRegister:
 class Sensor:
     name: str
     overlay: str
-    driver_repo: str = ""
+    driver_package: str = ""
     options: tuple[str, ...] = ()
     mono_option: str = ""
     notes: str = ""
@@ -46,7 +46,7 @@ def _coerce_sensor(raw: dict) -> Sensor:
     return Sensor(
         name=str(raw["name"]),
         overlay=str(raw["overlay"]),
-        driver_repo=str(raw.get("driver_repo", "")),
+        driver_package=str(raw.get("driver_package", "")),
         options=tuple(str(o) for o in (raw.get("options") or [])),
         mono_option=str(raw.get("mono_option", "")),
         notes=str(raw.get("notes", "")),

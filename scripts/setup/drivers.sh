@@ -2,16 +2,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026, UAB Kurokesu
 #
-# Build + install the Kurokesu out-of-tree sensor drivers via DKMS and compile
-# their device-tree overlays. Each driver repo ships a setup.sh (dkms add/build/
-# install) and a dkms.postinst that compiles <sensor>.dtbo and installs it to
-# /boot/overlays. On Trixie the live overlays live in /boot/firmware/overlays,
-# so we ensure /boot/overlays is a symlink to it first.
+# Install Kurokesu out-of-tree sensor drivers, DKMS source packages from the
+# Kurokesu apt archive (enabled by deps.sh). Package postinst compiles
+# <sensor>.dtbo into /boot/overlays, which must be a symlink to the live
+# /boot/firmware/overlays dir on Trixie.
 # Safe to re-run. Requires sudo.
 #
 # Usage:
-#   sudo scripts/setup/drivers.sh                 # build the default set
-#   sudo scripts/setup/drivers.sh ar0822 ar0234   # build specific sensors
+#   sudo scripts/setup/drivers.sh                 # install the default set
+#   sudo scripts/setup/drivers.sh ar0822 ar0234   # install specific sensors
 
 set -euo pipefail
 
@@ -21,38 +20,31 @@ CAMLAB_TAG="drivers"
 # shellcheck source=../common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../common.sh"
 
-# Driver repos come from the sensor registry (camlab/sensors.yaml) so adding a
-# sensor is a single edit there. Each entry's driver_repo is a repo name under
-# the Kurokesu org (a full git URL is also accepted). Override the org base with
-# CAMLAB_DRIVER_BASE_URL if a driver lives elsewhere.
+# Driver packages come from the sensor registry (camlab/sensors.yaml), adding
+# a sensor is a single edit there.
 REPO_DIR="$(resolve_repo_dir)"
 SENSORS_YAML="$REPO_DIR/camlab/sensors.yaml"
-DRIVER_BASE_URL="${CAMLAB_DRIVER_BASE_URL:-https://github.com/Kurokesu}"
 
 python3 -c 'import yaml' 2>/dev/null \
     || die "python3-yaml not installed (run scripts/setup/deps.sh first)"
 
-declare -A DRIVER_REPO=()
+declare -A DRIVER_PACKAGE=()
 DEFAULT_SENSORS=()
-while IFS=$'\t' read -r overlay repo; do
+while IFS=$'\t' read -r overlay package; do
     [ -n "$overlay" ] || continue
-    case "$repo" in
-        http://*|https://*|git@*) url="$repo" ;;            # already a full URL
-        *) url="$DRIVER_BASE_URL/${repo%.git}.git" ;;       # repo name under the org
-    esac
-    DRIVER_REPO["$overlay"]="$url"
+    DRIVER_PACKAGE["$overlay"]="$package"
     DEFAULT_SENSORS+=("$overlay")
 done < <(python3 - "$SENSORS_YAML" <<'PY'
 import sys, yaml
 with open(sys.argv[1]) as f:
     data = yaml.safe_load(f) or {}
 for s in (data.get("sensors") or []):
-    overlay, repo = s.get("overlay"), s.get("driver_repo")
-    if overlay and repo:
-        print(f"{overlay}\t{repo}")
+    overlay, package = s.get("overlay"), s.get("driver_package")
+    if overlay and package:
+        print(f"{overlay}\t{package}")
 PY
 )
-[ "${#DRIVER_REPO[@]}" -gt 0 ] || die "no sensors with a driver_repo in $SENSORS_YAML"
+[ "${#DRIVER_PACKAGE[@]}" -gt 0 ] || die "no sensors with a driver_package in $SENSORS_YAML"
 
 SENSORS=()
 for arg in "$@"; do
@@ -79,7 +71,6 @@ if [ -f /run/reboot-required ] \
 fi
 
 FW_OVERLAYS="/boot/firmware/overlays"
-BUILD_ROOT="$CAMLAB_HOME/kurokesu-drivers"
 
 header "Installing sensor drivers: ${SENSORS[*]}"
 
@@ -95,29 +86,27 @@ elif [ -d /boot/overlays ] && [ ! -L /boot/overlays ]; then
     warn "Driver overlays may land in the wrong place; verify after build."
 fi
 
-install -d -o "$CAMLAB_USER" -g "$CAMLAB_USER" "$BUILD_ROOT"
+[ -f /etc/apt/sources.list.d/kurokesu.sources ] \
+    || die "Kurokesu apt archive not configured (run scripts/setup/deps.sh first)"
+
+PACKAGES=()
+for sensor in "${SENSORS[@]}"; do
+    package="${DRIVER_PACKAGE[$sensor]:-}"
+    [ -n "$package" ] || die "no driver package known for sensor '$sensor'"
+    PACKAGES+=("$package")
+done
+
+log "apt-get update"
+apt-get update
+
+log "Installing: ${PACKAGES[*]}"
+apt-get install -y "${PACKAGES[@]}"
 
 for sensor in "${SENSORS[@]}"; do
-    repo="${DRIVER_REPO[$sensor]:-}"
-    [ -n "$repo" ] || die "no driver repo known for sensor '$sensor'"
-    dir="$BUILD_ROOT/${sensor}-rpi-driver"
-
-    header "Driver: $sensor"
-    if [ -d "$dir/.git" ]; then
-        log "Updating $dir"
-        sudo -u "$CAMLAB_USER" git -C "$dir" pull --ff-only || warn "git pull failed; using existing checkout"
-    else
-        log "Cloning $repo"
-        sudo -u "$CAMLAB_USER" git clone "$repo" "$dir"
-    fi
-
-    log "Running $sensor setup.sh (dkms add/build/install)"
-    ( cd "$dir" && ./setup.sh )
-
     if [ -f "$FW_OVERLAYS/${sensor}.dtbo" ]; then
         log "Overlay installed: $FW_OVERLAYS/${sensor}.dtbo"
     else
-        warn "Expected $FW_OVERLAYS/${sensor}.dtbo not found - check the build output."
+        warn "Expected $FW_OVERLAYS/${sensor}.dtbo not found - check the package postinst output."
     fi
 done
 
