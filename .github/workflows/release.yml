@@ -15,6 +15,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Check tag matches __version__
+        run: |
+          version="$(sed -n 's/^__version__ = "\(.*\)"$/\1/p' camlab/__init__.py)"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match __version__ $version" >&2
+            exit 1
+          fi
+
       - name: Build archive
         run: git archive --format=zip --prefix=camlab-rpi/ -o "camlab-rpi-$GITHUB_REF_NAME.zip" "$GITHUB_REF_NAME"
 
@@ -24,7 +32,7 @@ jobs:
         run: |
           prerelease=""
           case "$GITHUB_REF_NAME" in
-            *-alpha*|*-beta*) prerelease="--prerelease" ;;
+            *-*) prerelease="--prerelease" ;;
           esac
           gh release create "$GITHUB_REF_NAME" "camlab-rpi-$GITHUB_REF_NAME.zip" \
             --title "$GITHUB_REF_NAME" --verify-tag --generate-notes $prerelease
