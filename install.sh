@@ -82,7 +82,7 @@ if [ "$REPO_DIR" != "$APP_DIR" ]; then
     mkdir -p "$STAGE_DIR"
     cp -a "$REPO_DIR/." "$STAGE_DIR/"
     for item in "${DEV_CLUTTER[@]}"; do
-        rm -rf "$STAGE_DIR/$item"
+        rm -rf "${STAGE_DIR:?}/$item"
     done
     find "$STAGE_DIR" -type d -name __pycache__ -prune -exec rm -rf {} +
     chown -R root:root "$STAGE_DIR"
