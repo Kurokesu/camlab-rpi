@@ -6,20 +6,19 @@
 # NOT listed here.
 #
 # Fields:
-#   name         display name in the GUI
-#   overlay      dtoverlay token, must exist in /boot/firmware/overlays/
-#   driver_repo  Kurokesu DKMS driver repo name. drivers.sh clones it from the
-#                Kurokesu org (or a full git URL, if given). Single source of truth.
-#   options      fixed overlay params appended after the port (e.g. [4lane]). Do
-#                NOT put the mono param here. Color/mono is a per-rig runtime
-#                choice (see mono_option) made in the Select sensor modal.
-#   mono_option  overlay param that selects the monochrome variant (e.g. "mono").
-#                Sensors default to color. Set this only for sensors that ship in
-#                both color and mono and do NOT auto-detect (imx585, imx462). Its
-#                presence adds a Color/Mono selector to the modal and the choice is
-#                persisted in config.txt. Omit for color-only sensors and for
-#                ar0234 (driver auto-detects).
-#   notes        free-form operator note
+#   name           display name in the GUI
+#   overlay        dtoverlay token, must exist in /boot/firmware/overlays/
+#   driver_package Kurokesu APT DKMS source package.
+#   options        fixed overlay params appended after port (e.g. [4lane]). Do
+#                  NOT put mono param here. Color/mono is a per-rig runtime
+#                  choice (see mono_option) made in the Select sensor modal.
+#   mono_option    overlay param that selects the monochrome variant (e.g. "mono").
+#                  Sensors default to color. Set this only for sensors that ship in
+#                  both color and mono and do NOT auto-detect (imx585, imx462). Its
+#                  presence adds a Color/Mono selector to the modal and the choice is
+#                  persisted in config.txt. Omit for color-only sensors and for
+#                  ar0234 (driver auto-detects).
+#   notes          free-form operator note
 #   info_registers (optional) curated smbus2 identity probes:
 #     - { name: "...", addr: 0xNNNN, len: N }
 #
@@ -27,17 +26,18 @@
 # driver repo before trusting an entry.
 
 sensors:
-  # driver_repo set => Kurokesu out-of-tree sensor, built by drivers.sh via DKMS.
-  # No driver_repo => mainline sensor whose driver + overlay ship with RPi OS.
+  # driver_package set => Kurokesu out-of-tree sensor, DKMS package installed
+  # by drivers.sh. No driver_package => mainline sensor, driver + overlay ship
+  # with RPi OS.
   - name: AR0234
     overlay: ar0234
-    driver_repo: ar0234-rpi-driver
+    driver_package: ar0234-rpi-dkms
     options: [4lane]          # 4-lane MIPI, driver auto-detects color vs mono
     notes: "2.3MP global shutter, 1920x1200"
 
   - name: AR0822
     overlay: ar0822
-    driver_repo: ar0822-rpi-driver
+    driver_package: ar0822-rpi-dkms
     options: [4lane]          # 4-lane MIPI
     notes: "8MP rolling shutter, 3840x2160"
 
@@ -59,7 +59,7 @@ sensors:
 
   - name: IMX585
     overlay: imx585
-    driver_repo: imx585-rpi-driver
+    driver_package: imx585-rpi-dkms
     options: []               # 4-lane default, color/mono selectable, not auto-detected
     mono_option: mono
     notes: "8.3MP rolling shutter, 3840x2160"
