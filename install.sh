@@ -91,7 +91,7 @@ if [ "$REPO_DIR" != "$APP_DIR" ]; then
     log "Copied $REPO_DIR -> $APP_DIR"
 fi
 # Precompile, the service user cannot write bytecode into the root-owned tree.
-python3 -m compileall -q "$APP_DIR/camlab"
+python3 -m compileall -q -j 0 "$APP_DIR/camlab"
 
 # Setup primitives run from $APP_DIR so every rendered path points there.
 # Overlay-root last, so a partial install never leaves a read-only box.
