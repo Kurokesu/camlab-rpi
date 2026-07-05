@@ -72,13 +72,17 @@ fi
 log "Install user: $CAMLAB_USER (uid=$CAMLAB_UID)"
 
 # Fixed app location. Re-run from $APP_DIR itself skips the copy.
+# Stage the copy, then swap. A failed copy leaves the old tree in place.
 APP_DIR="/opt/camlab"
 if [ "$REPO_DIR" != "$APP_DIR" ]; then
     header "Installing app to $APP_DIR"
+    STAGE_DIR="$APP_DIR.new"
+    rm -rf "$STAGE_DIR"
+    mkdir -p "$STAGE_DIR"
+    cp -a "$REPO_DIR/." "$STAGE_DIR/"
+    chown -R root:root "$STAGE_DIR"
     rm -rf "$APP_DIR"
-    mkdir -p "$APP_DIR"
-    cp -a "$REPO_DIR/." "$APP_DIR/"
-    chown -R root:root "$APP_DIR"
+    mv "$STAGE_DIR" "$APP_DIR"
     log "Copied $REPO_DIR -> $APP_DIR"
 fi
 # Precompile, the service user cannot write bytecode into the root-owned tree.
