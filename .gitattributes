@@ -1,0 +1,5 @@
+# Keep repo metadata out of git archive release zips.
+.github/ export-ignore
+.gitignore export-ignore
+.gitattributes export-ignore
+.shellcheckrc export-ignore
