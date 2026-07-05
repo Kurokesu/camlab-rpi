@@ -24,7 +24,7 @@ jobs:
           fi
 
       - name: Build archive
-        run: git archive --format=zip --prefix=camlab-rpi/ -o "camlab-rpi-$GITHUB_REF_NAME.zip" "$GITHUB_REF_NAME"
+        run: git archive --format=zip --prefix=camlab-rpi/ -o camlab-rpi.zip "$GITHUB_REF_NAME"
 
       - name: Create release
         env:
@@ -34,5 +34,5 @@ jobs:
           case "$GITHUB_REF_NAME" in
             *-*) prerelease="--prerelease" ;;
           esac
-          gh release create "$GITHUB_REF_NAME" "camlab-rpi-$GITHUB_REF_NAME.zip" \
+          gh release create "$GITHUB_REF_NAME" camlab-rpi.zip \
             --title "$GITHUB_REF_NAME" --verify-tag --generate-notes $prerelease
