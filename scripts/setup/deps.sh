@@ -36,21 +36,15 @@ curl -fsSL https://apt.kurokesu.com/setup.sh -o "$ARCHIVE_SETUP"
 sh "$ARCHIVE_SETUP" --update
 rm -f "$ARCHIVE_SETUP"
 
-# Kurokesu libcamera/rpicam-apps fork (epoch-forced +krks). Pulls
-# libcamera0.7 / libcamera-ipa / python3-libcamera as dependencies.
-log "Installing Kurokesu libcamera + rpicam-apps fork..."
-apt-get install -y rpicam-apps python3-libcamera
-
-# Preview + GUI stack. picamera2 recommends pyqt5 + python3-opengl for the GL
-# preview widget (QGlPicamera2). We install them explicitly.
-log "Installing Python preview/GUI stack..."
+# One resolver pass: Kurokesu libcamera/rpicam-apps fork (epoch-forced +krks),
+# Python preview/GUI stack (picamera2 recommends pyqt5 + python3-opengl for
+# the QGlPicamera2 widget, install them explicitly) and Cage kiosk compositor.
+log "Installing packages..."
 apt-get install -y \
+    rpicam-apps python3-libcamera \
     python3-picamera2 \
     python3-pyqt5 python3-pyqt5.qtopengl python3-opengl \
-    python3-yaml python3-smbus2
-
-# Kiosk compositor.
-log "Installing Cage kiosk compositor..."
-apt-get install -y cage
+    python3-yaml python3-smbus2 \
+    cage
 
 log "Done. All apt dependencies installed."
