@@ -56,8 +56,8 @@ class SensorCard(QtWidgets.QFrame):
         self.sensor_sel.changed.connect(self._on_sensor_changed)
 
         self.port_sel = SegmentedSelector()
-        self.port_sel.set_options([("cam0", "cam0"), ("cam1", "cam1")],
-                                  current=current_port if current_port in ("cam0", "cam1") else "cam0")
+        port = current_port if current_port in ("cam0", "cam1") else "cam1"
+        self.port_sel.set_options([("cam0", "cam0"), ("cam1", "cam1")], current=port)
 
         self.variant_lbl = QtWidgets.QLabel("Variant:")
         self.variant_sel = SegmentedSelector()
