@@ -81,6 +81,10 @@ if [ "$REPO_DIR" != "$APP_DIR" ]; then
     rm -rf "$STAGE_DIR"
     mkdir -p "$STAGE_DIR"
     cp -a "$REPO_DIR/." "$STAGE_DIR/"
+    # Dev-clone clutter, release zips (git archive) don't have it.
+    rm -rf "$STAGE_DIR/.git" "$STAGE_DIR/.github" "$STAGE_DIR/.venv" \
+        "$STAGE_DIR/.gitignore" "$STAGE_DIR/.shellcheckrc" "$STAGE_DIR/.gitattributes"
+    find "$STAGE_DIR" -type d -name __pycache__ -prune -exec rm -rf {} +
     chown -R root:root "$STAGE_DIR"
     rm -rf "$APP_DIR"
     mv "$STAGE_DIR" "$APP_DIR"
