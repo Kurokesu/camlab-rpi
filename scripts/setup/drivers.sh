@@ -93,9 +93,6 @@ for sensor in "${SENSORS[@]}"; do
     PACKAGES+=("$package")
 done
 
-log "apt-get update"
-apt-get update
-
 log "Installing: ${PACKAGES[*]}"
 apt-get install -y "${PACKAGES[@]}"
 
