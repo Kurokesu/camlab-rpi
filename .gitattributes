@@ -3,3 +3,4 @@
 .gitignore export-ignore
 .gitattributes export-ignore
 .shellcheckrc export-ignore
+pyproject.toml export-ignore

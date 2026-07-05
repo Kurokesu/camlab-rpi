@@ -16,6 +16,11 @@ jobs:
       - name: Compile python
         run: python3 -m compileall -q camlab
 
+      - name: Ruff
+        run: |
+          pip install ruff
+          ruff check camlab
+
       - name: Shellcheck
         run: git ls-files '*.sh' | xargs shellcheck
 
