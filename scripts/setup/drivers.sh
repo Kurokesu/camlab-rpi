@@ -86,9 +86,6 @@ elif [ -d /boot/overlays ] && [ ! -L /boot/overlays ]; then
     warn "Driver overlays may land in the wrong place; verify after build."
 fi
 
-[ -f /etc/apt/sources.list.d/kurokesu.sources ] \
-    || die "Kurokesu apt archive not configured (run scripts/setup/deps.sh first)"
-
 PACKAGES=()
 for sensor in "${SENSORS[@]}"; do
     package="${DRIVER_PACKAGE[$sensor]:-}"
