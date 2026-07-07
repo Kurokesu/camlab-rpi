@@ -24,6 +24,7 @@ set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_FILE="/var/log/camlab-install.log"
+# shellcheck disable=SC2034  # log tag read by common.sh
 CAMLAB_TAG="install"
 
 # Dev-clone clutter to prune from /opt/camlab
@@ -52,8 +53,9 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 header "camlab install started at $(date)"
 log "Logging to $LOG_FILE"
 
-# Hold off apt's background timers so they cannot grab the dpkg lock mid-install.
-systemctl stop apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
+# Hold off apt's background jobs so they cannot grab the dpkg lock mid-install.
+systemctl stop apt-daily.timer apt-daily-upgrade.timer \
+    apt-daily.service apt-daily-upgrade.service 2>/dev/null || true
 trap 'systemctl start apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true' EXIT
 
 header "Platform check"
