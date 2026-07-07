@@ -95,8 +95,10 @@ fi
 python3 -m compileall -q -j 0 "$APP_DIR/camlab"
 
 # Setup primitives run from $APP_DIR so every rendered path points there.
+# Kernel trim before drivers, so DKMS builds for the running flavor only.
 # Overlay-root last, so a partial install never leaves a read-only box.
 "$APP_DIR/scripts/setup/deps.sh"
+"$APP_DIR/scripts/setup/kernel.sh"
 "$APP_DIR/scripts/setup/drivers.sh"
 "$APP_DIR/scripts/setup/config.sh" "${PORT_ARGS[@]}"
 "$APP_DIR/scripts/setup/journald.sh"
