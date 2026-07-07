@@ -36,15 +36,28 @@ curl -fsSL https://apt.kurokesu.com/setup.sh -o "$ARCHIVE_SETUP"
 sh "$ARCHIVE_SETUP" --update
 rm -f "$ARCHIVE_SETUP"
 
-# One resolver pass: Kurokesu libcamera/rpicam-apps fork (epoch-forced +krks),
-# Python preview/GUI stack (picamera2 recommends pyqt5 + python3-opengl for
-# the QGlPicamera2 widget, install them explicitly) and Cage kiosk compositor.
+# eatmydata first (plain apt-get) so apt_get can use it below.
+log "Installing eatmydata..."
+apt-get install -y eatmydata
+
+# One resolver pass, recommends off to keep GUI extras (VA/VDPAU/Vulkan, GTK,
+# QML) away. Hard deps stay unlisted: picamera2 pulls the +krks libcamera
+# fork, qtopengl pulls base pyqt5. Recommends the kiosk does need are pinned:
+# python3-opengl (QGlPicamera2 imports it), qtwayland5 (Qt under Cage),
+# awb-nn (libcamera-ipa AWB models).
 log "Installing packages..."
-apt-get install -y \
-    rpicam-apps python3-libcamera \
+apt_get install -y --no-install-recommends \
     python3-picamera2 \
-    python3-pyqt5 python3-pyqt5.qtopengl python3-opengl \
-    python3-yaml python3-smbus2 \
-    cage
+    python3-pyqt5.qtopengl python3-opengl \
+    python3-yaml \
+    cage \
+    qtwayland5 awb-nn
+
+# camlab never runs rpicam-* CLI. Drop the preinstalled rpicam-apps stack
+# and its OpenCV deps (~20 MB). picamera2 keeps libcamera from autoremoval.
+log "Removing unused rpicam-apps stack..."
+apt_get purge -y rpicam-apps rpicam-apps-lite rpicam-apps-core \
+    rpicam-apps-encoder rpicam-apps-opencv-postprocess rpicam-apps-preview
+apt_get autoremove --purge -y
 
 log "Done. All apt dependencies installed."
