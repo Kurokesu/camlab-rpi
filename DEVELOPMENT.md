@@ -16,7 +16,7 @@ camlabctl rw                   # boot writable next time
 camlabctl ro                   # boot read-only next time
 ```
 
-Networking is reversible: reach the rig over SSH during setup, ship it with no network. `camlabctl net off` drops the connection immediately. Reverse from the console with `camlabctl net on`.
+Network toggle (GUI Settings or `camlabctl net`) takes effect immediately and persists across reboots. Turning it off drops SSH. Reverse from console or GUI.
 
 ## Running the app
 
