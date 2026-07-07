@@ -34,7 +34,9 @@ sudo apt update && sudo apt full-upgrade -y
 sudo reboot
 ```
 
-Install the latest [release](https://github.com/Kurokesu/camlab-rpi/releases):
+### Install camlab
+
+Download latest [release](https://github.com/Kurokesu/camlab-rpi/releases) and install:
 
 ```bash
 wget https://github.com/Kurokesu/camlab-rpi/releases/latest/download/camlab-rpi.zip
@@ -42,11 +44,14 @@ unzip camlab-rpi.zip && cd camlab-rpi
 sudo ./install.sh
 ```
 
-Reboot when install finishes. Device auto-reboots once more to init read-only root, app starts on the attached display:
+Reboot when install finishes:
 
 ```bash
 sudo reboot
 ```
+
+> [!NOTE]
+> Device auto-reboots once more to init read-only root, app starts automatically.
 
 `install.sh` adds Kurokesu camera stack, sensor drivers, overlay config and kiosk service. CSI port defaults to `cam1` (override with `--port=cam0`) and stays switchable in the GUI. App is copied to `/opt/camlab` and runs from there.
 
