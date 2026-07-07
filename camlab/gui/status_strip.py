@@ -47,7 +47,7 @@ class StatusStrip(QtWidgets.QFrame):
 
         # Build version on the left so the operator can read the running build at a
         # glance. It lives in the balanced left zone, so telemetry stays centred.
-        self.version_lbl = QtWidgets.QLabel(f"v{__version__}", self)
+        self.version_lbl = QtWidgets.QLabel(f"camlab v{__version__}", self)
         self.version_lbl.setObjectName("version")
         self._left = QtWidgets.QWidget(self)
         lrow = QtWidgets.QHBoxLayout(self._left)
