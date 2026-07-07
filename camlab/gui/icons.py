@@ -31,6 +31,8 @@ _CODEPOINTS: dict[str, int] = {
     "sensors": 0xE51E,
     "tune": 0xE429,
     "close": 0xE5CD,
+    "settings": 0xE8B8,
+    "lan": 0xEB2F,
 }
 
 _FAMILY: str | None = None

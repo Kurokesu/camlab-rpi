@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 
+from .. import network
 from ..camera import CameraEngine
 from ..config_manager import ConfigManager
 from ..integrity import IntegrityMonitor, LogClassifier, StderrCapture
@@ -18,6 +19,7 @@ from .mode_dialog import ModeCard
 from .overlay import ModalOverlay, message_card
 from .preview_area import PreviewArea
 from .sensor_dialog import SensorCard
+from .settings_dialog import SettingsCard
 from .status_strip import StatusStrip
 from .widgets import vline
 
@@ -41,9 +43,11 @@ QLabel#warnCount[sev="alert"] { color: #e5c07b; font-weight: 600; }
 QPushButton { background: #2c303a; border: 1px solid #3a3f4b; border-radius: 5px;
               padding: 6px 12px; }
 QPushButton:hover { background: #353b47; }
+QPushButton:disabled { background: #23262d; border-color: #2f333c; color: #5c6370; }
 QPushButton:checked { background: #3d4858; border-color: #7f8aa0; color: #ffffff; }
 QPushButton:focus { border-color: #7aa2f7; background: #353b47; outline: none; }
 QPushButton#danger { border-color: #803126; }
+QPushButton#danger:disabled { border-color: #4a2620; }
 QPushButton#danger:hover { background: #50211a; }
 QPushButton#danger:focus { border-color: #e06c75; background: #50211a; outline: none; }
 QPushButton#segment { background: #262a33; border: 1px solid #3a3f4b; border-radius: 0;
@@ -129,6 +133,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.mode_btn = QtWidgets.QPushButton()
         self.mode_btn.clicked.connect(self._choose_mode)
         self.mode_btn.setEnabled(bool(self.engine.modes))
+        self.settings_btn = QtWidgets.QPushButton(
+            icons.icon("settings", _ICON_PX), " Settings")
+        self.settings_btn.clicked.connect(self._open_settings)
         self.log_btn = QtWidgets.QPushButton(icons.icon("terminal", _ICON_PX), " Log")
         self.log_btn.setCheckable(True)
         self.log_btn.toggled.connect(self._toggle_log)
@@ -140,7 +147,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # QPushButton clamps the icon to a small default, so set the size explicitly.
         # TabFocus (not the default StrongFocus): these are reachable by Tab but a
         # mouse click does not leave a lingering focus ring on them.
-        for btn in (self.sensor_btn, self.mode_btn, self.log_btn, self.shutdown_btn):
+        for btn in (self.sensor_btn, self.mode_btn, self.settings_btn,
+                    self.log_btn, self.shutdown_btn):
             btn.setIconSize(QtCore.QSize(_ICON_PX, _ICON_PX))
             btn.setCursor(Qt.PointingHandCursor)
             btn.setFocusPolicy(Qt.TabFocus)
@@ -151,6 +159,7 @@ class MainWindow(QtWidgets.QMainWindow):
         crow.addSpacing(6)
         crow.addWidget(self.mode_btn)
         crow.addStretch(1)
+        crow.addWidget(self.settings_btn)
         crow.addWidget(self.log_btn)
         crow.addSpacing(6)
         crow.addWidget(vline())
@@ -424,6 +433,21 @@ class MainWindow(QtWidgets.QMainWindow):
         # operator swaps while it is off, then powers on to the new overlay.
         from ..config_manager import poweroff
         poweroff()
+
+    def _open_settings(self) -> None:
+        card = SettingsCard(on_apply_network=self._apply_network,
+                            on_cancel=self._close_modal)
+        self._open_modal(card)
+
+    def _apply_network(self, enabled: bool) -> None:
+        self._close_modal()
+        try:
+            network.set_enabled(enabled)
+        except Exception as exc:
+            log.error("network toggle failed: %s", exc)
+            self._show_message("Network toggle failed", str(exc))
+            return
+        log.info("networking %s", "enabled" if enabled else "disabled")
 
     def _shutdown(self) -> None:
         # No confirmation by design: this is a power-cycle-heavy bench tool, so
