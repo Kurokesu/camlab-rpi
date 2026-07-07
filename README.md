@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/Kurokesu/camlab-rpi/actions/workflows/ci.yml/badge.svg)](https://github.com/Kurokesu/camlab-rpi/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/Kurokesu/camlab-rpi?include_prereleases&label=release)](https://github.com/Kurokesu/camlab-rpi/releases)
-![OS](https://img.shields.io/badge/OS-RPi%20Trixie%20Lite-blue?logo=raspberrypi&logoColor=c51a4a)
-![HW](https://img.shields.io/badge/HW-Pi%205%20%7C%20CM5-blue?logo=raspberrypi&logoColor=c51a4a)
-![Sensors](https://img.shields.io/badge/sensors-AR0234%20%7C%20AR0822%20%7C%20IMX283%20%7C%20IMX462%20%7C%20IMX477%20%7C%20IMX585-blue)
+![OS](https://img.shields.io/badge/OS-RPi%20Trixie%20Lite-lightgrey?logo=raspberrypi&logoColor=white)
+![Platform](https://img.shields.io/badge/platform-Pi%205%20%7C%20CM5-lightgrey?logo=raspberrypi&logoColor=white)
+![Sensors](https://img.shields.io/badge/sensors-AR0234%20%7C%20AR0822%20%7C%20IMX283%20%7C%20IMX462%20%7C%20IMX477%20%7C%20IMX585-lightgrey)
 
 Kiosk app for previewing and testing Kurokesu camera modules on Raspberry Pi.
 
