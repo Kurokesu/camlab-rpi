@@ -52,6 +52,10 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 header "camlab install started at $(date)"
 log "Logging to $LOG_FILE"
 
+# Hold off apt's background timers so they cannot grab the dpkg lock mid-install.
+systemctl stop apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true
+trap 'systemctl start apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true' EXIT
+
 header "Platform check"
 MODEL="$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || true)"
 case "$MODEL" in
