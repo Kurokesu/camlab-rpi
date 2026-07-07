@@ -2,18 +2,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026, UAB Kurokesu
 #
-# Boot-time tuning for the kiosk. Trims power-on to first preview on a CM5 by
-# cutting work that a single-purpose headless bench tool never needs. Two
-# stages, each idempotent and reversible:
-#   A. config.txt disable Bluetooth (managed block, the bench never uses BT)
-#   B. systemd    mask network-wait + BT + ModemManager, neutralise cloud-init
-#                 (only units present, never journald/logind/avahi-mDNS)
-# We deliberately leave console/bootloader logging on (BOOT_UART, no quiet): for
-# an internal bench tool the boot log is useful operator feedback while waiting,
-# and disabling it bought no measurable time.
-# Networking stays under operator control via camlabctl net on|off, not here,
-# so dev keeps SSH. Re-running is a no-op. --revert undoes every stage.
-# Safe to re-run. Requires sudo. A reboot is needed for the changes to take hold.
+# Boot-time tuning: trims power-on to first preview by cutting work the kiosk
+# never needs. Disables Bluetooth in config.txt (managed block) and masks unused
+# systemd units (network-wait, BT, ModemManager, cloud-init). Deliberately left
+# alone: journald/logind/avahi, console boot logging (useful operator feedback,
+# no measurable cost) and networking (operator-controlled via camlabctl net or GUI).
+# Safe to re-run. Requires sudo. Changes take hold after a reboot.
 #
 # Usage:
 #   sudo scripts/setup/boot.sh            # apply all stages
@@ -80,27 +74,27 @@ _atomic_write() {
     mv -f "$tmp" "$path"
 }
 
-# Stage A: config.txt
 # Managed block carrying firmware-stage tweaks, currently just disable-bt.
 stage_config() {
-    [ -f "$CONFIG_TXT" ] || { warn "A) $CONFIG_TXT missing, skipping"; return; }
+    log "Stage: config.txt (firmware tweaks)"
+    [ -f "$CONFIG_TXT" ] || { warn "$CONFIG_TXT missing, skipping"; return; }
     local text kept
     text="$(cat "$CONFIG_TXT")"
     kept="$(printf '%s\n' "$text" | sed "/^${BEGIN}$/,/^${END}$/d")"
     kept="${kept%$'\n'}"  # trim one trailing newline before we re-add spacing
     if [ "$REVERT" -eq 1 ]; then
         _atomic_write "$CONFIG_TXT" "${kept}"$'\n'
-        log "A) config.txt: removed camlab boot block"
+        log "config.txt: removed camlab boot block"
         return
     fi
     local block
     block="$(printf '%s\n%s\n%s' "$BEGIN" "dtoverlay=disable-bt" "$END")"
     _atomic_write "$CONFIG_TXT" "${kept}"$'\n\n'"${block}"$'\n'
-    log "A) config.txt: wrote managed block (dtoverlay=disable-bt)"
+    log "config.txt: wrote managed block (dtoverlay=disable-bt)"
 }
 
-# Stage B: systemd
 stage_systemd() {
+    log "Stage: systemd units"
     local u changed=0
     if [ "$REVERT" -eq 1 ]; then
         for u in "${MASK_UNITS[@]}"; do
@@ -120,27 +114,27 @@ stage_systemd() {
         # Lift the cloud-init kill switch we dropped on apply.
         if [ -f /etc/cloud/cloud-init.disabled ]; then
             rm -f /etc/cloud/cloud-init.disabled
-            log "B) removed /etc/cloud/cloud-init.disabled"
+            log "removed /etc/cloud/cloud-init.disabled"
             changed=1
         fi
         if [ "$changed" -eq 1 ]; then
             systemctl daemon-reload || true
         fi
-        log "B) systemd: unmasked/re-enabled units (reboot to take effect)"
+        log "systemd: unmasked/re-enabled units (reboot to take effect)"
         return
     fi
     for u in "${MASK_UNITS[@]}"; do
         if _unit_present "$u"; then
             systemctl disable --now "$u" >/dev/null 2>&1 || true
             systemctl mask "$u" >/dev/null 2>&1 || true
-            log "B) masked $u"
+            log "masked $u"
             changed=1
         fi
     done
     for u in "${CLOUDINIT_UNITS[@]}"; do
         if _unit_present "$u"; then
             systemctl disable "$u" >/dev/null 2>&1 || true
-            log "B) disabled $u"
+            log "disabled $u"
             changed=1
         fi
     done
@@ -148,7 +142,7 @@ stage_systemd() {
     # static or gets re-enabled by a package upgrade.
     if [ -d /etc/cloud ]; then
         touch /etc/cloud/cloud-init.disabled
-        log "B) touched /etc/cloud/cloud-init.disabled"
+        log "touched /etc/cloud/cloud-init.disabled"
         changed=1
     fi
     if [ "$changed" -eq 1 ]; then
@@ -159,7 +153,7 @@ stage_systemd() {
 if [ "$REVERT" -eq 1 ]; then
     header "Boot tuning - reverting all stages"
 else
-    header "Boot tuning - applying (CM5 headless kiosk)"
+    header "Boot tuning - applying (headless kiosk)"
 fi
 
 stage_config
@@ -168,6 +162,5 @@ stage_systemd
 if [ "$REVERT" -eq 1 ]; then
     log "Revert complete. Reboot to restore stock boot behaviour."
 else
-    log "Done. Reboot to measure: sudo reboot"
-    log "Networking is unchanged here. Toggle it with: camlabctl net off|on"
+    log "Done."
 fi
