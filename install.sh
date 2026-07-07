@@ -26,9 +26,10 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_FILE="/var/log/camlab-install.log"
 CAMLAB_TAG="install"
 
-# Dev-clone clutter pruned from the /opt/camlab copy. Release zips
-# (git archive) don't have it.
-DEV_CLUTTER=(.git .github .venv .gitignore .shellcheckrc .gitattributes pyproject.toml docs)
+# Dev-clone clutter to prune from /opt/camlab
+mapfile -t DEV_CLUTTER < <(awk '$2 == "export-ignore" { sub(/\/$/, "", $1); print $1 }' \
+    "$REPO_DIR/.gitattributes" 2>/dev/null)
+DEV_CLUTTER+=(.git .venv)
 
 # shellcheck source=scripts/common.sh
 source "$REPO_DIR/scripts/common.sh"
