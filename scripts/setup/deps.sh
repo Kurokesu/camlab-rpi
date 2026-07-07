@@ -2,9 +2,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026, UAB Kurokesu
 #
-# Install camlab APT dependencies: Kurokesu apt archive, Kurokesu
-# libcamera/rpicam-apps fork, Python preview/GUI stack (picamera2 + PyQt5 +
-# OpenGL) and Cage.
+# Install camlab APT dependencies: Kurokesu apt archive, Kurokesu libcamera
+# fork, Python preview/GUI stack (picamera2 + PyQt5 + OpenGL) and Cage.
+# Also removes preinstalled rpicam-apps stack camlab never uses.
 # Safe to re-run. Requires sudo.
 #
 # Usage: sudo scripts/setup/deps.sh
@@ -53,11 +53,18 @@ apt_get install -y --no-install-recommends \
     cage \
     qtwayland5 awb-nn
 
-# camlab never runs rpicam-* CLI. Drop the preinstalled rpicam-apps stack
+# camlab never runs rpicam-* CLI. Drop preinstalled rpicam-apps stack
 # and its OpenCV deps (~20 MB). picamera2 keeps libcamera from autoremoval.
+# Purge only what is actually installed: hardcoded names would abort the
+# install (set -e) if a name ever disappears from configured sources.
 log "Removing unused rpicam-apps stack..."
-apt_get purge -y rpicam-apps rpicam-apps-lite rpicam-apps-core \
-    rpicam-apps-encoder rpicam-apps-opencv-postprocess rpicam-apps-preview
+mapfile -t RPICAM < <(dpkg-query -Wf '${db:Status-Status} ${Package}\n' 'rpicam-apps*' 2>/dev/null \
+    | awk '$1 == "installed" { print $2 }')
+if [ "${#RPICAM[@]}" -gt 0 ]; then
+    apt_get purge -y "${RPICAM[@]}"
+else
+    log "No rpicam-apps packages installed."
+fi
 apt_get autoremove --purge -y
 
 log "Done. All apt dependencies installed."
