@@ -10,7 +10,7 @@ Kiosk app for previewing and testing Kurokesu camera modules on Raspberry Pi.
 
 ## Setup
 
-### Operating system
+### Prepare Raspberry Pi
 
 Flash Raspberry Pi OS Lite (Trixie 64-bit) to an SD card using [Raspberry Pi Imager](https://www.raspberrypi.com/software/):
 
@@ -18,16 +18,15 @@ Flash Raspberry Pi OS Lite (Trixie 64-bit) to an SD card using [Raspberry Pi Ima
 - Choose operating system: **Raspberry Pi OS (other)** --> **Raspberry Pi OS Lite (64-bit)**
 - OS customization: set hostname, username and password. Enable SSH to run install remotely
 
-Boot:
+Connect and boot:
 
-- Insert SD card and power on your Pi
 - Attach HDMI display, keyboard and/or mouse
+- Insert SD card and power on your Pi
 
 > [!NOTE]
 > App needs a display and one input device. Keyboard also makes SSH optional: all remaining steps work from the console.
 
-- Log in on the console or over SSH (`ssh <username>@<hostname>`)
-- Update OS and reboot:
+Log in on the console or over SSH (`ssh <username>@<hostname>`), update OS and reboot:
 
 ```bash
 sudo apt update && sudo apt full-upgrade -y
@@ -53,19 +52,27 @@ sudo reboot
 > [!NOTE]
 > Device auto-reboots once more to init read-only root, app starts automatically on boot.
 
-First time **camlab** starts with sensor defaults (AR0234 on `cam1`). Open **Select sensor** --> pick your camera and CSI port. Choice persists across reboots.
+> [!NOTE]
+> First time **camlab** starts with sensor defaults (AR0234 on `cam1`). Open **Select sensor** --> pick your camera and CSI port. Choice persists across reboots.
 
 > [!WARNING]
 > Connect or swap camera modules only when Pi is powered off and unplugged.
 
-## Install options
+## Install details
 
-install script adds Kurokesu camera stack, sensor drivers, overlay config and kiosk service, copies the app to `/opt/camlab` and locks root read-only on the next reboot. 
+By default `install.sh`:
 
-install script optional flags:
+- Enables [Kurokesu apt archive](https://apt.kurokesu.com) 
+- Installs Kurokesu libcamera/rpicam-apps forks
+- Installs Kurokesu sensor drivers
+- Copies app to `/opt/camlab`
+- Enables kiosk service
+- Locks root read-only on next reboot
+
+Optional flags:
 
 - `--port=cam0` set CSI port to `cam0`. Defaults to `cam1`, switchable later in the GUI.
-- `--no-readonly` keep root filesystem writable, for development (see below).
+- `--no-readonly` keep root filesystem writable, for development.
 
 ## Development
 
