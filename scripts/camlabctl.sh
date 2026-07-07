@@ -121,8 +121,11 @@ cmd_net() {
             for u in "${NET_MANAGERS[@]}"; do
                 _net_present "$u" || continue
                 sudo systemctl unmask "$u" >/dev/null 2>&1 || true
-                sudo systemctl enable --now "$u" >/dev/null 2>&1 || true
                 _persist_net unmask "$u"
+                # Unmask only: stock RPi OS ships networkd disabled and NM owns
+                # the interfaces. Starting both invites a manager conflict.
+                [ "$u" = "systemd-networkd.service" ] && continue
+                sudo systemctl enable --now "$u" >/dev/null 2>&1 || true
                 _persist_net enable "$u"
             done
             log "networking ON (unmasked + started). For dev/SSH."
