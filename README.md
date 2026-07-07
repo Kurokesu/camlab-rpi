@@ -16,15 +16,19 @@ Flash Raspberry Pi OS Lite (Trixie 64-bit) to an SD card using [Raspberry Pi Ima
 
 - Select your Raspberry Pi device: **Raspberry Pi 5**
 - Choose operating system: **Raspberry Pi OS (other)** --> **Raspberry Pi OS Lite (64-bit)**
-- OS customization: set hostname, username and password. Enable SSH to run install remotely
+- OS customization: set hostname, username and password. Enable SSH to install remotely. Configure Wi-Fi unless using Ethernet
+
+> [!NOTE]
+> SSH is optional. With a keyboard every step also works from the console.
 
 Connect and boot:
 
 - Attach HDMI display, keyboard and/or mouse
+- Connect Ethernet, unless Wi-Fi was configured in Imager (install needs internet)
 - Insert SD card and power on your Pi
 
 > [!NOTE]
-> App needs a display and one input device. Keyboard also makes SSH optional: all remaining steps work from the console.
+> App needs a display and one input device.
 
 Log in on the console or over SSH (`ssh <username>@<hostname>`), update OS and reboot:
 
