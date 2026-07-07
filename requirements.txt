@@ -1,13 +1,6 @@
-# camlab runtime Python deps.
-#
-# On the target these come from APT (system packages), NOT pip, because
-# picamera2 / python3-libcamera / PyQt5 are tightly coupled to the Kurokesu
-# libcamera fork and the system Qt. scripts/setup/deps.sh installs them:
-#   python3-picamera2 python3-pyqt5 python3-pyqt5.qtopengl python3-opengl
-#   python3-libcamera python3-yaml python3-smbus2
-#
-# This file documents the import-level deps for reference / linting only.
+# Import-level deps, for reference/linting only. Not installed via pip:
+# target gets these from APT (scripts/setup/deps.sh), pinned to
+# Kurokesu libcamera fork and system Qt.
 PyQt5
 picamera2
 PyYAML
-smbus2
