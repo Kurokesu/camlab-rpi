@@ -131,20 +131,12 @@ camlab installed.
   Service: camlab.service (enabled, auto-starts on boot)
   App:     $APP_DIR
 
-Quick commands:
-  sudo reboot                 # boot into the kiosk (loads the sensor overlay)
-  camlabctl status           # service state
-  camlabctl logs -f          # tail logs
-  camlabctl shot             # screenshot the live kiosk
-  camlabctl restart          # apply code changes
-
 Install log: $LOG_FILE
 EOF
 
 if [ "$READONLY_STAGED" -eq 1 ]; then
     cat <<'EOF'
 
-Read-only root: your reboot triggers one more automatic reboot to lock it in.
-Dev toggle: camlabctl rw / ro.
+Read-only root: next reboot triggers one more automatic reboot to lock it in.
 EOF
 fi
