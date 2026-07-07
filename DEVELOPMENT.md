@@ -5,14 +5,15 @@ Notes for developing and debugging camlab.
 ## Service control
 
 ```bash
-camlabctl status
-camlabctl logs -f
-camlabctl restart
-camlabctl shot                 # screenshot the live kiosk (needs grim)
-camlabctl log-level debug      # then: camlabctl restart
-camlabctl net off|on|status    # toggle networking (off for production)
-camlabctl rw                   # boot writable next time (for edits)
-camlabctl ro                   # boot read-only next time (production)
+camlabctl status               # print service state
+camlabctl start|stop           # start/stop kiosk service
+camlabctl restart              # restart
+camlabctl logs -f              # tail service logs
+camlabctl shot                 # screenshot live kiosk (needs grim)
+camlabctl log-level debug      # set log level (follow with camlabctl restart)
+camlabctl net off|on|status    # toggle networking
+camlabctl rw                   # boot writable next time
+camlabctl ro                   # boot read-only next time
 ```
 
 Networking is reversible: reach the rig over SSH during setup, ship it with no network. `camlabctl net off` drops the connection immediately. Reverse from the console with `camlabctl net on`.
