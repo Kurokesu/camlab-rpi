@@ -62,6 +62,16 @@ require_root() {
     fi
 }
 
+# apt-get via eatmydata when available: skips dpkg's per-package fsyncs,
+# which are slow on eMMC/SD and pointless for a re-runnable install.
+apt_get() {
+    if command -v eatmydata >/dev/null 2>&1; then
+        eatmydata apt-get "$@"
+    else
+        apt-get "$@"
+    fi
+}
+
 # Print the caller's top-of-file description comment block as help text.
 # Convention: a lone "#" line separates the SPDX/copyright header from the
 # description block. The description ends at the first non-comment line.

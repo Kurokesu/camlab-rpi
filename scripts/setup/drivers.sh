@@ -94,7 +94,7 @@ for sensor in "${SENSORS[@]}"; do
 done
 
 log "Installing: ${PACKAGES[*]}"
-apt-get install -y "${PACKAGES[@]}"
+apt_get install -y "${PACKAGES[@]}"
 
 for sensor in "${SENSORS[@]}"; do
     if [ -f "$FW_OVERLAYS/${sensor}.dtbo" ]; then
