@@ -56,9 +56,14 @@ class ModeCard(QtWidgets.QFrame):
         self._rebuild_depths(current_mode.bit_depth if current_mode else None)
         self._rebuild_fps(current_fps)
 
+        # The dirty check compares against what the card actually shows after
+        # seeding (current_fps may have been snapped to the nearest option).
+        self._initial = self._selection()
+
         # Connect after the initial build so the seeding stays silent.
         self.res_sel.changed.connect(self._on_res_changed)
         self.depth_sel.changed.connect(self._on_depth_changed)
+        self.fps_sel.changed.connect(self._refresh_apply)
 
         form = QtWidgets.QFormLayout()
         form.addRow("Resolution:", self.res_sel)
@@ -68,13 +73,13 @@ class ModeCard(QtWidgets.QFrame):
         buttons = QtWidgets.QHBoxLayout()
         cancel_btn = QtWidgets.QPushButton("Cancel")
         cancel_btn.clicked.connect(on_cancel)
-        apply_btn = QtWidgets.QPushButton("Apply")
-        apply_btn.clicked.connect(self._apply)
+        self.apply_btn = QtWidgets.QPushButton("Apply")
+        self.apply_btn.clicked.connect(self._apply)
         # Apply is safe (no reboot), so it is the primary Enter target.
-        self.primary_button = apply_btn
+        self.primary_button = self.apply_btn
         buttons.addWidget(cancel_btn)
         buttons.addStretch(1)
-        buttons.addWidget(apply_btn)
+        buttons.addWidget(self.apply_btn)
 
         lay = QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(22, 20, 22, 18)
@@ -84,14 +89,27 @@ class ModeCard(QtWidgets.QFrame):
         lay.addWidget(hline())
         lay.addLayout(buttons)
 
+        self._refresh_apply()
+
+    def _selection(self) -> tuple:
+        return (self.res_sel.current_value(),
+                self.depth_sel.current_value(),
+                self.fps_sel.current_value())
+
+    def _refresh_apply(self) -> None:
+        """Apply is live only when a selection changed."""
+        self.apply_btn.setEnabled(self._selection() != self._initial)
+
     def _on_res_changed(self) -> None:
         prev_depth = self.depth_sel.current_value()
         prev_fps = self.fps_sel.current_value()
         self._rebuild_depths(prev_depth)
         self._rebuild_fps(prev_fps)
+        self._refresh_apply()
 
     def _on_depth_changed(self) -> None:
         self._rebuild_fps(self.fps_sel.current_value())
+        self._refresh_apply()
 
     def _rebuild_depths(self, prefer_depth: int | None) -> None:
         depths = bit_depths_for(self._modes, self.res_sel.current_value())  # deepest first
