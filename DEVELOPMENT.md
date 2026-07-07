@@ -16,7 +16,7 @@ camlabctl rw                   # boot writable next time
 camlabctl ro                   # boot read-only next time
 ```
 
-Network toggle (GUI Settings or `camlabctl net`) takes effect immediately and persists across reboots. Turning it off drops SSH. Reverse from console or GUI.
+Network toggle (GUI Settings or `camlabctl net`) persists across reboots. Turning it off drops Wi-Fi immediately, Ethernet on next reboot (an SSH session over Ethernet survives as a grace period). Reverse from console or GUI.
 
 ## Running the app
 
