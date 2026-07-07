@@ -58,9 +58,12 @@ class SensorCard(QtWidgets.QFrame):
         self.port_sel = SegmentedSelector()
         port = current_port if current_port in ("cam0", "cam1") else "cam1"
         self.port_sel.set_options([("cam0", "cam0"), ("cam1", "cam1")], current=port)
+        self.port_sel.changed.connect(self._refresh_apply)
+        self._init_port = port
 
         self.variant_lbl = QtWidgets.QLabel("Variant:")
         self.variant_sel = SegmentedSelector()
+        self.variant_sel.changed.connect(self._refresh_apply)
 
         form.addRow("Sensor:", self.sensor_sel)
         form.addRow("CSI port:", self.port_sel)
@@ -72,16 +75,16 @@ class SensorCard(QtWidgets.QFrame):
         buttons = QtWidgets.QHBoxLayout()
         cancel_btn = QtWidgets.QPushButton("Cancel")
         cancel_btn.clicked.connect(on_cancel)
-        apply_btn = QtWidgets.QPushButton("Apply && Shutdown")
-        apply_btn.setObjectName("danger")
-        apply_btn.clicked.connect(self._apply)
+        self.apply_btn = QtWidgets.QPushButton("Apply && Shutdown")
+        self.apply_btn.setObjectName("danger")
+        self.apply_btn.clicked.connect(self._apply)
         # Apply here powers off, so a bare Enter must not trigger it: Cancel is the
         # primary target (what Enter hits before tabbing to a button). Applying
         # needs a deliberate Tab-to-Apply then Enter, or a click.
         self.primary_button = cancel_btn
         buttons.addWidget(cancel_btn)
         buttons.addStretch(1)
-        buttons.addWidget(apply_btn)
+        buttons.addWidget(self.apply_btn)
 
         lay = QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(22, 20, 22, 18)
@@ -91,12 +94,23 @@ class SensorCard(QtWidgets.QFrame):
         lay.addWidget(hline())
         lay.addLayout(buttons)
 
+        self._refresh_apply()
+
     def _on_sensor_changed(self) -> None:
         name = self.sensor_sel.current_value()
         # Restore the variant only for the sensor we opened on. Others start color.
         mono = self._init_mono if name == self._init_name else False
         self._rebuild_variant(name, mono)
         self._update_notes(name)
+        self._refresh_apply()
+
+    def _refresh_apply(self) -> None:
+        """Apply is live only when a selection changed."""
+        selected = (self.sensor_sel.current_value(),
+                    self.port_sel.current_value(),
+                    bool(self.variant_sel.current_value()))
+        initial = (self._init_name, self._init_port, self._init_mono)
+        self.apply_btn.setEnabled(selected != initial)
 
     def _update_notes(self, sensor_name: str | None) -> None:
         sensor = self._registry.by_name(sensor_name) if sensor_name else None
