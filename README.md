@@ -63,8 +63,9 @@ sudo reboot
 By default `install.sh`:
 
 - Enables [Kurokesu apt archive](https://apt.kurokesu.com) 
-- Installs Kurokesu libcamera/rpicam-apps forks
+- Installs Kurokesu libcamera fork
 - Installs Kurokesu sensor drivers
+- Removes unused packages (rpicam-apps stack, sibling kernel flavor)
 - Copies app to `/opt/camlab`
 - Enables kiosk service
 - Locks root read-only on next reboot
