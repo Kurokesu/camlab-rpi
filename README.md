@@ -10,64 +10,24 @@ Kiosk app for previewing and testing Kurokesu camera modules on Raspberry Pi.
 
 ## Setup
 
-Flash Raspberry Pi OS Lite (Trixie 64-bit) with [Raspberry Pi Imager](https://www.raspberrypi.com/software/):
+### Operating system
 
-- Choose OS: "Raspberry Pi OS (other)", then "Raspberry Pi OS Lite (64-bit)". Desktop image won't work.
-- OS customization: set hostname, username and password. Enable SSH to run setup remotely.
+Flash Raspberry Pi OS Lite (Trixie 64-bit) to an SD card using [Raspberry Pi Imager](https://www.raspberrypi.com/software/):
 
-SD card (Pi 5, CM5 Lite): flash, insert, power on. eMMC (CM5): flash over USB:
+- Select your Raspberry Pi device: **Raspberry Pi 5**
+- Choose operating system: **Raspberry Pi OS (other)** --> **Raspberry Pi OS Lite (64-bit)**
+- OS customization: set hostname, username and password. Enable SSH to run install remotely
 
-<details>
-<summary><b>Flash eMMC</b>: <code>J2</code> jumper, rpiboot, Imager</summary>
+Boot:
 
-Fit jumper on `nRPI_BOOT` pins 1-2 of `J2` header (disables eMMC boot) and connect USB-C from power port `J11` to host machine (host powers the board):
+- Insert SD card and power on your Pi
+- Attach HDMI display, keyboard and/or mouse
 
-![J2 jumper and J11 USB-C port on CM5 IO board](docs/cm5-flash-jumper.jpg)
+> [!NOTE]
+> App needs a display and one input device. Keyboard also makes SSH optional: all remaining steps work from the console.
 
-Run rpiboot on the host to expose eMMC as a USB drive:
-
-<details>
-<summary>Windows</summary>
-
-Install `rpiboot_setup.exe` from [usbboot releases](https://github.com/raspberrypi/usbboot/releases), then run **rpiboot - Mass Storage Gadget** from Start menu.
-
-</details>
-
-<details>
-<summary>Linux / macOS</summary>
-
-Distro `rpiboot` packages are often too old for CM5, so build from source.
-
-Linux deps:
-
-```bash
-sudo apt install -y git libusb-1.0-0-dev pkg-config build-essential
-```
-
-macOS deps:
-
-```bash
-brew install libusb pkg-config
-```
-
-Build and run:
-
-```bash
-git clone --recurse-submodules --shallow-submodules --depth=1 https://github.com/raspberrypi/usbboot
-cd usbboot
-make
-sudo ./rpiboot -d mass-storage-gadget64
-```
-
-</details>
-
-After a few seconds eMMC appears as a USB drive. Flash it with Imager, eject, remove `J2` jumper and swap USB-C back to power supply.
-
-</details>
-
-Attach HDMI display and keyboard and/or mouse. App needs the display and one input device, keyboard also makes SSH optional: all remaining steps work from the console.
-
-Log in on the console or over SSH (`ssh <username>@<hostname>.local`), update OS and reboot:
+- Log in on the console or over SSH (`ssh <username>@<hostname>`)
+- Update OS and reboot:
 
 ```bash
 sudo apt update && sudo apt full-upgrade -y
