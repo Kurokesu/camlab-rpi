@@ -51,9 +51,21 @@ sudo reboot
 ```
 
 > [!NOTE]
-> Device auto-reboots once more to init read-only root, app starts automatically.
+> Device auto-reboots once more to init read-only root, app starts automatically on boot.
 
-`install.sh` adds Kurokesu camera stack, sensor drivers, overlay config and kiosk service. CSI port defaults to `cam1` (override with `--port=cam0`) and stays switchable in the GUI. App is copied to `/opt/camlab` and runs from there.
+First time **camlab** starts with sensor defaults (AR0234 on `cam1`). Open **Select sensor** --> pick your camera and CSI port. Choice persists across reboots.
+
+> [!WARNING]
+> Connect or swap camera modules only when Pi is powered off and unplugged.
+
+## Install options
+
+install script adds Kurokesu camera stack, sensor drivers, overlay config and kiosk service, copies the app to `/opt/camlab` and locks root read-only on the next reboot. 
+
+install script optional flags:
+
+- `--port=cam0` set CSI port to `cam0`. Defaults to `cam1`, switchable later in the GUI.
+- `--no-readonly` keep root filesystem writable, for development (see below).
 
 ## Development
 
