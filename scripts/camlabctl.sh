@@ -13,10 +13,10 @@
 #   camlabctl logs [journalctl-args]     default: last 200 lines
 #   camlabctl log-level <level>          trace|debug|info|warn|error|off
 #   camlabctl shot [path]                screenshot the live kiosk (needs grim)
-#   camlabctl net <on|off|status>        toggle networking (reversible, off for
-#                                         production, on for SSH dev)
-#   camlabctl rw                         remount root read-write   (Phase 5)
-#   camlabctl ro                         remount root read-only    (Phase 5)
+#   camlabctl net <on|off|status>        toggle networking (off for production,
+#                                         on for SSH dev)
+#   camlabctl rw                         boot writable next time
+#   camlabctl ro                         boot read-only next time
 #   camlabctl help
 #
 # log-level writes a systemd drop-in (Environment=CAMLAB_LOG_LEVEL). The app
@@ -84,52 +84,68 @@ cmd_shot() {
     log "saved $out"
 }
 
-# Networking toggle. Production runs headless with no network (faster boot, no
-# attack surface), flipped back on for remote SSH dev. We mask/unmask rather
-# than just disable, so a masked unit can't be pulled in by a dependency
-# either. Only acts on units that exist on this box.
-NET_UNITS=(
+# Networking toggle: off for production (faster boot), on for SSH dev. Units
+# are masked, not just disabled, so a dependency can't pull them back in. The
+# *-wait-online units gate only network-online.target (unused by the kiosk)
+# and stay masked even after 'net on', so re-enabling never slows boot down.
+NET_MANAGERS=(
     NetworkManager.service
-    NetworkManager-wait-online.service
     wpa_supplicant.service
     systemd-networkd.service
+)
+NET_WAIT_UNITS=(
+    NetworkManager-wait-online.service
     systemd-networkd-wait-online.service
 )
 
 _net_present() { systemctl list-unit-files "$1" >/dev/null 2>&1; }
 
+_overlay_active() { [ "$(findmnt -no FSTYPE / 2>/dev/null)" = "overlay" ]; }
+
+# Under overlayroot, systemctl writes land in the tmpfs upper and vanish on
+# reboot. Repeat the change against the lower root so it persists. The verbs
+# used here only manage symlinks, so the chroot needs no running systemd.
+_persist_net() {
+    _overlay_active || return 0
+    if ! command -v overlayroot-chroot >/dev/null 2>&1; then
+        warn "overlayroot-chroot not found: change is live but will NOT survive a reboot"
+        return 0
+    fi
+    sudo overlayroot-chroot systemctl "$@" >/dev/null 2>&1 || true
+}
+
 cmd_net() {
     local action="${1:-status}"
     case "$action" in
         on)
-            for u in "${NET_UNITS[@]}"; do
+            for u in "${NET_MANAGERS[@]}"; do
                 _net_present "$u" || continue
                 sudo systemctl unmask "$u" >/dev/null 2>&1 || true
-            done
-            # Bring the primary manager up now so SSH survives without a reboot.
-            for u in NetworkManager.service systemd-networkd.service wpa_supplicant.service; do
-                _net_present "$u" || continue
                 sudo systemctl enable --now "$u" >/dev/null 2>&1 || true
+                _persist_net unmask "$u"
+                _persist_net enable "$u"
             done
             log "networking ON (unmasked + started). For dev/SSH."
             ;;
         off)
-            for u in "${NET_UNITS[@]}"; do
+            for u in "${NET_MANAGERS[@]}" "${NET_WAIT_UNITS[@]}"; do
                 _net_present "$u" || continue
                 sudo systemctl disable --now "$u" >/dev/null 2>&1 || true
                 sudo systemctl mask "$u" >/dev/null 2>&1 || true
+                _persist_net disable "$u"
+                _persist_net mask "$u"
             done
             warn "networking OFF (stopped + masked). Reverse with: camlabctl net on"
-            warn "if run over SSH, this connection is about to drop."
+            warn "Wi-Fi drops now. Ethernet keeps its address until reboot, so an"
+            warn "SSH session over Ethernet survives as a grace period."
             ;;
         status)
             local any=0 en act
-            for u in "${NET_UNITS[@]}"; do
+            for u in "${NET_MANAGERS[@]}" "${NET_WAIT_UNITS[@]}"; do
                 _net_present "$u" || continue
                 any=1
-                # is-enabled/is-active print a word to stdout but exit nonzero
-                # for disabled/inactive units. Keep the word, drop the exit code
-                # (the trailing || true stops set -e aborting on that exit).
+                # is-enabled/is-active print the state word but exit nonzero for
+                # disabled/inactive units. || true keeps set -e out of the way.
                 en="$(systemctl is-enabled "$u" 2>/dev/null || true)"; [ -n "$en" ] || en="n/a"
                 act="$(systemctl is-active "$u" 2>/dev/null || true)"; [ -n "$act" ] || act="inactive"
                 printf "%-42s %s / %s\n" "$u" "$en" "$act"
@@ -140,10 +156,9 @@ cmd_net() {
     esac
 }
 
-# Read-only root toggle. The overlay is driven by an overlayroot=disabled token on
-# the kernel command line: present = writable, absent = read-only. We flip the
-# token in cmdline.txt (remounting the boot partition writable to do so) and the
-# change takes effect on the next reboot. A no-op if overlayroot was never set up.
+# Read-only root toggle. An overlayroot=disabled token in cmdline.txt means
+# boot writable, absent means read-only. Flip the token (remounting the boot
+# partition rw to do so), takes effect on next reboot.
 FW_DIR="${CAMLAB_FW_DIR:-/boot/firmware}"
 CMDLINE="$FW_DIR/cmdline.txt"
 
