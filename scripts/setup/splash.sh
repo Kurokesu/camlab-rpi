@@ -161,6 +161,24 @@ stage_console() {
     systemctl mask getty@tty1.service >/dev/null 2>&1 || true
 }
 
+SHUTDOWN_SPLASH="/usr/local/bin/camlab-shutdown-splash"
+CAMLAB_DROPIN="/etc/systemd/system/camlab.service.d/shutdown-splash.conf"
+
+stage_shutdown() {
+    if [ "$REVERT" -eq 1 ]; then
+        rm -f "$SHUTDOWN_SPLASH" "$CAMLAB_DROPIN"
+        rmdir /etc/systemd/system/camlab.service.d 2>/dev/null || true
+        systemctl daemon-reload >/dev/null 2>&1 || true
+        log "removed shutdown splash hook"
+        return
+    fi
+    log "Stage: shutdown splash"
+    install -m 0755 "$REPO_DIR/scripts/camlab-shutdown-splash.sh" "$SHUTDOWN_SPLASH"
+    install -d -m 0755 "$(dirname "$CAMLAB_DROPIN")"
+    install -m 0644 "$REPO_DIR/deploy/systemd/camlab.service.d/shutdown-splash.conf" "$CAMLAB_DROPIN"
+    systemctl daemon-reload
+}
+
 if [ "$REVERT" -eq 1 ]; then
     header "Boot splash - reverting"
 else
@@ -173,6 +191,7 @@ stage_config
 stage_theme
 stage_initramfs
 stage_console
+stage_shutdown
 
 log "Refreshing initramfs..."
 update-initramfs -u >/dev/null
