@@ -161,7 +161,8 @@ class ConfigManager:
 
 
 def poweroff() -> None:
-    subprocess.run(["sudo", "systemctl", "poweroff"], check=True)
+    # --no-wall: broadcast would flash on tty1 between Cage exiting and Plymouth
+    subprocess.run(["sudo", "systemctl", "poweroff", "--no-wall"], check=True)
 
 
 def _main(argv: list[str] | None = None) -> int:

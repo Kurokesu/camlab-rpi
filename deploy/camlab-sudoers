@@ -9,6 +9,6 @@
 #   - networking toggle (Settings dialog)
 
 CAMLAB_USER ALL=(root) NOPASSWD: /usr/local/bin/camlab-apply
-CAMLAB_USER ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff
+CAMLAB_USER ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff --no-wall
 CAMLAB_USER ALL=(root) NOPASSWD: /usr/local/bin/camlabctl net on
 CAMLAB_USER ALL=(root) NOPASSWD: /usr/local/bin/camlabctl net off
