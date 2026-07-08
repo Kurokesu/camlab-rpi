@@ -109,6 +109,7 @@ python3 -m compileall -q -j 0 "$APP_DIR/camlab"
 "$APP_DIR/scripts/setup/config.sh" "${PORT_ARGS[@]}"
 "$APP_DIR/scripts/setup/journald.sh"
 "$APP_DIR/scripts/setup/boot.sh"
+"$APP_DIR/scripts/setup/splash.sh"
 "$APP_DIR/scripts/setup/service.sh" --enable
 
 header "Installing camlabctl command"

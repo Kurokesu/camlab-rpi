@@ -1,0 +1,23 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026, UAB Kurokesu
+#
+# Replaces Debian's initramfs plymouth starter, which paints on the firmware
+# framebuffer that vc4 later replaces (a visible blink). Skip it and let
+# plymouth-start.service show the splash once vc4 owns the display.
+
+PREREQ="udev"
+
+prereqs()
+{
+	echo "${PREREQ}"
+}
+
+case ${1} in
+	prereqs)
+		prereqs
+		exit 0
+		;;
+esac
+
+exit 0
