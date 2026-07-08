@@ -65,31 +65,16 @@ CLOUDINIT_UNITS=(
 
 _unit_present() { systemctl list-unit-files "$1" >/dev/null 2>&1; }
 
-# Atomic write preserving mode/owner of an existing file.
-_atomic_write() {
-    local path="$1" content="$2" tmp
-    tmp="$(mktemp "${path}.camlab-XXXXXX")"
-    printf '%s' "$content" > "$tmp"
-    if [ -f "$path" ]; then chmod --reference="$path" "$tmp" 2>/dev/null || true; fi
-    mv -f "$tmp" "$path"
-}
-
 # Managed block carrying firmware-stage tweaks, currently just disable-bt.
 stage_config() {
     log "Stage: config.txt (firmware tweaks)"
     [ -f "$CONFIG_TXT" ] || { warn "$CONFIG_TXT missing, skipping"; return; }
-    local text kept
-    text="$(cat "$CONFIG_TXT")"
-    kept="$(printf '%s\n' "$text" | sed "/^${BEGIN}$/,/^${END}$/d")"
-    kept="${kept%$'\n'}"  # trim one trailing newline before we re-add spacing
     if [ "$REVERT" -eq 1 ]; then
-        _atomic_write "$CONFIG_TXT" "${kept}"$'\n'
+        block_strip "$CONFIG_TXT" "$BEGIN" "$END"
         log "config.txt: removed camlab boot block"
         return
     fi
-    local block
-    block="$(printf '%s\n%s\n%s' "$BEGIN" "dtoverlay=disable-bt" "$END")"
-    _atomic_write "$CONFIG_TXT" "${kept}"$'\n\n'"${block}"$'\n'
+    block_write "$CONFIG_TXT" "$BEGIN" "$END" "dtoverlay=disable-bt"
     log "config.txt: wrote managed block (dtoverlay=disable-bt)"
 }
 

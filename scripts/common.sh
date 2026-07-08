@@ -72,6 +72,60 @@ apt_get() {
     fi
 }
 
+# Atomic file write preserving the mode of an existing file. Content is
+# written to a temp file in the same directory and moved into place, so
+# readers never see a half-written boot-critical file.
+atomic_write() {
+    local path="$1" content="$2" tmp
+    tmp="$(mktemp "${path}.camlab-XXXXXX")"
+    printf '%s' "$content" > "$tmp"
+    if [ -f "$path" ]; then chmod --reference="$path" "$tmp" 2>/dev/null || true; fi
+    mv -f "$tmp" "$path"
+}
+
+# Managed-block editing. Each setup script owns a marker pair so its edits to
+# shared files (config.txt, fstab) are greppable, idempotent and removable.
+
+# Drop the block between begin/end markers (no-op if file or block absent).
+block_strip() {
+    local path="$1" begin="$2" end="$3" kept
+    [ -f "$path" ] || return 0
+    kept="$(sed "/^${begin}$/,/^${end}$/d" "$path")"
+    kept="${kept%$'\n'}"
+    atomic_write "$path" "${kept}"$'\n'
+}
+
+# Replace-or-append the block: strip any existing copy, then append content
+# wrapped in the markers.
+block_write() {
+    local path="$1" begin="$2" end="$3" content="$4" kept block
+    block_strip "$path" "$begin" "$end"
+    kept="$(cat "$path")"
+    block="$(printf '%s\n%s\n%s' "$begin" "$content" "$end")"
+    atomic_write "$path" "${kept%$'\n'}"$'\n\n'"${block}"$'\n'
+}
+
+# cmdline.txt token editing. Exact whole-token matching (no regex) and one
+# token at a time, so tokens owned by other scripts survive the edit.
+cmdline_has() { tr ' ' '\n' < "$1" | grep -qFx "$2"; }
+
+cmdline_add() {
+    local path="$1" token="$2"
+    cmdline_has "$path" "$token" && return 0
+    sed -i "s/[[:space:]]*\$/ ${token}/" "$path"
+}
+
+cmdline_remove() {
+    local path="$1" token="$2" line
+    line="$(awk -v t="$token" '{
+        out = ""
+        for (i = 1; i <= NF; i++)
+            if ($i != t) out = out (out == "" ? "" : " ") $i
+        print out
+    }' "$path")"
+    atomic_write "$path" "$line"$'\n'
+}
+
 # Print the caller's top-of-file description comment block as help text.
 # Convention: a lone "#" line separates the SPDX/copyright header from the
 # description block. The description ends at the first non-comment line.
