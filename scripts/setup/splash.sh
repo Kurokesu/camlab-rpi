@@ -48,6 +48,7 @@ QUIET_DROPIN="/etc/systemd/system.conf.d/camlab-splash.conf"
 CMDLINE_ADD=(
     splash
     quiet
+    logo.nologo
     plymouth.ignore-serial-consoles
     vt.global_cursor_default=0
 )
@@ -66,7 +67,8 @@ _atomic_write() {
     mv -f "$tmp" "$path"
 }
 
-_cmdline_has() { grep -qE "(^| )$1( |\$)" "$CMDLINE_TXT"; }
+# Exact token matching, no regex, so dots in tokens cannot false-match.
+_cmdline_has() { tr ' ' '\n' < "$CMDLINE_TXT" | grep -qFx "$1"; }
 
 _cmdline_add() {
     _cmdline_has "$1" && return 0
@@ -74,7 +76,14 @@ _cmdline_add() {
 }
 
 _cmdline_remove() {
-    sed -i -E "s/(^| )$1( |\$)/\1/; s/[[:space:]]+\$//" "$CMDLINE_TXT"
+    local line
+    line="$(awk -v t="$1" '{
+        out = ""
+        for (i = 1; i <= NF; i++)
+            if ($i != t) out = out (out == "" ? "" : " ") $i
+        print out
+    }' "$CMDLINE_TXT")"
+    _atomic_write "$CMDLINE_TXT" "$line"$'\n'
 }
 
 stage_packages() {
