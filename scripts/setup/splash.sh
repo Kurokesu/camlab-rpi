@@ -126,9 +126,10 @@ stage_theme() {
         return
     fi
     log "Stage: Plymouth theme"
+    rm -rf "$THEME_DST"
     install -d -m 0755 "$THEME_DST"
     local f
-    for f in camlab.plymouth camlab.script logo.png progress_bg.png progress_fill.png; do
+    for f in camlab.plymouth camlab.script splash.png progress_bg.png progress_fill.png; do
         install -m 0644 "$SPLASH_SRC/$f" "$THEME_DST/"
     done
     plymouth-set-default-theme camlab

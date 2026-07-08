@@ -1,13 +1,13 @@
 # SPDX-FileCopyrightText: Copyright (C) 2026, UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Centered logo on black. Boot adds a loader bar below the logo; shutdown and
-# reboot show the static logo only.
+# Centered splash art on black. Boot adds a loader bar below it, shutdown and
+# reboot show the static art only.
 
 Window.SetBackgroundTopColor(0, 0, 0);
 Window.SetBackgroundBottomColor(0, 0, 0);
 
-logo = Image("logo.png");
+logo = Image("splash.png");
 logo_sprite = Sprite(logo);
 logo_sprite.SetX(Window.GetWidth() / 2 - logo.GetWidth() / 2);
 logo_sprite.SetY(Window.GetHeight() / 2 - logo.GetHeight() / 2);
@@ -15,9 +15,9 @@ logo_sprite.SetY(Window.GetHeight() / 2 - logo.GetHeight() / 2);
 progress_bg = Image("progress_bg.png");
 progress_fill = Image("progress_fill.png");
 
-bar_w = logo.GetWidth() * 0.55;
+bar_w = logo.GetWidth();
 bar_x = Window.GetWidth() / 2 - bar_w / 2;
-bar_y = Window.GetHeight() / 2 + logo.GetHeight() * 0.3 + 40;
+bar_y = Window.GetHeight() / 2 + logo.GetHeight() / 2 + 40;
 
 is_boot = (Plymouth.GetMode() == "boot");
 
