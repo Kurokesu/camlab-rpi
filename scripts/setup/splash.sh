@@ -59,33 +59,6 @@ CMDLINE_REMOVE=(
 BEGIN="# >>> camlab splash (do not edit) >>>"
 END="# <<< camlab splash <<<"
 
-_atomic_write() {
-    local path="$1" content="$2" tmp
-    tmp="$(mktemp "${path}.camlab-XXXXXX")"
-    printf '%s' "$content" > "$tmp"
-    if [ -f "$path" ]; then chmod --reference="$path" "$tmp" 2>/dev/null || true; fi
-    mv -f "$tmp" "$path"
-}
-
-# Exact token matching, no regex, so dots in tokens cannot false-match.
-_cmdline_has() { tr ' ' '\n' < "$CMDLINE_TXT" | grep -qFx "$1"; }
-
-_cmdline_add() {
-    _cmdline_has "$1" && return 0
-    sed -i "s/[[:space:]]*\$/ $1/" "$CMDLINE_TXT"
-}
-
-_cmdline_remove() {
-    local line
-    line="$(awk -v t="$1" '{
-        out = ""
-        for (i = 1; i <= NF; i++)
-            if ($i != t) out = out (out == "" ? "" : " ") $i
-        print out
-    }' "$CMDLINE_TXT")"
-    _atomic_write "$CMDLINE_TXT" "$line"$'\n'
-}
-
 stage_packages() {
     if [ "$REVERT" -eq 1 ]; then
         log "leaving splash packages installed (harmless, removal is manual)"
@@ -100,31 +73,25 @@ stage_cmdline() {
     [ -f "$CMDLINE_TXT" ] || { warn "$CMDLINE_TXT missing, skipping"; return; }
     local t
     if [ "$REVERT" -eq 1 ]; then
-        for t in "${CMDLINE_ADD[@]}"; do _cmdline_remove "$t"; done
-        _cmdline_add "console=tty1"
+        for t in "${CMDLINE_ADD[@]}"; do cmdline_remove "$CMDLINE_TXT" "$t"; done
+        cmdline_add "$CMDLINE_TXT" "console=tty1"
         log "cmdline.txt: splash tokens removed, console=tty1 restored"
         return
     fi
     log "Stage: cmdline.txt"
-    for t in "${CMDLINE_REMOVE[@]}"; do _cmdline_remove "$t"; done
-    for t in "${CMDLINE_ADD[@]}"; do _cmdline_add "$t"; done
+    for t in "${CMDLINE_REMOVE[@]}"; do cmdline_remove "$CMDLINE_TXT" "$t"; done
+    for t in "${CMDLINE_ADD[@]}"; do cmdline_add "$CMDLINE_TXT" "$t"; done
 }
 
 stage_config() {
     [ -f "$CONFIG_TXT" ] || { warn "$CONFIG_TXT missing, skipping"; return; }
-    local text kept
-    text="$(cat "$CONFIG_TXT")"
-    kept="$(printf '%s\n' "$text" | sed "/^${BEGIN}$/,/^${END}$/d")"
-    kept="${kept%$'\n'}"
     if [ "$REVERT" -eq 1 ]; then
-        _atomic_write "$CONFIG_TXT" "${kept}"$'\n'
+        block_strip "$CONFIG_TXT" "$BEGIN" "$END"
         log "config.txt: removed camlab splash block"
         return
     fi
     log "Stage: config.txt"
-    local block
-    block="$(printf '%s\n%s\n%s' "$BEGIN" "disable_splash=1" "$END")"
-    _atomic_write "$CONFIG_TXT" "${kept}"$'\n\n'"${block}"$'\n'
+    block_write "$CONFIG_TXT" "$BEGIN" "$END" "disable_splash=1"
 }
 
 stage_theme() {
@@ -166,7 +133,7 @@ stage_console() {
     fi
     log "Stage: console quiet"
     install -d -m 0755 "$(dirname "$QUIET_DROPIN")"
-    _atomic_write "$QUIET_DROPIN" '[Manager]'$'\n''ShowStatus=no'$'\n'
+    atomic_write "$QUIET_DROPIN" '[Manager]'$'\n''ShowStatus=no'$'\n'
     chmod 0644 "$QUIET_DROPIN"
     systemctl mask getty@tty1.service >/dev/null 2>&1 || true
 }

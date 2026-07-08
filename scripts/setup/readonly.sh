@@ -84,24 +84,6 @@ END="# <<< camlab readonly <<<"
 
 REPO_DIR="$(resolve_repo_dir)"
 
-# Atomic write preserving mode of an existing file.
-_atomic_write() {
-    local path="$1" content="$2" tmp
-    tmp="$(mktemp "${path}.camlab-XXXXXX")"
-    printf '%s' "$content" > "$tmp"
-    if [ -f "$path" ]; then chmod --reference="$path" "$tmp" 2>/dev/null || true; fi
-    mv -f "$tmp" "$path"
-}
-
-# Drop our managed block from a file (no-op if absent).
-_strip_block() {
-    local path="$1" kept
-    [ -f "$path" ] || return 0
-    kept="$(sed "/^${BEGIN}$/,/^${END}$/d" "$path")"
-    kept="${kept%$'\n'}"
-    _atomic_write "$path" "${kept}"$'\n'
-}
-
 # Stage 1: packages
 stage_packages() {
     if [ "$REVERT" -eq 1 ]; then
@@ -124,7 +106,7 @@ stage_data() {
         if mountpoint -q "$DATA_MNT"; then
             umount "$DATA_MNT" 2>/dev/null || true
         fi
-        _strip_block /etc/fstab
+        block_strip /etc/fstab "$BEGIN" "$END"
         if [ -f "$DATA_IMG" ]; then
             rm -f "$DATA_IMG"
             log "2) removed $DATA_IMG and its fstab line"
@@ -151,15 +133,9 @@ stage_data() {
 
     # fstab line via managed block. The loop option + nofail keeps a missing image
     # from blocking boot; x-systemd ordering puts the mount before the service.
-    if ! grep -qF "$BEGIN" /etc/fstab; then
-        local block
-        block="$(printf '%s\n%s %s ext4 loop,nofail,x-systemd.before=camlab.service 0 2\n%s' \
-                 "$BEGIN" "$DATA_IMG" "$DATA_MNT" "$END")"
-        printf '\n%s\n' "$block" >> /etc/fstab
-        log "2) added fstab mount $DATA_IMG -> $DATA_MNT"
-    else
-        log "2) fstab mount already present"
-    fi
+    block_write /etc/fstab "$BEGIN" "$END" \
+        "$DATA_IMG $DATA_MNT ext4 loop,nofail,x-systemd.before=camlab.service 0 2"
+    log "2) ensured fstab mount $DATA_IMG -> $DATA_MNT"
 
     # Mount now (writable root) and migrate any existing state into the image, so
     # nothing is lost and camlab can read/write straight away.
@@ -189,9 +165,9 @@ stage_overlay() {
     if [ "$REVERT" -eq 1 ]; then
         [ -f "$OVERLAY_CONF" ] && { rm -f "$OVERLAY_CONF"; log "3) removed $OVERLAY_CONF"; }
         [ -f "$REMOUNT_DROPIN" ] && { rm -f "$REMOUNT_DROPIN"; log "3) removed $REMOUNT_DROPIN"; }
-        _strip_block "$CONFIG_TXT"
+        block_strip "$CONFIG_TXT" "$BEGIN" "$END"
         # Drop the disable token too, so a clean revert leaves cmdline.txt as it was.
-        sed -i 's/ *overlayroot=disabled//g' "$CMDLINE_TXT"
+        cmdline_remove "$CMDLINE_TXT" "overlayroot=disabled"
         update-initramfs -u >/dev/null 2>&1 || true
         log "3) overlay config removed (reboot to fully unlock)"
         return
@@ -199,36 +175,28 @@ stage_overlay() {
 
     # recurse=0 is load-bearing: without it the overlay drives every other mount
     # (including our /var/lib/camlab loop) read-only too.
-    _atomic_write "$OVERLAY_CONF" 'overlayroot="tmpfs:recurse=0"'$'\n'
+    atomic_write "$OVERLAY_CONF" 'overlayroot="tmpfs:recurse=0"'$'\n'
     log "3) wrote $OVERLAY_CONF (tmpfs:recurse=0)"
 
     # Force the legacy mount API so systemd-remount-fs does not fail under the
     # overlay (Trixie/systemd #39558). Keeps the box out of 'degraded' state and
     # off the FAILED console lines.
     install -d -m 0755 "$(dirname "$REMOUNT_DROPIN")"
-    _atomic_write "$REMOUNT_DROPIN" \
+    atomic_write "$REMOUNT_DROPIN" \
         '[Manager]'$'\n''DefaultEnvironment="LIBMOUNT_FORCE_MOUNT2=always"'$'\n'
     log "3) wrote $REMOUNT_DROPIN (legacy mount API for remount-fs)"
 
     # auto_initramfs=1 makes the firmware load the initramfs that carries the
     # overlay hook. Managed block so it is reversible.
-    if ! grep -qF "$BEGIN" "$CONFIG_TXT"; then
-        local block
-        block="$(printf '%s\n%s\n%s' "$BEGIN" "auto_initramfs=1" "$END")"
-        local kept
-        kept="$(cat "$CONFIG_TXT")"
-        _atomic_write "$CONFIG_TXT" "${kept%$'\n'}"$'\n\n'"${block}"$'\n'
-        log "3) config.txt: enabled auto_initramfs"
-    else
-        log "3) config.txt: auto_initramfs block already present"
-    fi
+    block_write "$CONFIG_TXT" "$BEGIN" "$END" "auto_initramfs=1"
+    log "3) config.txt: enabled auto_initramfs"
 
     # Stage the overlay DISABLED. The first post-install boot then comes up
     # writable so first-boot tasks settle; the one-shot finaliser removes this
     # token and reboots to bring the overlay up for real. Without this, the
     # overlay would engage on the very next boot with no writable settle-boot.
-    if ! grep -q 'overlayroot=disabled' "$CMDLINE_TXT"; then
-        sed -i 's/[[:space:]]*$/ overlayroot=disabled/' "$CMDLINE_TXT"
+    if ! cmdline_has "$CMDLINE_TXT" "overlayroot=disabled"; then
+        cmdline_add "$CMDLINE_TXT" "overlayroot=disabled"
         log "3) cmdline.txt: staged overlay disabled (writable settle-boot)"
     else
         log "3) cmdline.txt: overlay-disabled token already present"
@@ -246,7 +214,7 @@ stage_swap() {
         return
     fi
     install -d -m 0755 "$(dirname "$SWAP_DROPIN")"
-    _atomic_write "$SWAP_DROPIN" '[Main]'$'\n''Mechanism=zram'$'\n'
+    atomic_write "$SWAP_DROPIN" '[Main]'$'\n''Mechanism=zram'$'\n'
     log "4) wrote $SWAP_DROPIN (zram swap, no swapfile under overlay)"
 }
 
