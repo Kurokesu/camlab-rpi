@@ -71,4 +71,4 @@ else
     die "generated sudoers failed visudo validation; not installing"
 fi
 
-log "Done. Reboot to load the overlay: sudo reboot"
+log "Done."
