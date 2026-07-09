@@ -1,4 +1,4 @@
-"""Boot-persistent settings store (per-sensor mode + fps selection).
+"""Boot-persistent settings store (per-sensor mode/fps and control overrides).
 
 A tiny atomic JSON file. Selections are keyed by the sensor's dtoverlay token so
 each sensor remembers its own last mode. Writes are unprivileged (no sudo): the
@@ -92,6 +92,44 @@ class SettingsStore:
             "size": [int(size[0]), int(size[1])],
             "bit_depth": int(bit_depth),
             "fps": float(fps),
+        }
+        return self._atomic_write(data)
+
+    def get_controls(self, overlay: str) -> dict:
+        """Per-sensor manual control overrides, None per control means auto.
+
+        Always returns all three keys, so it can seed ControlState directly.
+        """
+        out = {"exposure_us": None, "gain": None, "colour_temp": None}
+        if not overlay:
+            return out
+        entry = (self._load().get("controls") or {}).get(overlay)
+        if not isinstance(entry, dict):
+            return out
+        try:
+            if entry.get("exposure_us") is not None:
+                out["exposure_us"] = int(entry["exposure_us"])
+            if entry.get("gain") is not None:
+                out["gain"] = float(entry["gain"])
+            if entry.get("colour_temp") is not None:
+                out["colour_temp"] = int(entry["colour_temp"])
+        except (TypeError, ValueError):
+            log.warning("controls entry for %s is malformed - ignoring", overlay)
+            return {"exposure_us": None, "gain": None, "colour_temp": None}
+        return out
+
+    def set_controls(self, overlay: str, exposure_us: int | None,
+                     gain: float | None, colour_temp: int | None) -> bool:
+        """Persist control overrides for a sensor. Returns True if written."""
+        if not overlay:
+            return False
+        data = self._load()
+        data["version"] = _VERSION
+        data.setdefault("controls", {})
+        data["controls"][overlay] = {
+            "exposure_us": int(exposure_us) if exposure_us is not None else None,
+            "gain": float(gain) if gain is not None else None,
+            "colour_temp": int(colour_temp) if colour_temp is not None else None,
         }
         return self._atomic_write(data)
 

@@ -101,6 +101,8 @@ def main(argv: list[str] | None = None) -> int:
             engine.modes, settings.get_mode(overlay), display_max_fps)
         try:
             engine.configure_mode(mode, fps, avail)
+            # Restore manual control overrides after mode is configured
+            engine.set_control_state(**settings.get_controls(overlay))
         except Exception as exc:
             log.error("camera configure failed: %s", exc)
 
