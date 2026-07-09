@@ -374,7 +374,7 @@ class MainWindow(QtWidgets.QMainWindow):
         st = self.engine.control_state
         for key, (md_key, label, fmt) in self._CTRL_LIVE.items():
             value = md.get(md_key)
-            text = f" {label} {fmt(value)}" if value is not None else f" {label}"
+            text = f" {label} {fmt(value)}" if value is not None else f" {label} --"
             manual = getattr(st, key) is not None
             self._set_ctrl_button(key, text, manual)
             if key == self._open_sheet:
@@ -384,6 +384,9 @@ class MainWindow(QtWidgets.QMainWindow):
         btn = self._ctrl_buttons[key]
         if btn.text() != text:
             btn.setText(text)
+            # Ratchet width so a chip never shrinks (e.g. metadata gap during
+            # mode reconfigure) and its right neighbours do not jiggle.
+            btn.setMinimumWidth(max(btn.minimumWidth(), btn.sizeHint().width()))
         # Re-polish (and tint the icon) only when auto/manual state flips.
         if btn.property("manual") == manual:
             return
