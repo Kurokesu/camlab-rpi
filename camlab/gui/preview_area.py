@@ -42,15 +42,15 @@ class PreviewArea(QtWidgets.QWidget):
                 self.set_frost(True)
         else:
             self._live = QtWidgets.QLabel("No camera detected")
-            self._live.setAlignment(Qt.AlignCenter)
+            self._live.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self._live.setStyleSheet("font-size: 22px; color: #e06c75;")
         self._freeze = QtWidgets.QLabel()
-        self._freeze.setAlignment(Qt.AlignCenter)
+        self._freeze.setAlignment(Qt.AlignmentFlag.AlignCenter)
         # The frozen still is a full-resolution pixmap. Without this its size hint
         # inflates the stacked layout's minimum and pins the preview at full
         # height even after it is cleared, so the log can no longer claim space.
-        self._freeze.setSizePolicy(QtWidgets.QSizePolicy.Ignored,
-                                   QtWidgets.QSizePolicy.Ignored)
+        self._freeze.setSizePolicy(QtWidgets.QSizePolicy.Policy.Ignored,
+                                   QtWidgets.QSizePolicy.Policy.Ignored)
         self._stack.addWidget(self._live)
         self._stack.addWidget(self._freeze)
 
@@ -121,7 +121,7 @@ class PreviewArea(QtWidgets.QWidget):
                 max(4, round(img.width * _BLUR_FRACTION))))
             data = img.tobytes("raw", "RGB")
             qimg = QtGui.QImage(data, img.width, img.height,
-                                3 * img.width, QtGui.QImage.Format_RGB888)
+                                3 * img.width, QtGui.QImage.Format.Format_RGB888)
             return QtGui.QPixmap.fromImage(qimg)
         except Exception:
             log.exception("freeze-frame blur failed")

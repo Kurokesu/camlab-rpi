@@ -52,11 +52,11 @@ class LogPanel(QtWidgets.QWidget):
                                    "when re-checked.")
         self.autoscroll.setChecked(True)
         # Indicator to the right of the label (reads label-then-box).
-        self.autoscroll.setLayoutDirection(Qt.RightToLeft)
+        self.autoscroll.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
         self.autoscroll.toggled.connect(self._on_autoscroll)
 
         clear_btn = QtWidgets.QPushButton("Clear")
-        clear_btn.setCursor(Qt.PointingHandCursor)
+        clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         clear_btn.clicked.connect(self.clear)
 
         header.addWidget(title)
@@ -70,7 +70,7 @@ class LogPanel(QtWidgets.QWidget):
         self.view.setObjectName("logView")
         self.view.setMaximumBlockCount(_MAX_LINES)
         font = QtGui.QFont("monospace")
-        font.setStyleHint(QtGui.QFont.Monospace)
+        font.setStyleHint(QtGui.QFont.StyleHint.Monospace)
         font.setPointSize(9)
         self.view.setFont(font)
 

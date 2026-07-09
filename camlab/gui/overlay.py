@@ -46,10 +46,10 @@ class ModalOverlay(QtWidgets.QWidget):
         # Every clickable in the card gets the pointing-hand cursor (the action
         # buttons would otherwise keep the default arrow).
         for btn in card.findChildren(QtWidgets.QPushButton):
-            btn.setCursor(QtCore.Qt.PointingHandCursor)
+            btn.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
         # Hold focus so the dimmed chrome behind cannot be tabbed to until the
         # first Tab moves into the card (see _tab_targets / eventFilter).
-        self.setFocusPolicy(QtCore.Qt.StrongFocus)
+        self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
 
         outer = QtWidgets.QVBoxLayout(self)
         outer.setContentsMargins(40, 40, 40, 40)
@@ -74,7 +74,7 @@ class ModalOverlay(QtWidgets.QWidget):
         self.show()
         # Focus the overlay itself (not a button), so nothing is highlighted until
         # the first Tab, which then lands on the first control inside the card.
-        self.setFocus(QtCore.Qt.OtherFocusReason)
+        self.setFocus(QtCore.Qt.FocusReason.OtherFocusReason)
 
     def paintEvent(self, event) -> None:
         painter = QtGui.QPainter(self)
@@ -100,7 +100,7 @@ class ModalOverlay(QtWidgets.QWidget):
         seen_selectors: set[int] = set()
         for w in self.card.findChildren(QtWidgets.QWidget):
             if not (w.isEnabled() and w.isVisibleTo(self.card)
-                    and w.focusPolicy() & QtCore.Qt.TabFocus):
+                    and w.focusPolicy().value & QtCore.Qt.FocusPolicy.TabFocus.value):
                 continue
             sel = self._selector_of(w)
             if sel is not None:
@@ -132,18 +132,18 @@ class ModalOverlay(QtWidgets.QWidget):
             idx = (targets.index(cur) + (1 if forward else -1)) % len(targets)
         else:
             idx = 0 if forward else len(targets) - 1
-        targets[idx].setFocus(QtCore.Qt.TabFocusReason)
+            targets[idx].setFocus(QtCore.Qt.FocusReason.TabFocusReason)
 
     def eventFilter(self, obj, event) -> bool:
-        if obj is self._host and event.type() == QtCore.QEvent.Resize:
+        if obj is self._host and event.type() == QtCore.QEvent.Type.Resize:
             self.setGeometry(self._host.rect())
             return False
         # App-wide key trap while the overlay is up.
-        if event.type() == QtCore.QEvent.KeyPress:
+        if event.type() == QtCore.QEvent.Type.KeyPress:
             key = event.key()
-            if key in (QtCore.Qt.Key_Tab, QtCore.Qt.Key_Backtab):
-                back = key == QtCore.Qt.Key_Backtab or bool(
-                    event.modifiers() & QtCore.Qt.ShiftModifier)
+            if key in (QtCore.Qt.Key.Key_Tab, QtCore.Qt.Key.Key_Backtab):
+                back = key == QtCore.Qt.Key.Key_Backtab or bool(
+                    event.modifiers() & QtCore.Qt.KeyboardModifier.ShiftModifier)
                 self._cycle_focus(forward=not back)
                 return True  # consume: focus stays inside the card
         return super().eventFilter(obj, event)

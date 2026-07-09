@@ -88,7 +88,7 @@ class SegmentedSelector(QtWidgets.QWidget):
                 pos = "mid"
             btn.setProperty("pos", pos)
             btn.setCheckable(True)
-            btn.setCursor(Qt.PointingHandCursor)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setEnabled(enabled)
             self._group.addButton(btn, i)
             self._row.addWidget(btn)

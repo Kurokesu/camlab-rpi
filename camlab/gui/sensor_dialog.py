@@ -42,7 +42,8 @@ class SensorCard(QtWidgets.QFrame):
         # does not split the selector rows.
         self.notes_lbl = QtWidgets.QLabel()
         self.notes_lbl.setObjectName("modalText")
-        self.notes_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.notes_lbl.setAlignment(Qt.AlignmentFlag.AlignRight
+                                    | Qt.AlignmentFlag.AlignVCenter)
 
         header = QtWidgets.QHBoxLayout()
         header.addWidget(title)

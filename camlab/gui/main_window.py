@@ -126,7 +126,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Focus sink: clicking empty chrome (or boot) parks focus here instead of
         # on a control, so no button shows a stray highlight until the operator
         # actually tabs to one. ClickFocus also pulls focus off a button on click.
-        central.setFocusPolicy(Qt.ClickFocus)
+        central.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         root = QtWidgets.QVBoxLayout(central)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
@@ -137,8 +137,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # preview (live GL + frozen frost backdrop for modals)
         self.preview_area = PreviewArea(engine)
-        self.preview_area.setSizePolicy(QtWidgets.QSizePolicy.Expanding,
-                                        QtWidgets.QSizePolicy.Expanding)
+        self.preview_area.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding,
+                                        QtWidgets.QSizePolicy.Policy.Expanding)
         root.addWidget(self.preview_area, 1)
 
         # Control sheets float over preview as native subsurfaces. Created
@@ -207,8 +207,8 @@ class MainWindow(QtWidgets.QMainWindow):
         for btn in (self.sensor_btn, self.mode_btn, self.exp_btn, self.gain_btn,
                     self.wb_btn, self.settings_btn, self.log_btn, self.shutdown_btn):
             btn.setIconSize(QtCore.QSize(_ICON_PX, _ICON_PX))
-            btn.setCursor(Qt.PointingHandCursor)
-            btn.setFocusPolicy(Qt.TabFocus)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setFocusPolicy(Qt.FocusPolicy.TabFocus)
 
         crow.addWidget(self.sensor_btn)
         crow.addSpacing(6)
@@ -240,18 +240,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self._wire()
         self._populate_static()
         # Start with focus on the inert sink so nothing is highlighted until Tab.
-        central.setFocus(Qt.OtherFocusReason)
+        central.setFocus(Qt.FocusReason.OtherFocusReason)
 
         # Window shortcuts fire regardless of which child holds focus, so they
         # cover both the main screen and the in-window modal overlay (a plain
         # QWidget with no default-button routing of its own). _on_escape is
         # tiered (modal -> log -> shutdown); _on_return clicks the focused button.
-        esc = QtWidgets.QShortcut(QtGui.QKeySequence(Qt.Key_Escape), self)
-        esc.setContext(Qt.WindowShortcut)
+        esc = QtGui.QShortcut(QtGui.QKeySequence(Qt.Key.Key_Escape), self)
+        esc.setContext(Qt.ShortcutContext.WindowShortcut)
         esc.activated.connect(self._on_escape)
-        for seq in (Qt.Key_Return, Qt.Key_Enter):
-            sc = QtWidgets.QShortcut(QtGui.QKeySequence(seq), self)
-            sc.setContext(Qt.WindowShortcut)
+        for seq in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            sc = QtGui.QShortcut(QtGui.QKeySequence(seq), self)
+            sc.setContext(Qt.ShortcutContext.WindowShortcut)
             sc.activated.connect(self._on_return)
 
         # Sample telemetry at 10 Hz (100 ms): about the fastest a changing number
@@ -436,7 +436,7 @@ class MainWindow(QtWidgets.QMainWindow):
                           self.preview_area.width(), h)
 
     def eventFilter(self, obj, event) -> bool:
-        if (obj is self.preview_area and event.type() == QtCore.QEvent.Resize
+        if (obj is self.preview_area and event.type() == QtCore.QEvent.Type.Resize
                 and self._open_sheet is not None):
             self._position_sheet(self._open_sheet)
         return super().eventFilter(obj, event)
@@ -447,7 +447,7 @@ class MainWindow(QtWidgets.QMainWindow):
             sheet.setVisible(False)
         for btn in self._ctrl_buttons.values():
             btn.setChecked(False)
-        self.centralWidget().setFocus(Qt.OtherFocusReason)
+        self.centralWidget().setFocus(Qt.FocusReason.OtherFocusReason)
 
     def _seed_sheet(self, key: str) -> None:
         """Range + state from the engine (silent, no changed emission)."""
@@ -536,7 +536,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.preview_area.exit_freeze()
         # Park focus back on the inert sink so no control is left highlighted
         # (Qt would otherwise restore focus to whatever had it before the modal).
-        self.centralWidget().setFocus(Qt.OtherFocusReason)
+        self.centralWidget().setFocus(Qt.FocusReason.OtherFocusReason)
 
     def _show_message(self, title: str, message: str) -> None:
         self._open_modal(message_card(

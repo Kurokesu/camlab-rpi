@@ -41,9 +41,10 @@ class JumpSlider(QtWidgets.QSlider):
     """QSlider whose groove click jumps the handle straight to that spot."""
 
     def mousePressEvent(self, event) -> None:
-        if event.button() == Qt.LeftButton:
+        if event.button() == Qt.MouseButton.LeftButton:
             self.setValue(QtWidgets.QStyle.sliderValueFromPosition(
-                self.minimum(), self.maximum(), event.pos().x(), self.width()))
+                self.minimum(), self.maximum(),
+                int(event.position().x()), self.width()))
         super().mousePressEvent(event)
 
 
@@ -59,7 +60,7 @@ class ControlSheet(QtWidgets.QFrame):
         # Own native (Wayland sub)surface, created after the GL preview's, so
         # it stacks above it. No WA_TranslucentBackground: an alpha subsurface
         # never composites on this stack, so the buffer must stay opaque.
-        self.setAttribute(Qt.WA_NativeWindow)
+        self.setAttribute(Qt.WidgetAttribute.WA_NativeWindow)
         self._fmt = fmt
         self._log = log_scale
         self._int = integer
@@ -76,10 +77,10 @@ class ControlSheet(QtWidgets.QFrame):
                                   current="auto", stretch=False)
         self.mode_sel.changed.connect(self._on_mode)
 
-        self.slider = JumpSlider(Qt.Horizontal)
+        self.slider = JumpSlider(Qt.Orientation.Horizontal)
         self.slider.setRange(0, _STEPS)
-        self.slider.setFocusPolicy(Qt.TabFocus)
-        self.slider.setCursor(Qt.PointingHandCursor)
+        self.slider.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        self.slider.setCursor(Qt.CursorShape.PointingHandCursor)
         self.slider.valueChanged.connect(self._on_slider)
         self.slider.sliderPressed.connect(self._flip_to_manual)
 
@@ -87,7 +88,8 @@ class ControlSheet(QtWidgets.QFrame):
         self.value_lbl.setObjectName("sheetValue")
         # Fixed width so the row does not jitter as digits change.
         self.value_lbl.setMinimumWidth(80)
-        self.value_lbl.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.value_lbl.setAlignment(Qt.AlignmentFlag.AlignRight
+                                    | Qt.AlignmentFlag.AlignVCenter)
 
         row = QtWidgets.QHBoxLayout(self)
         row.setContentsMargins(14, 8, 14, 8)
