@@ -10,6 +10,7 @@ preview never hitches.
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Callable
 
 from ..qt import Qt, QtGui, QtWidgets, Signal
@@ -36,6 +37,9 @@ class PreviewArea(QtWidgets.QWidget):
 
         if engine.picam2 is not None:
             self._live: QtWidgets.QWidget = engine.make_preview_widget()
+            # Evaluation hook: boot with live frost on to judge the shader.
+            if os.environ.get("CAMLAB_FROST"):
+                self.set_frost(True)
         else:
             self._live = QtWidgets.QLabel("No camera detected")
             self._live.setAlignment(Qt.AlignCenter)
@@ -84,6 +88,11 @@ class PreviewArea(QtWidgets.QWidget):
         """Restore the live preview and drop the frozen still."""
         self._stack.setCurrentWidget(self._live)
         self._freeze.clear()
+
+    def set_frost(self, frosted: bool) -> None:
+        """Blur the live GL preview in-shader (no-op without a GL preview)."""
+        if hasattr(self._live, "set_frosted"):
+            self._live.set_frosted(frosted)
 
     def _on_snapshot(self, img) -> None:
         cb, self._on_frozen = self._on_frozen, None

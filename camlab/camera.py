@@ -20,6 +20,7 @@ import os
 import time
 from dataclasses import dataclass, field
 
+from .gl_frost import frost_widget_class
 from .modes import (
     SensorMode,
     enumerate_modes,
@@ -320,6 +321,8 @@ class CameraEngine:
         # in __init__ via winId(), and an unrealized child parent yields
         # EGL_BAD_ALLOC. The layout reparents it afterwards.
         cls = preview_widget_class(software=software)
+        if not software:
+            cls = frost_widget_class(cls)
         w, h = self.size
         widget = cls(self.picam2, width=w, height=h, keep_ar=True)
         return widget
