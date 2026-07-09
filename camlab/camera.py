@@ -2,9 +2,9 @@
 
 Owns the Picamera2 instance, enumerates the sensor's runtime-selectable modes,
 configures a (raw + main + lores) preview pipeline, builds the Qt preview widget,
-and exposes detection + a first-frame hook (for boot-to-preview timing). Designed
-to degrade gracefully: if no camera enumerates, the GUI still comes up and reports
-the fact.
+holds exposure/gain/WB control state and exposes detection + a first-frame
+hook (for boot-to-preview timing). Designed to degrade gracefully: if no camera
+enumerates, GUI still comes up and reports "no camera".
 
 Stream topology (per mode): the raw stream carries the selected sensor mode, the
 main stream is the full-resolution ISP output (XBGR8888, exercises the pipeline),
@@ -29,6 +29,26 @@ from .modes import (
 from .qt import preview_widget_class
 
 log = logging.getLogger(__name__)
+
+# libcamera advertises ColourTemperature as 100-100000 K, far beyond any tuning
+# curve. Clamp slider range to a practical photographic band.
+_CT_UI_RANGE = (2000, 10000)
+
+# Sentinel so set_control_state can tell "not passed" from "None = auto".
+_UNSET = object()
+
+
+@dataclass
+class ControlState:
+    """Manual control overrides, None means auto.
+
+    Exposure, gain and white balance are independently auto or manual, matching
+    libcamera's split AE API. Values clamp to the current mode's advertised
+    range on every set and on mode change.
+    """
+    exposure_us: int | None = None
+    gain: float | None = None
+    colour_temp: int | None = None
 
 
 @dataclass(frozen=True)
@@ -75,6 +95,7 @@ class CameraEngine:
         self.sensor_mode: dict = {}
         self.current_mode: SensorMode | None = None
         self.current_fps: float | None = None
+        self.control_state = ControlState()
         self.telemetry = Telemetry()  # latest per-frame snapshot (camera -> GUI)
         self._last_ts = 0             # previous SensorTimestamp (ns), for fps
         self._started = False
@@ -145,6 +166,10 @@ class CameraEngine:
         self.current_mode = mode
         self.current_fps = float(fps)
         self.size = tuple(self.lores_config.get("size", lores_size))
+        # configure() resets picam2.controls to the config's, so re-clamp
+        # manual values against the new mode and push them again.
+        self._clamp_control_state()
+        self._apply_controls()
         log.info("configured: sensor_mode=%s fps=%.2f main=%s lores=%s",
                  self.sensor_mode_str(), fps,
                  self.main_config.get("size"), self.size)
@@ -157,6 +182,109 @@ class CameraEngine:
         self.configure_mode(mode, fps, avail_size)
         if was_started:
             self.start()
+
+    # camera controls (exposure / gain / white balance)
+    @property
+    def has_split_ae(self) -> bool:
+        """True when libcamera offers per-control AE modes (split API, 0.7+)."""
+        return self.picam2 is not None and "ExposureTimeMode" in self.picam2.camera_controls
+
+    def control_ranges(self) -> dict[str, tuple]:
+        """(min, max) per manual control for the current configuration.
+
+        Keys mirror ControlState fields. A missing key means the camera does
+        not offer that control (e.g. no ColourTemperature on mono sensors), so
+        GUI hides it. Ranges come from camera_controls, except exposure max,
+        which the locked fps caps at one frame duration.
+        """
+        if self.picam2 is None:
+            return {}
+        cc = self.picam2.camera_controls
+        ranges: dict[str, tuple] = {}
+        if "ExposureTime" in cc:
+            lo, hi, _ = cc["ExposureTime"]
+            if self.current_fps:
+                hi = min(hi, fps_to_frame_duration(self.current_fps))
+            ranges["exposure_us"] = (int(lo), int(hi))
+        if "AnalogueGain" in cc:
+            lo, hi, _ = cc["AnalogueGain"]
+            ranges["gain"] = (float(lo), float(hi))
+        if "ColourTemperature" in cc and "AwbEnable" in cc:
+            lo, hi, _ = cc["ColourTemperature"]
+            ranges["colour_temp"] = (max(int(lo), _CT_UI_RANGE[0]),
+                                     min(int(hi), _CT_UI_RANGE[1]))
+        return ranges
+
+    def set_control_state(self, exposure_us=_UNSET, gain=_UNSET,
+                          colour_temp=_UNSET) -> ControlState:
+        """Update one or more controls (None = auto) and push them to libcamera.
+
+        Values clamp to the current mode's range. Returns resulting state
+        (caller reads back what was actually set, e.g. for persisting).
+        """
+        st = self.control_state
+        if exposure_us is not _UNSET:
+            v = self._clamped("exposure_us", exposure_us)
+            st.exposure_us = int(v) if v is not None else None
+        if gain is not _UNSET:
+            v = self._clamped("gain", gain)
+            st.gain = float(v) if v is not None else None
+        if colour_temp is not _UNSET:
+            v = self._clamped("colour_temp", colour_temp)
+            st.colour_temp = int(v) if v is not None else None
+        self._apply_controls()
+        return st
+
+    def _clamped(self, key: str, value):
+        if value is None:
+            return None
+        rng = self.control_ranges().get(key)
+        if rng is None:
+            return None  # control not offered, stay auto
+        return min(max(value, rng[0]), rng[1])
+
+    def _clamp_control_state(self) -> None:
+        """Re-clamp manual values against the new mode's ranges."""
+        st = self.control_state
+        for key in ("exposure_us", "gain", "colour_temp"):
+            v = getattr(st, key)
+            if v is not None:
+                c = self._clamped(key, v)
+                setattr(st, key, type(v)(c) if c is not None else None)
+
+    def _apply_controls(self) -> None:
+        if self.picam2 is None:
+            return
+        st = self.control_state
+        cc = self.picam2.camera_controls
+        ctrls: dict = {}
+        if self.has_split_ae:
+            # 0 = auto, 1 = manual (libcamera ExposureTimeMode/AnalogueGainMode).
+            ctrls["ExposureTimeMode"] = 0 if st.exposure_us is None else 1
+            if st.exposure_us is not None:
+                ctrls["ExposureTime"] = int(st.exposure_us)
+            ctrls["AnalogueGainMode"] = 0 if st.gain is None else 1
+            if st.gain is not None:
+                ctrls["AnalogueGain"] = float(st.gain)
+        elif "AeEnable" in cc:
+            # Legacy joint AE: either manual side forces AE off, freezing the
+            # other at its last metered value.
+            manual = st.exposure_us is not None or st.gain is not None
+            ctrls["AeEnable"] = not manual
+            if manual:
+                md = self.telemetry.metadata or {}
+                exp = st.exposure_us if st.exposure_us is not None else md.get("ExposureTime")
+                gain = st.gain if st.gain is not None else md.get("AnalogueGain")
+                if exp:
+                    ctrls["ExposureTime"] = int(exp)
+                if gain:
+                    ctrls["AnalogueGain"] = float(gain)
+        if "colour_temp" in self.control_ranges():
+            ctrls["AwbEnable"] = st.colour_temp is None
+            if st.colour_temp is not None:
+                ctrls["ColourTemperature"] = int(st.colour_temp)
+        if ctrls:
+            self.picam2.set_controls(ctrls)
 
     def _match_sensor_mode(self, sensor_cfg: dict) -> dict:
         """Find the sensor_modes entry matching the configured size + bit depth.
