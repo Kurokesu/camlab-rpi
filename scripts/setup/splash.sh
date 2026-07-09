@@ -2,10 +2,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026, UAB Kurokesu
 #
-# Boot/shutdown splash: a Plymouth theme (logo + loader bar) that runs until
-# Cage starts, static logo on shutdown. Also silences the console: no rainbow
-# splash, no tty text, no cursor. Artwork lives in deploy/splash/.
-# Safe to re-run. Requires sudo. Reboot to apply.
+# Boot splash via the kernel fullscreen logo (no daemon, no DRM, no Plymouth).
+# The rpi kernel draws deploy/splash/logo.tga from the initramfs at fbcon
+# init, the earliest point custom pixels appear, and it holds until Cage
+# modesets over it. The Qt boot cover then carries a black screen until the
+# first camera frame.
+# Regenerate logo.tga from splash.png with:
+#   convert splash.png -background black -alpha remove -alpha off -colors 224 \
+#     -depth 8 -type TrueColor -compress none logo.tga
+# Safe to re-run on a writable root. Requires sudo. Reboot to apply.
 #
 # Usage:
 #   sudo scripts/setup/splash.sh            # install + activate
@@ -33,127 +38,43 @@ require_root
 
 REPO_DIR="$(resolve_repo_dir)"
 SPLASH_SRC="$REPO_DIR/deploy/splash"
-THEME_DST="/usr/share/plymouth/themes/camlab"
-
 FW_DIR="${CAMLAB_FW_DIR:-/boot/firmware}"
-CONFIG_TXT="$FW_DIR/config.txt"
 CMDLINE_TXT="$FW_DIR/cmdline.txt"
+LOGO_TGA="/lib/firmware/logo.tga"
+INITRAMFS_HOOK="/etc/initramfs-tools/hooks/camlab-splash"
 
-QUIET_DROPIN="/etc/systemd/system.conf.d/camlab-splash.conf"
-
-# Cmdline token sets. Add/remove one token at a time (never rewrite the whole
-# line) so the overlayroot token managed by readonly.sh/camlabctl survives.
-# ignore-serial-consoles is load-bearing: without it Plymouth attaches to the
-# serial console (last console= entry) and the HDMI panel stays black.
-CMDLINE_ADD=(
-    splash
-    quiet
-    logo.nologo
-    plymouth.ignore-serial-consoles
-    vt.global_cursor_default=0
-)
-CMDLINE_REMOVE=(
-    console=tty1
+# Kernel fullscreen-logo tokens. boot.sh owns the quiet-console tokens and
+# already removes quiet/logo.nologo, which suppress the logo.
+CMDLINE_TOKENS=(
+    fullscreen_logo=1
+    fullscreen_logo_name=logo.tga
 )
 
-BEGIN="# >>> camlab splash (do not edit) >>>"
-END="# <<< camlab splash <<<"
-
-stage_packages() {
+stage_logo() {
     if [ "$REVERT" -eq 1 ]; then
-        log "leaving splash packages installed (harmless, removal is manual)"
+        rm -f "$LOGO_TGA" "$INITRAMFS_HOOK"
+        update-initramfs -u >/dev/null 2>&1 || true
+        log "removed boot logo and initramfs hook"
         return
     fi
-    log "Stage: packages"
-    DEBIAN_FRONTEND=noninteractive apt_get install -y --no-install-recommends \
-        plymouth plymouth-themes >/dev/null
+    log "Stage: kernel boot logo"
+    install -m 0644 "$SPLASH_SRC/logo.tga" "$LOGO_TGA"
+    install -m 0755 "$SPLASH_SRC/initramfs-hook" "$INITRAMFS_HOOK"
+    update-initramfs -u >/dev/null
+    log "logo.tga bundled into initramfs"
 }
 
 stage_cmdline() {
-    [ -f "$CMDLINE_TXT" ] || { warn "$CMDLINE_TXT missing, skipping"; return; }
     local t
+    [ -f "$CMDLINE_TXT" ] || { warn "$CMDLINE_TXT missing, skipping cmdline"; return; }
     if [ "$REVERT" -eq 1 ]; then
-        for t in "${CMDLINE_ADD[@]}"; do cmdline_remove "$CMDLINE_TXT" "$t"; done
-        cmdline_add "$CMDLINE_TXT" "console=tty1"
-        log "cmdline.txt: splash tokens removed, console=tty1 restored"
+        for t in "${CMDLINE_TOKENS[@]}"; do cmdline_remove "$CMDLINE_TXT" "$t"; done
+        log "cmdline: fullscreen logo tokens removed"
         return
     fi
-    log "Stage: cmdline.txt"
-    for t in "${CMDLINE_REMOVE[@]}"; do cmdline_remove "$CMDLINE_TXT" "$t"; done
-    for t in "${CMDLINE_ADD[@]}"; do cmdline_add "$CMDLINE_TXT" "$t"; done
-}
-
-stage_config() {
-    [ -f "$CONFIG_TXT" ] || { warn "$CONFIG_TXT missing, skipping"; return; }
-    if [ "$REVERT" -eq 1 ]; then
-        block_strip "$CONFIG_TXT" "$BEGIN" "$END"
-        log "config.txt: removed camlab splash block"
-        return
-    fi
-    log "Stage: config.txt"
-    block_write "$CONFIG_TXT" "$BEGIN" "$END" "disable_splash=1"
-}
-
-stage_theme() {
-    if [ "$REVERT" -eq 1 ]; then
-        plymouth-set-default-theme --reset >/dev/null 2>&1 || true
-        rm -rf "$THEME_DST"
-        log "removed Plymouth theme, reset default"
-        return
-    fi
-    log "Stage: Plymouth theme"
-    rm -rf "$THEME_DST"
-    install -d -m 0755 "$THEME_DST"
-    local f
-    for f in camlab.plymouth camlab.script splash.png progress_bg.png progress_fill.png; do
-        install -m 0644 "$SPLASH_SRC/$f" "$THEME_DST/"
-    done
-    plymouth-set-default-theme camlab
-}
-
-PREMOUNT_OVERRIDE="/etc/initramfs-tools/scripts/init-premount/plymouth"
-
-stage_initramfs() {
-    if [ "$REVERT" -eq 1 ]; then
-        rm -f "$PREMOUNT_OVERRIDE"
-        log "initramfs premount override removed"
-        return
-    fi
-    log "Stage: initramfs (defer splash until KMS)"
-    install -d -m 0755 "$(dirname "$PREMOUNT_OVERRIDE")"
-    install -m 0755 "$SPLASH_SRC/initramfs-premount" "$PREMOUNT_OVERRIDE"
-}
-
-stage_console() {
-    if [ "$REVERT" -eq 1 ]; then
-        rm -f "$QUIET_DROPIN"
-        systemctl unmask getty@tty1.service >/dev/null 2>&1 || true
-        log "console output restored (drop-in removed, getty unmasked)"
-        return
-    fi
-    log "Stage: console quiet"
-    install -d -m 0755 "$(dirname "$QUIET_DROPIN")"
-    atomic_write "$QUIET_DROPIN" '[Manager]'$'\n''ShowStatus=no'$'\n'
-    chmod 0644 "$QUIET_DROPIN"
-    systemctl mask getty@tty1.service >/dev/null 2>&1 || true
-}
-
-SHUTDOWN_SPLASH="/usr/local/bin/camlab-shutdown-splash"
-CAMLAB_DROPIN="/etc/systemd/system/camlab.service.d/shutdown-splash.conf"
-
-stage_shutdown() {
-    if [ "$REVERT" -eq 1 ]; then
-        rm -f "$SHUTDOWN_SPLASH" "$CAMLAB_DROPIN"
-        rmdir /etc/systemd/system/camlab.service.d 2>/dev/null || true
-        systemctl daemon-reload >/dev/null 2>&1 || true
-        log "removed shutdown splash hook"
-        return
-    fi
-    log "Stage: shutdown splash"
-    install -m 0755 "$REPO_DIR/scripts/camlab-shutdown-splash.sh" "$SHUTDOWN_SPLASH"
-    install -d -m 0755 "$(dirname "$CAMLAB_DROPIN")"
-    install -m 0644 "$REPO_DIR/deploy/systemd/camlab.service.d/shutdown-splash.conf" "$CAMLAB_DROPIN"
-    systemctl daemon-reload
+    log "Stage: cmdline tokens"
+    for t in "${CMDLINE_TOKENS[@]}"; do cmdline_add "$CMDLINE_TXT" "$t"; done
+    log "cmdline: fullscreen logo enabled"
 }
 
 if [ "$REVERT" -eq 1 ]; then
@@ -162,19 +83,11 @@ else
     header "Boot splash - installing"
 fi
 
-stage_packages
+stage_logo
 stage_cmdline
-stage_config
-stage_theme
-stage_initramfs
-stage_console
-stage_shutdown
-
-log "Refreshing initramfs..."
-update-initramfs -u >/dev/null
 
 if [ "$REVERT" -eq 1 ]; then
-    log "Revert complete. Reboot to restore the stock console."
+    log "Revert complete. Reboot to restore stock behaviour."
 else
-    log "Done. Reboot to see the splash: sudo reboot"
+    log "Done."
 fi
