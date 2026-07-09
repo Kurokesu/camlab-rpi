@@ -4,9 +4,9 @@
 #
 # Boot-time tuning: trims power-on to first preview by cutting work the kiosk
 # never needs. Disables Bluetooth in config.txt (managed block) and masks unused
-# systemd units (network-wait, BT, ModemManager, cloud-init). Deliberately left
-# alone: journald/logind/avahi, console boot logging (useful operator feedback,
-# no measurable cost) and networking (operator-controlled via camlabctl net or GUI).
+# systemd units (network-wait, BT, ModemManager, cloud-init). Silences the
+# console for kiosk boot (quiet cmdline, no getty on tty1, no status wall).
+# Deliberately left alone: journald/logind/avahi and networking.
 # Safe to re-run. Requires sudo. Changes take hold after a reboot.
 #
 # Usage:
@@ -35,6 +35,23 @@ require_root
 
 FW_DIR="${CAMLAB_FW_DIR:-/boot/firmware}"
 CONFIG_TXT="$FW_DIR/config.txt"
+CMDLINE_TXT="$FW_DIR/cmdline.txt"
+CONSOLE_DROPIN="/etc/systemd/system.conf.d/camlab-console.conf"
+
+# Cmdline tokens for a quiet kiosk panel. One token at a time so overlayroot
+# and tokens owned by other scripts survive. quiet and logo.nologo both
+# suppress the kernel fullscreen logo (splash.sh), so they are removed. The
+# fullscreen logo keeps the console clean on its own (bench verified).
+CMDLINE_ADD=(
+    vt.global_cursor_default=0
+)
+CMDLINE_REMOVE=(
+    console=tty1
+    quiet
+    logo.nologo
+    splash
+    plymouth.ignore-serial-consoles
+)
 
 # Managed block markers, mirroring camlab.config_manager so the edits are
 # greppable, idempotent and cleanly removable.
@@ -74,8 +91,8 @@ stage_config() {
         log "config.txt: removed camlab boot block"
         return
     fi
-    block_write "$CONFIG_TXT" "$BEGIN" "$END" "dtoverlay=disable-bt"
-    log "config.txt: wrote managed block (dtoverlay=disable-bt)"
+    block_write "$CONFIG_TXT" "$BEGIN" "$END" $'dtoverlay=disable-bt\ndisable_splash=1'
+    log "config.txt: wrote managed block (disable-bt, disable_splash)"
 }
 
 stage_systemd() {
@@ -135,6 +152,34 @@ stage_systemd() {
     fi
 }
 
+stage_console() {
+    log "Stage: console quiet"
+    if [ "$REVERT" -eq 1 ]; then
+        if [ -f "$CMDLINE_TXT" ]; then
+            local t
+            for t in "${CMDLINE_ADD[@]}"; do cmdline_remove "$CMDLINE_TXT" "$t"; done
+            cmdline_add "$CMDLINE_TXT" "console=tty1"
+            cmdline_add "$CMDLINE_TXT" "quiet"
+        fi
+        rm -f "$CONSOLE_DROPIN"
+        systemctl unmask getty@tty1.service >/dev/null 2>&1 || true
+        log "console output restored"
+        return
+    fi
+    if [ -f "$CMDLINE_TXT" ]; then
+        local t
+        for t in "${CMDLINE_REMOVE[@]}"; do cmdline_remove "$CMDLINE_TXT" "$t"; done
+        for t in "${CMDLINE_ADD[@]}"; do cmdline_add "$CMDLINE_TXT" "$t"; done
+        log "cmdline.txt: quiet kiosk tokens applied"
+    else
+        warn "$CMDLINE_TXT missing, skipping cmdline quiet"
+    fi
+    install -d -m 0755 "$(dirname "$CONSOLE_DROPIN")"
+    atomic_write "$CONSOLE_DROPIN" '[Manager]'$'\n''ShowStatus=no'$'\n'
+    chmod 0644 "$CONSOLE_DROPIN"
+    systemctl mask getty@tty1.service >/dev/null 2>&1 || true
+}
+
 if [ "$REVERT" -eq 1 ]; then
     header "Boot tuning - reverting all stages"
 else
@@ -143,6 +188,7 @@ fi
 
 stage_config
 stage_systemd
+stage_console
 
 if [ "$REVERT" -eq 1 ]; then
     log "Revert complete. Reboot to restore stock boot behaviour."
