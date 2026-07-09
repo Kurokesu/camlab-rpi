@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 
 from .. import network
 from ..camera import CameraEngine
@@ -588,18 +587,10 @@ class MainWindow(QtWidgets.QMainWindow):
         options = list(chosen.options)
         if mono and chosen.mono_option and chosen.mono_option not in options:
             options.append(chosen.mono_option)
-        variant = " (mono)" if mono and chosen.mono_option else ""
         try:
             self.config.apply(chosen.overlay, port, options)
         except Exception as exc:  # surface the failure, do not power off
             self._show_message("Apply failed", str(exc))
-            return
-        if os.environ.get("CAMLAB_NO_REBOOT"):
-            self._populate_static()
-            self._show_message(
-                "Applied (shutdown skipped)",
-                f"config.txt updated: {chosen.overlay}{variant} on {port}.\n"
-                "CAMLAB_NO_REBOOT set - power off and swap the sensor manually.")
             return
         # A sensor swap needs the box off, so power down rather than reboot: the
         # operator swaps while it is off, then powers on to the new overlay.
