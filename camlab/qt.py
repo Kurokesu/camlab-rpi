@@ -1,30 +1,23 @@
-"""Single chokepoint for the Qt binding + the picamera2 preview widget.
+"""Single chokepoint for Qt imports and picamera2 preview widget.
 
-The whole app imports Qt from here so switching bindings (PyQt5 <-> PyQt6) is a
-one-file change. Phase 1 settled on PyQt5 / QGlPicamera2 (Debian-recommended,
-verified working under Cage as a native Wayland EGL client on this CM5). Override
-with CAMLAB_QT_BINDING=pyqt6 if ever needed.
+The whole app imports Qt from here. PyQt6 throughout (Qt 6.8 Wayland backend
+composites translucent native subsurfaces, which Qt 5.15 could not - that
+enables sheets and cards floating over the GL preview with alpha). Phase 1
+ran PyQt5; the migration kept this module as the import seam.
 """
 
-import os
-
-BINDING = os.environ.get("CAMLAB_QT_BINDING", "pyqt5").lower()
-
-if BINDING == "pyqt6":
-    from PyQt6 import QtCore, QtGui, QtWidgets  # noqa: F401
-    _GL_WIDGET = "QGl6Picamera2"
-    _SW_WIDGET = "Q6Picamera2"
-else:
-    from PyQt5 import QtCore, QtGui, QtWidgets  # noqa: F401
-    _GL_WIDGET = "QGlPicamera2"
-    _SW_WIDGET = "QPicamera2"
+from PyQt6 import QtCore, QtGui, QtWidgets  # noqa: F401
 
 Qt = QtCore.Qt
 Signal = QtCore.pyqtSignal
 Slot = QtCore.pyqtSlot
 
+BINDING_LABEL = "pyqt6/QGl6Picamera2"
+
 
 def preview_widget_class(software=False):
-    """Return the picamera2 Qt preview widget class matching the active binding."""
+    """Return the picamera2 Qt preview widget class for this binding."""
+    # Deferred import: pulling in picamera2's preview machinery loads EGL, which
+    # must not happen at camlab.qt import time (camera opens before QApplication).
     from picamera2.previews import qt as _p2qt
-    return getattr(_p2qt, _SW_WIDGET if software else _GL_WIDGET)
+    return _p2qt.Q6Picamera2 if software else _p2qt.QGl6Picamera2

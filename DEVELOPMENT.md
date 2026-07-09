@@ -37,5 +37,4 @@ Ships from eMMC. NVMe was tested and dropped: it boots ~1s slower (~16s vs ~15s 
 - `CAMLAB_BUFFER_COUNT` preview buffers per stream (default `4`)
 - `CAMLAB_STATE_FILE` persisted mode/fps settings path
 - `CAMLAB_NO_CAPTURE` disable stderr splicing
-- `CAMLAB_QT_BINDING` `pyqt5` (default) or `pyqt6`
 - `QT_QPA_PLATFORM` defaults to `wayland` under a Wayland session

@@ -106,7 +106,7 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as exc:
             log.error("camera configure failed: %s", exc)
 
-    binding_label = f"{qt.BINDING}/{'QGlPicamera2' if qt.BINDING == 'pyqt5' else 'QGl6Picamera2'}"
+    binding_label = qt.BINDING_LABEL
 
     from .gui.main_window import MainWindow
     win = MainWindow(engine, registry, config, capture, classifier,
@@ -117,7 +117,7 @@ def main(argv: list[str] | None = None) -> int:
     # MainWindow). Starting it here, before the event loop runs, would block with
     # the window still mapped at its initial size and look like a boot glitch.
 
-    rc = app.exec_() if hasattr(app, "exec_") else app.exec()
+    rc = app.exec()
 
     engine.stop()
     engine.close()

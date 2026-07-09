@@ -3,7 +3,7 @@
 # Copyright (C) 2026, UAB Kurokesu
 #
 # Install camlab APT dependencies: Kurokesu apt archive, Kurokesu libcamera
-# fork, Python preview/GUI stack (picamera2 + PyQt5 + OpenGL) and Cage.
+# fork, Python preview/GUI stack (picamera2 + PyQt6 + OpenGL) and Cage.
 # Also removes preinstalled rpicam-apps stack camlab never uses.
 # Safe to re-run. Requires sudo.
 #
@@ -42,16 +42,16 @@ apt-get install -y eatmydata
 
 # One resolver pass, recommends off to keep GUI extras (VA/VDPAU/Vulkan, GTK,
 # QML) away. Hard deps stay unlisted: picamera2 pulls the +krks libcamera
-# fork, qtopengl pulls base pyqt5. Recommends the kiosk does need are pinned:
-# python3-opengl (QGlPicamera2 imports it), qtwayland5 (Qt under Cage),
-# awb-nn (libcamera-ipa AWB models).
+# fork. Recommends the kiosk does need are pinned: python3-opengl
+# (QGl6Picamera2 imports it), qt6-wayland (Qt under Cage), awb-nn
+# (libcamera-ipa AWB models).
 log "Installing packages..."
 apt_get install -y --no-install-recommends \
     python3-picamera2 \
-    python3-pyqt5.qtopengl python3-opengl \
+    python3-pyqt6 python3-opengl \
     python3-yaml \
     cage \
-    qtwayland5 awb-nn
+    qt6-wayland awb-nn
 
 # camlab never runs rpicam-* CLI. Drop preinstalled rpicam-apps stack
 # and its OpenCV deps (~20 MB). picamera2 keeps libcamera from autoremoval.

@@ -1,6 +1,6 @@
 # Import-level deps, for reference/linting only. Not installed via pip:
 # target gets these from APT (scripts/setup/deps.sh), pinned to
 # Kurokesu libcamera fork and system Qt.
-PyQt5
+PyQt6
 picamera2
 PyYAML

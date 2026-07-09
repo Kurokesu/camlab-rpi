@@ -56,7 +56,7 @@ class SettingsCard(QtWidgets.QFrame):
         cancel_btn.clicked.connect(on_cancel)
         self.apply_btn = QtWidgets.QPushButton("Apply")
         self.apply_btn.clicked.connect(self._apply)
-        self.apply_btn.setCursor(Qt.PointingHandCursor)
+        self.apply_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         # Turning networking off cuts the rig's reachability, so a bare Enter
         # must not trigger it: Cancel is the primary target, same convention
         # as the sensor card.

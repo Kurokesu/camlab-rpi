@@ -72,7 +72,7 @@ def _glyph(name: str) -> str:
 def pixmap(name: str, size_px: int, color: str = "#d7dae0") -> QtGui.QPixmap:
     glyph = _glyph(name)
     pm = QtGui.QPixmap(size_px, size_px)
-    pm.fill(Qt.transparent)
+    pm.fill(Qt.GlobalColor.transparent)
     if not glyph:
         return pm
     painter = QtGui.QPainter(pm)
@@ -80,7 +80,7 @@ def pixmap(name: str, size_px: int, color: str = "#d7dae0") -> QtGui.QPixmap:
     font.setPixelSize(size_px)
     painter.setFont(font)
     painter.setPen(QtGui.QColor(color))
-    painter.drawText(pm.rect(), Qt.AlignCenter, glyph)
+    painter.drawText(pm.rect(), Qt.AlignmentFlag.AlignCenter, glyph)
     painter.end()
     return pm
 
