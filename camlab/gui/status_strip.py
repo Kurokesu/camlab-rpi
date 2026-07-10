@@ -138,7 +138,11 @@ class StatusStrip(QtWidgets.QFrame):
                       exposure_us: float | None = None,
                       analogue_gain: float | None = None,
                       digital_gain: float | None = None) -> None:
-        """Live per-frame numbers from the engine + libcamera metadata."""
+        """Live per-frame numbers from the engine + libcamera metadata.
+
+        frame None means no frame has been captured yet, which hides the
+        whole line rather than rendering placeholders.
+        """
         self._frame = frame
         self._fps = fps
         self._exp_us = exposure_us
@@ -158,18 +162,20 @@ class StatusStrip(QtWidgets.QFrame):
         self._render_telemetry()
 
     def _render_telemetry(self) -> None:
-        frame = self._frame if self._frame is not None else 0
-        fps = f"{self._fps:.2f}" if self._fps is not None else "--.--"
-        parts = [f"#{frame} ({fps} fps)"]
-        if self._exp_us is not None:
-            parts.append(f"exp {int(round(self._exp_us))}")
-        if self._ag is not None:
-            parts.append(f"ag {self._ag:.2f}")
-        if self._dg is not None:
-            parts.append(f"dg {self._dg:.2f}")
-        self.telemetry_lbl.setText(" ".join(parts))
+        live = self._frame is not None
+        self.telemetry_lbl.setVisible(live)
+        if live:
+            fps = f"{self._fps:.2f}" if self._fps is not None else "--.--"
+            parts = [f"#{self._frame} ({fps} fps)"]
+            if self._exp_us is not None:
+                parts.append(f"exp {int(round(self._exp_us))}")
+            if self._ag is not None:
+                parts.append(f"ag {self._ag:.2f}")
+            if self._dg is not None:
+                parts.append(f"dg {self._dg:.2f}")
+            self.telemetry_lbl.setText(" ".join(parts))
         has_temp = self._temp is not None
-        self._temp_sep.setVisible(has_temp)
+        self._temp_sep.setVisible(has_temp and live)
         self.temp_lbl.setVisible(has_temp)
         if has_temp:
             self.temp_lbl.setText(f"{self._temp:.1f}\u00b0C")
