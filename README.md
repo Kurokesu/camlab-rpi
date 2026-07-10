@@ -34,7 +34,7 @@ Connect and boot:
 > [!NOTE]
 > App needs a display and one input device.
 
-Log in on the console or over SSH (`ssh <username>@<hostname>`), update OS and reboot:
+- Log in on the console or over SSH (`ssh <username>@<hostname>`), update OS and reboot:
 
 ```bash
 sudo apt update && sudo apt full-upgrade -y
@@ -43,7 +43,7 @@ sudo reboot
 
 ### Install camlab
 
-Download latest [release](https://github.com/Kurokesu/camlab-rpi/releases) and install:
+- Download latest [release](https://github.com/Kurokesu/camlab-rpi/releases) and install:
 
 ```bash
 wget https://github.com/Kurokesu/camlab-rpi/releases/latest/download/camlab-rpi.zip
@@ -51,7 +51,7 @@ unzip camlab-rpi.zip && cd camlab-rpi
 sudo ./install.sh
 ```
 
-Start **camlab** when install finishes:
+- Start **camlab** when install finishes:
 
 ```bash
 sudo systemctl start camlab
@@ -59,9 +59,9 @@ sudo systemctl start camlab
 
 *App starts with sensor defaults (AR0234 on `cam1`) and no live image, sensor overlay loads on next boot.*
 
-Open **Select sensor** --> pick your camera and CSI port --> **Apply & Shutdown**.
+- Open **Select sensor** --> pick your camera and CSI port --> **Apply & Shutdown**
 
-Once Pi powers off, power it back on. App starts automatically on boot, choices persist across reboots.
+- Once Pi powers off, power it back on. App starts automatically on boot, choices persist across reboots
 
 > [!NOTE]
 > First power-on auto-reboots once to init read-only root.
