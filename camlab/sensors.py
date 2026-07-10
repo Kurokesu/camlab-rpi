@@ -29,10 +29,6 @@ class Sensor:
     info_registers: tuple[InfoRegister, ...] = field(default_factory=tuple)
 
     @property
-    def has_probe(self) -> bool:
-        return bool(self.info_registers)
-
-    @property
     def mono_capable(self) -> bool:
         """True if the sensor has a selectable mono variant (overlay param)."""
         return bool(self.mono_option)

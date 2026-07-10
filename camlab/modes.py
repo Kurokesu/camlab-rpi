@@ -1,7 +1,7 @@
 """Sensor mode catalogue + selection logic (pure, no Picamera2/Qt imports).
 
 A "mode" is one raw output the sensor can deliver: a libcamera packed format
-(e.g. SGRBG12_CSI2P), an output size, a bit depth, and the sensor's max fps for
+(e.g. SGRBG12_CSI2P), an output size, a bit depth and the sensor's max fps for
 that combination. The GUI lets the operator pick one at runtime as a cascade:
 
     Resolution  ->  Bit depth  ->  FPS
@@ -199,9 +199,9 @@ def resolve_initial_mode(modes: list[SensorMode], saved: dict | None,
 
 def plan_lores_size(main_size: tuple[int, int],
                     avail_size: tuple[int, int]) -> tuple[int, int]:
-    """Largest lores size with the main aspect ratio that fits the preview area.
+    """Largest lores size with main aspect ratio that fits viewfinder area.
 
-    The lores stream is what the GL widget shows. We keep it at the main aspect
+    Lores stream is what the GL widget shows. We keep it at the main aspect
     ratio (so the ISP scale is undistorted) and never upscale beyond main.
     """
     mw, mh = main_size
