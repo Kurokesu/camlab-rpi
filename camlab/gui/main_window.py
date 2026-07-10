@@ -228,7 +228,12 @@ class MainWindow(QtWidgets.QMainWindow):
         sg = screen.geometry() if screen is not None else central.rect()
         self._boot_cover.setGeometry(0, 0, sg.width(), sg.height())
         self._boot_cover.raise_()
-        QtCore.QTimer.singleShot(3000, self._reveal)  # fallback if never resized
+        self._reveal_timer = QtCore.QTimer(self)
+        self._reveal_timer.setSingleShot(True)
+        self._reveal_timer.setInterval(250)
+        self._reveal_timer.timeout.connect(self._reveal)
+        self._fallback_tries = 0
+        QtCore.QTimer.singleShot(3000, self._reveal_fallback)
 
     # wiring
     def _wire(self) -> None:
@@ -579,15 +584,37 @@ class MainWindow(QtWidgets.QMainWindow):
         super().resizeEvent(event)
         if self._boot_cover is None:
             return
+        # Reaching fullscreen width once is not enough: early Wayland configure
+        # churn can still commit a buffer at the pre-fullscreen size, flashing
+        # chrome mid-screen. Reveal only after the size holds fullscreen for a
+        # settle window (any resize restarts it). The camera starts as soon as
+        # fullscreen is first reached, so its blocking start hides behind the
+        # cover and the reveal shows chrome with video already flowing.
         screen = self.screen() or QtWidgets.QApplication.primaryScreen()
         if screen is not None and self.width() >= screen.geometry().width() - 1:
+            QtCore.QTimer.singleShot(0, self._start_engine)
+            self._reveal_timer.start()
+        else:
+            self._reveal_timer.stop()
+
+    def _reveal_fallback(self) -> None:
+        # At cold boot the compositor can hold the first fullscreen configure
+        # past this timer (display modeset in progress), and dropping the cover
+        # then would bare the next pre-fullscreen buffer. Re-arm while the
+        # window is not fullscreen yet, revealing unconditionally only after
+        # ten tries so a non-kiosk session cannot stay covered forever.
+        if self._boot_cover is None:
+            return
+        screen = self.screen() or QtWidgets.QApplication.primaryScreen()
+        fullscreen = (screen is not None
+                      and self.width() >= screen.geometry().width() - 1)
+        self._fallback_tries += 1
+        if fullscreen or self._fallback_tries >= 10:
             self._reveal()
+        else:
+            QtCore.QTimer.singleShot(3000, self._reveal_fallback)
 
     def _reveal(self) -> None:
-        # Window is laid out at fullscreen: drop the boot cover to reveal the
-        # ready chrome, then start the camera one tick later so that frame paints
-        # first (the blocking start would otherwise freeze the just-revealed
-        # chrome before it shows).
         if self._boot_cover is None:
             return
         self._boot_cover.hide()
