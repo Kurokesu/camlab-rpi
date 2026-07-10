@@ -59,7 +59,7 @@ sudo reboot
 - Download latest [release](https://github.com/Kurokesu/camlab-rpi/releases) and install:
 
 ```bash
-wget https://github.com/Kurokesu/camlab-rpi/releases/latest/download/camlab-rpi.zip
+curl -#LO https://github.com/Kurokesu/camlab-rpi/releases/latest/download/camlab-rpi.zip
 unzip camlab-rpi.zip && cd camlab-rpi
 sudo ./install.sh
 ```
