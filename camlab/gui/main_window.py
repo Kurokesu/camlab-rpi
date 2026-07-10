@@ -1,4 +1,4 @@
-"""MainWindow - fullscreen bench UI: preview + status strip + controls + log."""
+"""MainWindow - fullscreen bench UI: viewfinder + status strip + controls + log."""
 
 from __future__ import annotations
 
@@ -6,104 +6,49 @@ import logging
 
 from .. import network
 from ..camera import CameraEngine
-from ..config_manager import ConfigManager
+from ..config_manager import ConfigManager, poweroff
 from ..integrity import IntegrityMonitor, LogClassifier, StderrCapture
 from ..modes import mode_for
 from ..qt import Qt, QtCore, QtGui, QtWidgets, Signal, Slot
 from ..sensors import SensorRegistry
 from ..settings import SettingsStore
+from ..stats import RpiStats
 from . import icons
-from .control_sheet import ControlSheet, fmt_ct, fmt_exposure, fmt_gain
+from .control_sheet import ControlSheet, MonitorSheet, fmt_ct, fmt_exposure, fmt_gain
 from .log_panel import LogPanel
 from .mode_dialog import ModeCard
 from .overlay import ModalOverlay, message_card
-from .preview_area import PreviewArea
 from .sensor_dialog import SensorCard
 from .settings_dialog import SettingsCard
 from .status_strip import StatusStrip
-from .widgets import vline
+from .style import build_stylesheet
+from .viewfinder_area import ViewfinderArea
+from .widgets import repolish, vline
 
 log = logging.getLogger(__name__)
 
 # On-screen icon size for the control-bar buttons.
 _ICON_PX = 21
 
-_STYLE = """
-QWidget { background: #1b1d22; color: #d7dae0; font-size: 13px; }
-QFrame#statusStrip { background: #23262d; border-bottom: 1px solid #2f333c; }
-QFrame#controls { background: #1b1d22; border-top: 1px solid #2f333c; }
-QFrame#vsep, QFrame#hsep { background: #3a3f4b; }
-QFrame#statusStrip QWidget { background: transparent; }
-QLabel#telemetry { color: #c4c9d2; }
-QLabel#bootInfo { color: #8a909b; }
-QLabel#version { color: #8a909b; }
-QLabel#errCount[sev="ok"], QLabel#warnCount[sev="ok"] { color: #98c379; }
-QLabel#errCount[sev="alert"]  { color: #e06c75; font-weight: 600; }
-QLabel#warnCount[sev="alert"] { color: #e5c07b; font-weight: 600; }
-QPushButton { background: #2c303a; border: 1px solid #3a3f4b; border-radius: 5px;
-              padding: 6px 12px; }
-QPushButton:hover { background: #353b47; }
-QPushButton:disabled { background: #23262d; border-color: #2f333c; color: #5c6370; }
-QPushButton:checked { background: #3d4858; border-color: #7f8aa0; color: #ffffff; }
-QPushButton:focus { border-color: #7aa2f7; background: #353b47; outline: none; }
-QPushButton#danger { border-color: #803126; }
-QPushButton#danger:disabled { border-color: #4a2620; }
-QPushButton#danger:hover { background: #50211a; }
-QPushButton#danger:focus { border-color: #e06c75; background: #50211a; outline: none; }
-QPushButton#segment { background: #262a33; border: 1px solid #3a3f4b; border-radius: 0;
-                      padding: 6px 14px; color: #c4c9d2; }
-QPushButton#segment[pos="mid"], QPushButton#segment[pos="last"] { margin-left: -1px; }
-QPushButton#segment[pos="first"] { border-top-left-radius: 6px; border-bottom-left-radius: 6px; }
-QPushButton#segment[pos="last"] { border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
-QPushButton#segment[pos="only"] { border-radius: 6px; }
-QPushButton#segment:hover { background: #2f3540; }
-QPushButton#segment:checked { background: #3d4858; border-color: #7f8aa0; color: #ffffff; }
-QPushButton#segment:checked:disabled { background: #2f3540; border-color: #4a505c; color: #aeb4bf; }
-QPushButton#segment:focus { border-color: #7aa2f7; background: #2f3949; outline: none; }
-QPushButton#segment:checked:focus { border-color: #9db8ff; background: #45526a; color: #ffffff; }
-QPushButton#chip { text-align: left; }
-QPushButton[manual="true"] { border-color: #7f6a3d; color: #e5c07b; }
-QPushButton[manual="true"]:checked { background: #4a4231; border-color: #b08d3f; color: #f0d493; }
-QFrame#controlSheet { background: #23262d; border-top: 1px solid #2f333c; }
-QFrame#controlSheet QWidget { background: transparent; }
-QLabel#sheetTitle { color: #aeb4bf; font-weight: 600; }
-QLabel#sheetValue { color: #e8eaed; font-size: 14px; }
-QFrame#controlSheet QPushButton#segment { background: #262a33; }
-QFrame#controlSheet QPushButton#segment:checked { background: #3d4858; }
-QSlider::groove:horizontal { height: 6px; background: #2c303a;
-                             border: 1px solid #3a3f4b; border-radius: 3px; }
-QSlider::sub-page:horizontal { background: #56617a; border: 1px solid #3a3f4b;
-                               border-radius: 3px; }
-QSlider::handle:horizontal { width: 18px; margin: -7px 0; border-radius: 10px;
-                             background: #c4c9d2; border: 1px solid #7f8aa0; }
-QSlider::handle:horizontal:hover { background: #e8eaed; }
-QSlider[auto="true"]::handle:horizontal { background: #5c6370; border-color: #4a505c; }
-QSlider[auto="true"]::sub-page:horizontal { background: #353b47; }
-QSlider:focus { outline: none; }
-QSlider:focus::handle:horizontal { border-color: #7aa2f7; }
-QCheckBox { color: #aeb4bf; spacing: 6px; }
-QCheckBox::indicator { width: 20px; height: 20px; border: 1px solid #4a505c;
-                       border-radius: 4px; background: #2c303a; }
-QCheckBox::indicator:hover { border-color: #6a7180; }
-QCheckBox::indicator:checked { border-color: #6a7180; }
-QCheckBox::indicator:checked:hover { border-color: #808998; }
-QPlainTextEdit#logView { background: #15171b; border: none; color: #c4c9d2; }
-QLabel#logTitle { color: #8a909b; font-weight: 600; }
-QLabel#dialogNote { color: #8a909b; }
-QFrame#modalCard { background: #23262d; border: 1px solid #3a3f4b; border-radius: 8px; }
-QFrame#modalCard QLabel { background: transparent; }
-QLabel#modalTitle { font-size: 16px; font-weight: 600; color: #e8eaed; }
-QLabel#modalText { color: #aeb4bf; }
-"""
+# Amber = "not showing the plain picture" (manual control, assist overlay).
+_ACCENT_ON = "#e5c07b"
+_ACCENT_OFF = "#d7dae0"
 
 
 class MainWindow(QtWidgets.QMainWindow):
     first_frame = Signal(float)
 
+    # (chip label, icon glyph, metadata key, value formatter) per camera control.
+    _CTRL_SPEC = {
+        "exposure_us": ("Exp", "shutter_speed", "ExposureTime", fmt_exposure),
+        "gain": ("Gain", "iso", "AnalogueGain", fmt_gain),
+        "colour_temp": ("WB", "wb_sunny", "ColourTemperature", fmt_ct),
+    }
+
     def __init__(self, engine: CameraEngine, registry: SensorRegistry,
                  config: ConfigManager, capture: StderrCapture,
                  classifier: LogClassifier, settings: SettingsStore,
-                 display_max_fps: float, binding_label: str = ""):
+                 display_max_fps: float):
         super().__init__()
         self.engine = engine
         self.registry = registry
@@ -111,54 +56,55 @@ class MainWindow(QtWidgets.QMainWindow):
         self.capture = capture
         self.settings = settings
         self.display_max_fps = display_max_fps
-        self.binding_label = binding_label
         self.monitor = IntegrityMonitor(classifier)
         self._overlay: ModalOverlay | None = None
-        self._pending_card: QtWidgets.QWidget | None = None
         self._boot_cover: QtWidgets.QWidget | None = None
         self._engine_started = False
 
         self.setWindowTitle("camlab")
-        self.setStyleSheet(_STYLE + self._checkbox_tick_style())
+        self.setStyleSheet(build_stylesheet())
 
         central = QtWidgets.QWidget()
         self.setCentralWidget(central)
-        # Focus sink: clicking empty chrome (or boot) parks focus here instead of
-        # on a control, so no button shows a stray highlight until the operator
-        # actually tabs to one. ClickFocus also pulls focus off a button on click.
+        # Focus sink: clicking empty chrome parks focus here, so no button
+        # shows a stray highlight until the operator tabs to one.
         central.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         root = QtWidgets.QVBoxLayout(central)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # Split bars: live facts on top, controls on the bottom, preview between.
+        # Split bars: live facts on top, controls on the bottom, viewfinder between.
         self.status = StatusStrip()
         root.addWidget(self.status)
 
-        # preview (live GL + frozen frost backdrop for modals)
-        self.preview_area = PreviewArea(engine)
-        self.preview_area.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding,
+        # viewfinder (live GL, frosted in-shader while a modal is up)
+        self.viewfinder_area = ViewfinderArea(engine)
+        self.viewfinder_area.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding,
                                         QtWidgets.QSizePolicy.Policy.Expanding)
-        root.addWidget(self.preview_area, 1)
+        root.addWidget(self.viewfinder_area, 1)
 
-        # Control sheets float over preview as native subsurfaces. Created
-        # after the GL widget on purpose: only later siblings stack above its
-        # subsurface. Exposure and gain span decades, hence log sliders.
-        self._sheets: dict[str, ControlSheet] = {
+        # Control sheets dock over viewfinder's bottom edge as plain translucent
+        # widgets (the in-scene viewfinder composites under them). Exposure
+        # and gain span decades, hence log sliders.
+        self._sheets: dict[str, QtWidgets.QWidget] = {
             "exposure_us": ControlSheet("Exposure", fmt_exposure, log_scale=True,
-                                        parent=self.preview_area),
+                                        parent=self),
             "gain": ControlSheet("Gain", fmt_gain, log_scale=True, integer=False,
-                                 parent=self.preview_area),
+                                 parent=self),
             "colour_temp": ControlSheet("White balance", fmt_ct,
-                                        parent=self.preview_area),
+                                        parent=self),
+            "monitor": MonitorSheet(parent=self),
         }
         self._open_sheet: str | None = None
-        for key, sheet in self._sheets.items():
+        for sheet in self._sheets.values():
             sheet.setVisible(False)
-            sheet.changed.connect(lambda v, k=key: self._on_control_changed(k, v))
-        # Keep the open sheet glued to preview's bottom edge on resize
-        # (e.g. opening the log panel shrinks the preview).
-        self.preview_area.installEventFilter(self)
+        for key in self._CTRL_SPEC:
+            self._sheets[key].changed.connect(
+                lambda v, k=key: self._on_control_changed(k, v))
+        self._sheets["monitor"].changed.connect(self._on_monitor_changed)
+        # Keep the open sheet glued to viewfinder's bottom edge on resize
+        # (e.g. opening the log panel shrinks the viewfinder).
+        self.viewfinder_area.installEventFilter(self)
 
         # Sensor/Mode are merged status+chooser buttons. Shutdown is fenced behind
         # a divider on the right so it is never a mis-click from Log.
@@ -174,17 +120,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.mode_btn.setEnabled(bool(self.engine.modes))
         # Camera-control chips: live value on the button, amber accent when
         # manual, click opens a floating sheet (clicking another one switches).
-        self.exp_btn = QtWidgets.QPushButton(" Exp")
-        self.gain_btn = QtWidgets.QPushButton(" Gain")
-        self.wb_btn = QtWidgets.QPushButton(" WB")
         self._ctrl_buttons: dict[str, QtWidgets.QPushButton] = {
-            "exposure_us": self.exp_btn,
-            "gain": self.gain_btn,
-            "colour_temp": self.wb_btn,
+            key: QtWidgets.QPushButton(f" {label}")
+            for key, (label, _glyph, _md, _fmt) in self._CTRL_SPEC.items()
         }
-        self._ctrl_icons = {"exposure_us": "shutter_speed", "gain": "iso",
-                            "colour_temp": "wb_sunny"}
-        for key, btn in self._ctrl_buttons.items():
+        self.monitor_btn = QtWidgets.QPushButton(
+            icons.icon("stroke_partial", _ICON_PX), " Monitor")
+        # Sheet-opening chips: camera controls plus the monitor-assist toggle.
+        self._sheet_buttons = dict(self._ctrl_buttons, monitor=self.monitor_btn)
+        for key, btn in self._sheet_buttons.items():
             btn.setCheckable(True)
             # Left-anchored so icon and label hold still inside the ratcheted
             # width while the value's tail grows and shrinks.
@@ -204,23 +148,22 @@ class MainWindow(QtWidgets.QMainWindow):
         # QPushButton clamps the icon to a small default, so set the size explicitly.
         # TabFocus (not the default StrongFocus): these are reachable by Tab but a
         # mouse click does not leave a lingering focus ring on them.
-        for btn in (self.sensor_btn, self.mode_btn, self.exp_btn, self.gain_btn,
-                    self.wb_btn, self.settings_btn, self.log_btn, self.shutdown_btn):
+        for btn in (self.sensor_btn, self.mode_btn, *self._ctrl_buttons.values(),
+                    self.monitor_btn, self.settings_btn, self.log_btn,
+                    self.shutdown_btn):
             btn.setIconSize(QtCore.QSize(_ICON_PX, _ICON_PX))
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setFocusPolicy(Qt.FocusPolicy.TabFocus)
 
+        # Sensor and Mode read as one selection group, so no divider between.
         crow.addWidget(self.sensor_btn)
-        crow.addSpacing(6)
-        crow.addWidget(vline())
-        crow.addSpacing(6)
         crow.addWidget(self.mode_btn)
         crow.addSpacing(6)
         crow.addWidget(vline())
         crow.addSpacing(6)
-        crow.addWidget(self.exp_btn)
-        crow.addWidget(self.gain_btn)
-        crow.addWidget(self.wb_btn)
+        for btn in self._ctrl_buttons.values():
+            crow.addWidget(btn)
+        crow.addWidget(self.monitor_btn)
         crow.addStretch(1)
         crow.addWidget(self.settings_btn)
         crow.addWidget(self.log_btn)
@@ -230,9 +173,8 @@ class MainWindow(QtWidgets.QMainWindow):
         crow.addWidget(self.shutdown_btn)
         root.addWidget(controls)
 
-        # Log panel (collapsed by default) sits below the controls, never abutting
-        # the preview: the preview is a native EGL surface that overlaps adjacent
-        # siblings. Both stretch 1, so opening the log shrinks the preview to fit.
+        # Log panel (collapsed by default) sits below the controls. Both stretch
+        # 1, so opening the log shrinks the viewfinder to fit.
         self.log_panel = LogPanel(classifier)
         self.log_panel.setVisible(False)
         root.addWidget(self.log_panel, 1)
@@ -245,7 +187,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Window shortcuts fire regardless of which child holds focus, so they
         # cover both the main screen and the in-window modal overlay (a plain
         # QWidget with no default-button routing of its own). _on_escape is
-        # tiered (modal -> log -> shutdown); _on_return clicks the focused button.
+        # tiered (modal -> log -> shutdown), _on_return clicks the focused button.
         esc = QtGui.QShortcut(QtGui.QKeySequence(Qt.Key.Key_Escape), self)
         esc.setContext(Qt.ShortcutContext.WindowShortcut)
         esc.activated.connect(self._on_escape)
@@ -254,12 +196,20 @@ class MainWindow(QtWidgets.QMainWindow):
             sc.setContext(Qt.ShortcutContext.WindowShortcut)
             sc.activated.connect(self._on_return)
 
-        # Sample telemetry at 10 Hz (100 ms): about the fastest a changing number
-        # stays readable.
+        # Telemetry at 10 Hz: about the fastest a changing number stays readable.
         self._status_timer = QtCore.QTimer(self)
         self._status_timer.setInterval(100)
         self._status_timer.timeout.connect(self._update_status)
         self._status_timer.start()
+
+        # Board health at 1 Hz: load percentages are deltas, and a second is a
+        # meaningful averaging window (10 Hz would read as noise).
+        self._rpi_stats = RpiStats()
+        self._rpi_timer = QtCore.QTimer(self)
+        self._rpi_timer.setInterval(1000)
+        self._rpi_timer.timeout.connect(
+            lambda: self.status.set_rpi_stats(self._rpi_stats.sample()))
+        self._rpi_timer.start()
 
         # Debounce control persistence so a slider drag is one write, not one
         # per tick.
@@ -269,9 +219,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self._persist_timer.timeout.connect(self._persist_controls)
 
         # Qt commits its first surface at the layout's size hint before the
-        # compositor's fullscreen configure lands, so the window flashes small on
-        # boot. A black, screen-sized cover hides that (invisible on the black
-        # background) until the window is laid out fullscreen, then it is dropped.
+        # compositor's fullscreen configure lands, so the window flashes small
+        # on boot. A black screen-sized cover hides that until the window is
+        # laid out fullscreen.
         self._boot_cover = QtWidgets.QWidget(central)
         self._boot_cover.setStyleSheet("background: #000;")
         screen = QtWidgets.QApplication.primaryScreen()
@@ -279,13 +229,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self._boot_cover.setGeometry(0, 0, sg.width(), sg.height())
         self._boot_cover.raise_()
         QtCore.QTimer.singleShot(3000, self._reveal)  # fallback if never resized
-
-    @staticmethod
-    def _checkbox_tick_style() -> str:
-        # Neutral tick for the checked state, rendered from the icon font to a PNG
-        # since Qt stylesheets need an image url for sub-control glyphs.
-        path = icons.cached_png("check", 17, "#cdd3dd")
-        return f"QCheckBox::indicator:checked {{ image: url({path}); }}" if path else ""
 
     # wiring
     def _wire(self) -> None:
@@ -345,6 +288,8 @@ class MainWindow(QtWidgets.QMainWindow):
         ranges = self.engine.control_ranges()
         for key, btn in self._ctrl_buttons.items():
             btn.setVisible(key in ranges)
+        # Monitor shaders draw on the live stream, so any camera qualifies.
+        self.monitor_btn.setVisible(self.viewfinder_area.has_camera)
 
     # slots
     @Slot(float)
@@ -352,53 +297,45 @@ class MainWindow(QtWidgets.QMainWindow):
         self.status.set_boot_time(boot_time)
         log.info("first frame at boot time=%.1fs", boot_time)
 
-    # (metadata key, chip label, value formatter) per control
-    _CTRL_LIVE = {
-        "exposure_us": ("ExposureTime", "Exp", fmt_exposure),
-        "gain": ("AnalogueGain", "Gain", fmt_gain),
-        "colour_temp": ("ColourTemperature", "WB", fmt_ct),
-    }
-
     def _update_status(self) -> None:
-        # One snapshot read: #frame, fps and metadata are guaranteed to be from
-        # the same frame (the camera thread publishes them as one reference).
+        # One snapshot read: #frame, fps and metadata come from the same frame
+        # (camera thread publishes them as one reference).
         t = self.engine.telemetry
         md = t.metadata or {}
-        # rpicam-style info text: #frame (fps) exp ag dg, refreshed at 10 Hz.
         self.status.set_telemetry(t.frame,
                                   t.fps if t.fps > 0 else None,
                                   md.get("ExposureTime"),
                                   md.get("AnalogueGain"),
                                   md.get("DigitalGain"))
-        # SensorTemperature comes from the embedded-data parser and is not
-        # offered by every sensor (None -> the last reading sticks).
+        # SensorTemperature is not offered by every sensor (None keeps the
+        # last reading).
         self.status.set_temperature(md.get("SensorTemperature"))
         # Control chips carry live values too, and the open sheet tracks its
         # value while in auto.
         st = self.engine.control_state
-        for key, (md_key, label, fmt) in self._CTRL_LIVE.items():
+        for key, (label, glyph, md_key, fmt) in self._CTRL_SPEC.items():
             value = md.get(md_key)
             text = f" {label} {fmt(value)}" if value is not None else f" {label} --"
-            manual = getattr(st, key) is not None
-            self._set_ctrl_button(key, text, manual)
+            btn = self._ctrl_buttons[key]
+            if btn.text() != text:
+                btn.setText(text)
+                # Ratchet width so a chip never shrinks (e.g. metadata gap during
+                # mode reconfigure) and its right neighbours hold still.
+                btn.setMinimumWidth(max(btn.minimumWidth(), btn.sizeHint().width()))
+            self._set_chip_accent(btn, glyph, getattr(st, key) is not None)
             if key == self._open_sheet:
                 self._sheets[key].set_live(value)
 
-    def _set_ctrl_button(self, key: str, text: str, manual: bool) -> None:
-        btn = self._ctrl_buttons[key]
-        if btn.text() != text:
-            btn.setText(text)
-            # Ratchet width so a chip never shrinks (e.g. metadata gap during
-            # mode reconfigure) and its right neighbours do not jiggle.
-            btn.setMinimumWidth(max(btn.minimumWidth(), btn.sizeHint().width()))
-        # Re-polish (and tint the icon) only when auto/manual state flips.
-        if btn.property("manual") == manual:
+    @staticmethod
+    def _set_chip_accent(btn: QtWidgets.QPushButton, glyph: str,
+                         active: bool) -> None:
+        """Amber accent on/off. Re-polish (and tint the icon) only on a flip."""
+        if btn.property("manual") == active:
             return
-        btn.setProperty("manual", manual)
-        color = "#e5c07b" if manual else "#d7dae0"
-        btn.setIcon(icons.icon(self._ctrl_icons[key], _ICON_PX, color))
-        btn.style().unpolish(btn)
-        btn.style().polish(btn)
+        btn.setProperty("manual", active)
+        btn.setIcon(icons.icon(glyph, _ICON_PX,
+                               _ACCENT_ON if active else _ACCENT_OFF))
+        repolish(btn)
 
     def _toggle_log(self, checked: bool) -> None:
         self.log_panel.setVisible(checked)
@@ -411,7 +348,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.log_btn.setIcon(icons.icon("terminal", _ICON_PX))
             self.log_btn.setText(" Log")
 
-    # control sheets (floating, preview stays live)
+    # control sheets (floating, viewfinder stays live)
     def _toggle_sheet(self, key: str) -> None:
         if self._open_sheet == key:
             self._close_sheet()
@@ -420,23 +357,26 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _show_sheet(self, key: str) -> None:
         self._open_sheet = key
-        self._seed_sheet(key)
+        if key in self._ctrl_buttons:
+            self._seed_sheet(key)  # monitor sheet holds its own state
         self._position_sheet(key)
         for k, sheet in self._sheets.items():
             sheet.setVisible(k == key)
         self._sheets[key].raise_()
-        for k, btn in self._ctrl_buttons.items():
+        for k, btn in self._sheet_buttons.items():
             btn.setChecked(k == key)
 
     def _position_sheet(self, key: str) -> None:
-        """Pin the sheet to preview's bottom edge, full width."""
+        """Dock the sheet to viewfinder's bottom edge, flush with the controls bar."""
         sheet = self._sheets[key]
         h = sheet.sizeHint().height()
-        sheet.setGeometry(0, self.preview_area.height() - h,
-                          self.preview_area.width(), h)
+        pa = self.viewfinder_area
+        origin = pa.mapTo(self, QtCore.QPoint(0, 0))
+        sheet.setGeometry(origin.x(), origin.y() + pa.height() - h,
+                          pa.width(), h)
 
     def eventFilter(self, obj, event) -> bool:
-        if (obj is self.preview_area and event.type() == QtCore.QEvent.Type.Resize
+        if (obj is self.viewfinder_area and event.type() == QtCore.QEvent.Type.Resize
                 and self._open_sheet is not None):
             self._position_sheet(self._open_sheet)
         return super().eventFilter(obj, event)
@@ -445,7 +385,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._open_sheet = None
         for sheet in self._sheets.values():
             sheet.setVisible(False)
-        for btn in self._ctrl_buttons.values():
+        for btn in self._sheet_buttons.values():
             btn.setChecked(False)
         self.centralWidget().setFocus(Qt.FocusReason.OtherFocusReason)
 
@@ -456,6 +396,14 @@ class MainWindow(QtWidgets.QMainWindow):
         if rng:
             sheet.set_range(*rng)
         sheet.set_state(getattr(self.engine.control_state, key))
+
+    def _on_monitor_changed(self, peaking: bool, zebra: bool,
+                            threshold: float) -> None:
+        self.viewfinder_area.set_assists(peaking, zebra, threshold)
+        # Amber chip while any assist draws on the viewfinder, same accent as
+        # a manual camera control.
+        self._set_chip_accent(self.monitor_btn, "stroke_partial",
+                              peaking or zebra)
 
     def _on_control_changed(self, key: str, value) -> None:
         st = self.engine.set_control_state(**{key: value})
@@ -472,8 +420,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @property
     def _modal_active(self) -> bool:
-        """A modal is open or a snapshot is in flight to open one."""
-        return self._overlay is not None or self._pending_card is not None
+        return self._overlay is not None
 
     def _on_return(self) -> None:
         # Activate the focused button. Inside a modal, fall back to the card's
@@ -506,26 +453,17 @@ class MainWindow(QtWidgets.QMainWindow):
     # tiny unusable artifact, so everything is drawn over the main surface).
     def _open_modal(self, card) -> None:
         if self._modal_active:
-            return  # one modal at a time (a snapshot may be in flight)
+            return  # one modal at a time
         # A sheet under the dimmed backdrop would stay interactive-looking, so
         # close it (state lives in the engine, nothing is lost).
         self._close_sheet()
-        self._pending_card = card
-        # Swap the live GL preview for a frosted still, then present the overlay
-        # (a native window would otherwise stack above it). With no camera,
-        # present right away over a full dim.
-        if not self.preview_area.enter_freeze(self._present_pending):
-            self._present_pending()
-
-    def _present_pending(self) -> None:
-        card = self._pending_card
-        self._pending_card = None
-        if card is None:
-            return  # stale (closed before the snapshot landed)
-        # Leave the frozen-preview area undimmed so the frost reads at full
-        # strength. The surrounding chrome stays dimmed for focus.
-        clear = self.preview_area.geometry() if self.preview_area.is_frozen else None
-        # The overlay traps Tab and swallows backdrop clicks; Enter/Escape come
+        # Frost the live viewfinder and leave its area undimmed, so it reads at
+        # full strength while the surrounding chrome dims for focus.
+        clear = None
+        if self.viewfinder_area.has_camera:
+            self.viewfinder_area.set_frost(True)
+            clear = self.viewfinder_area.geometry()
+        # The overlay traps Tab and swallows backdrop clicks. Enter/Escape come
         # from MainWindow's window shortcuts (they fire regardless of focus).
         self._overlay = ModalOverlay(self.centralWidget(), card, clear_rect=clear)
 
@@ -533,7 +471,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if self._overlay is not None:
             self._overlay.dismiss()
             self._overlay = None
-        self.preview_area.exit_freeze()
+        self.viewfinder_area.set_frost(False)
         # Park focus back on the inert sink so no control is left highlighted
         # (Qt would otherwise restore focus to whatever had it before the modal).
         self.centralWidget().setFocus(Qt.FocusReason.OtherFocusReason)
@@ -546,9 +484,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if not self.engine.modes:
             self._show_message("No modes", "No selectable sensor modes were enumerated.")
             return
-        # Capture the live preview area BEFORE the overlay hides the GL widget. It
-        # sizes the lores (display) stream of the new mode.
-        self._mode_avail = self.preview_area.lores_size()
+        # Viewfinder area at open time sizes the new mode's lores (display) stream.
+        self._mode_avail = self.viewfinder_area.lores_size()
         card = ModeCard(self.engine.modes, self.engine.current_mode,
                         self.engine.current_fps, self.display_max_fps,
                         on_apply=self._apply_mode, on_cancel=self._close_modal)
@@ -560,7 +497,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if mode is None:  # re-validate at apply time
             self._show_message("Mode unavailable", "That mode is no longer available.")
             return
-        avail = getattr(self, "_mode_avail", self.preview_area.lores_size())
+        avail = getattr(self, "_mode_avail", self.viewfinder_area.lores_size())
         try:
             self.engine.apply_mode(mode, float(fps), avail)
         except Exception as exc:
@@ -601,7 +538,6 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         # A sensor swap needs the box off, so power down rather than reboot: the
         # operator swaps while it is off, then powers on to the new overlay.
-        from ..config_manager import poweroff
         poweroff()
 
     def _open_settings(self) -> None:
@@ -622,7 +558,6 @@ class MainWindow(QtWidgets.QMainWindow):
     def _shutdown(self) -> None:
         # No confirmation by design: this is a power-cycle-heavy bench tool, so
         # the button powers off immediately to save a click.
-        from ..config_manager import poweroff
         try:
             poweroff()
         except Exception as exc:

@@ -28,7 +28,6 @@ _CODEPOINTS: dict[str, int] = {
     "power_settings_new": 0xF8C7,
     "photo_camera": 0xE412,
     "terminal": 0xEB8E,
-    "sensors": 0xE51E,
     "tune": 0xE429,
     "close": 0xE5CD,
     "settings": 0xE8B8,
@@ -36,6 +35,9 @@ _CODEPOINTS: dict[str, int] = {
     "shutter_speed": 0xE43D,
     "iso": 0xE3F6,
     "wb_sunny": 0xE430,
+    "center_focus_weak": 0xE3B5,
+    "texture": 0xE421,
+    "stroke_partial": 0xF748,
 }
 
 _FAMILY: str | None = None
@@ -54,11 +56,6 @@ def _ensure_loaded() -> None:
         families = QtGui.QFontDatabase.applicationFontFamilies(fid)
         if families:
             _FAMILY = families[0]
-
-
-def available() -> bool:
-    _ensure_loaded()
-    return _FAMILY is not None
 
 
 def _glyph(name: str) -> str:
