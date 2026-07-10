@@ -17,6 +17,8 @@ Kiosk app for previewing and testing Kurokesu camera modules on Raspberry Pi.
 
 ## Setup
 
+*camlab runs on Raspberry Pi 5 or CM5. Any RAM size works, 2 GB is enough.*
+
 ### Prepare Raspberry Pi
 
 Flash Raspberry Pi OS Lite (Trixie 64-bit) to an SD card using [Raspberry Pi Imager](https://www.raspberrypi.com/software/):
@@ -77,7 +79,7 @@ sudo systemctl start camlab
 
 By default `install.sh`:
 
-- Enables [Kurokesu apt archive](https://apt.kurokesu.com) 
+- Enables [Kurokesu apt archive](https://apt.kurokesu.com)
 - Installs Kurokesu libcamera fork
 - Installs Kurokesu sensor drivers
 - Removes unused packages (rpicam-apps stack, sibling kernel flavor)
