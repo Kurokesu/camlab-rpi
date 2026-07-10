@@ -7,10 +7,12 @@ that combination. The GUI lets the operator pick one at runtime as a cascade:
     Resolution  ->  Bit depth  ->  FPS
 
 FPS choices follow a fixed policy (see fps_options): the standard bench rates
-30 and 60, capped by what the sensor mode and the display can actually sustain,
-with the sensor's own maximum surfaced as the top option when it falls between
-two standard rates. The "max stress" default picks the heaviest mode the rig can
-run (largest area, deepest bits, highest fps within the display limit).
+(30, 60, 120) capped by what the sensor mode can sustain and by the app
+ceiling MAX_FPS, with the sensor's own maximum surfaced as the top option
+when it falls between two standard rates. The display never limits the
+sensor rate: the viewfinder draws the latest frame at each screen refresh
+and drops the ones between. With no valid persisted selection the default
+is the heaviest mode (largest area, deepest bits, highest fps).
 
 Everything here is deterministic and side-effect free so it can be unit tested
 and reasoned about without a camera. CameraEngine turns a (SensorMode, fps) pair
@@ -21,13 +23,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-# Standard bench framerates, lowest first. Anything else offered is a sensor- or
-# display-imposed cap surfaced alongside these.
-BASE_FPS: tuple[float, ...] = (30.0, 60.0)
+# Standard bench framerates, lowest first. Anything else offered is a
+# sensor-imposed cap surfaced alongside these.
+BASE_FPS: tuple[float, ...] = (30.0, 60.0, 120.0)
 
-# Default display refresh ceiling when we cannot read it from the screen. Most
-# bench HDMI panels are 60 Hz, which is also the policy ceiling for "stress".
-DEFAULT_DISPLAY_MAX_FPS = 60.0
+# App-supported ceiling. Rates above run the pipeline fine, but sensor mode
+# tables advertising them have proven unreliable to start (AR0234 960x600
+# claims 236.85, locks maybe half the time), so the beta stops at the rate
+# every bench sensor starts dependably.
+MAX_FPS = 120.0
 
 # Tolerance when comparing reported fps (floats like 33.89) to nominal rates.
 _FPS_EPS = 0.5
@@ -86,18 +90,17 @@ def enumerate_modes(raw_modes) -> list[SensorMode]:
     return sorted(by_key.values(), key=lambda s: (s.area, s.bit_depth, s.max_fps))
 
 
-def fps_options(max_fps: float,
-                display_max_fps: float = DEFAULT_DISPLAY_MAX_FPS) -> list[float]:
+def fps_options(max_fps: float) -> list[float]:
     """FPS choices for a mode, honouring the bench policy.
 
-    eff = min(sensor max, display max). Then:
+    eff = min(sensor max, MAX_FPS). Then:
       - eff <= 30  -> a single locked option (30 if it lands on 30, else eff).
-      - eff > 30   -> the standard rates (30, 60) that fit under eff, plus eff
-                      itself when it sits strictly between two standard rates
-                      (e.g. 33.89 -> [30, 33.89], 40.03 -> [30, 40.03]).
+      - eff > 30   -> the standard rates (30, 60, 120) that fit under eff,
+                      plus eff itself when it sits strictly between two standard
+                      rates (e.g. 33.89 -> [30, 33.89], 120.21 -> [30, 60, 120]).
     A single-element result means the selector should be locked (unselectable).
     """
-    eff = min(max_fps, display_max_fps)
+    eff = min(max_fps, MAX_FPS)
     if eff <= BASE_FPS[0] + _FPS_EPS:
         return [BASE_FPS[0]] if eff >= BASE_FPS[0] - _FPS_EPS else [round(eff, 2)]
     opts = [r for r in BASE_FPS if r <= eff + _FPS_EPS]
@@ -161,24 +164,21 @@ def mode_for(modes: list[SensorMode], size: tuple[int, int],
     return None
 
 
-def default_mode(modes: list[SensorMode],
-                 display_max_fps: float = DEFAULT_DISPLAY_MAX_FPS
-                 ) -> tuple[SensorMode, float]:
-    """Max-stress default: largest area, then deepest bits, then highest fps.
+def default_mode(modes: list[SensorMode]) -> tuple[SensorMode, float]:
+    """Heaviest mode: largest area, then deepest bits, then highest fps.
 
     No per-sensor defaults are predefined: the heaviest runnable mode is the
-    stress baseline whenever there is no (valid) persisted selection.
+    default whenever there is no (valid) persisted selection.
     """
     if not modes:
         raise ValueError("no sensor modes to choose from")
     best = max(modes, key=lambda m: (m.area, m.bit_depth, m.max_fps))
-    return best, fps_options(best.max_fps, display_max_fps)[-1]
+    return best, fps_options(best.max_fps)[-1]
 
 
-def resolve_initial_mode(modes: list[SensorMode], saved: dict | None,
-                         display_max_fps: float = DEFAULT_DISPLAY_MAX_FPS
-                         ) -> tuple[SensorMode, float]:
-    """Pick the boot mode: a valid persisted selection, else the stress default.
+def resolve_initial_mode(modes: list[SensorMode],
+                         saved: dict | None) -> tuple[SensorMode, float]:
+    """Pick the boot mode: a valid persisted selection, else the heaviest mode.
 
     A persisted selection is honoured only if its (size, bit_depth) still exists.
     Its fps is used when it is still a valid option, otherwise we snap to the max
@@ -191,10 +191,10 @@ def resolve_initial_mode(modes: list[SensorMode], saved: dict | None,
         if size is not None and depth is not None:
             m = mode_for(modes, (int(size[0]), int(size[1])), int(depth))
             if m is not None:
-                opts = fps_options(m.max_fps, display_max_fps)
+                opts = fps_options(m.max_fps)
                 chosen = match_fps_option(opts, saved.get("fps"))
                 return m, (chosen if chosen is not None else opts[-1])
-    return default_mode(modes, display_max_fps)
+    return default_mode(modes)
 
 
 def plan_lores_size(main_size: tuple[int, int],
