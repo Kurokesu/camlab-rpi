@@ -189,7 +189,7 @@ _FRAG_EXT_FX = """
         vec4 color = texture2D(tex, texcoord);
         float centre = dot(color.rgb, LUMA);
         if (zebra > 0.5 && centre > zebraThr) {
-            float stripe = mod((texcoord.x + texcoord.y + time * 0.1) / 0.01, 2.0);
+            float stripe = mod((texcoord.x + texcoord.y + time * 0.02) / 0.01, 2.0);
             gl_FragColor = stripe < 1.0 ? vec4(0.0, 0.0, 0.0, 1.0)
                                         : vec4(1.0, 1.0, 1.0, 1.0);
             return;
