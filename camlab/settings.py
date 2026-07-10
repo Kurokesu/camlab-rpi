@@ -133,6 +133,16 @@ class SettingsStore:
         }
         return self._atomic_write(data)
 
+    def get_histogram(self) -> bool:
+        """App-level histogram overlay toggle, default off."""
+        return bool((self._load().get("ui") or {}).get("histogram", False))
+
+    def set_histogram(self, enabled: bool) -> bool:
+        data = self._load()
+        data["version"] = _VERSION
+        data.setdefault("ui", {})["histogram"] = bool(enabled)
+        return self._atomic_write(data)
+
     def _atomic_write(self, data: dict) -> bool:
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)

@@ -38,6 +38,7 @@ _CODEPOINTS: dict[str, int] = {
     "center_focus_weak": 0xE3B5,
     "texture": 0xE421,
     "stroke_partial": 0xF748,
+    "bar_chart": 0xE26B,
 }
 
 _FAMILY: str | None = None

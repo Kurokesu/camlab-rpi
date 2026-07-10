@@ -19,6 +19,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 
+import numpy as np
 from picamera2 import Picamera2
 
 from .gl_viewfinder import GlViewfinder
@@ -37,6 +38,11 @@ _CT_UI_RANGE = (2000, 10000)
 
 # Sentinel so set_control_state can tell "not passed" from "None = auto".
 _UNSET = object()
+
+# PispStatsOutput blob layout (libpisp pisp_statistics.h): the AGC luma
+# histogram sits past the AWB zone block and the AGC row sums.
+_AGC_HIST_OFFSET = 16448 + 2048
+_AGC_HIST_BINS = 1024
 
 
 @dataclass
@@ -97,6 +103,12 @@ class CameraEngine:
         self.current_mode: SensorMode | None = None
         self.current_fps: float | None = None
         self.control_state = ControlState()
+        self.stats_output = False   # ISP statistics in metadata (histogram)
+        # Latest parsed AGC histogram (camera thread writes, GUI reads). Kept
+        # outside Telemetry: above 30 fps libcamera attaches stats to only
+        # some frames (~30 Hz), so the newest frame often has no blob and the
+        # GUI would go stale sampling telemetry alone.
+        self.latest_histogram: np.ndarray | None = None
         self.telemetry = Telemetry()  # latest per-frame snapshot (camera -> GUI)
         self._last_ts = 0             # previous SensorTimestamp (ns), for fps
         self._started = False
@@ -262,8 +274,40 @@ class CameraEngine:
             ctrls["AwbEnable"] = st.colour_temp is None
             if st.colour_temp is not None:
                 ctrls["ColourTemperature"] = int(st.colour_temp)
+        if "StatsOutputEnable" in self.picam2.camera_controls:
+            ctrls["StatsOutputEnable"] = self.stats_output
         if ctrls:
             self.picam2.set_controls(ctrls)
+
+    def set_stats_output(self, enabled: bool) -> None:
+        """Deliver ISP statistics (PispStatsOutput) with each frame's metadata.
+
+        Feeds the histogram overlay. Off by default: with stats on, the
+        binding converts the 23 kB blob on every frame that carries it.
+        """
+        self.stats_output = bool(enabled)
+        if not self.stats_output:
+            self.latest_histogram = None
+        if (self.picam2 is not None
+                and "StatsOutputEnable" in self.picam2.camera_controls):
+            self.picam2.set_controls({"StatsOutputEnable": self.stats_output})
+
+    @staticmethod
+    def agc_histogram(metadata: dict) -> np.ndarray | None:
+        """1024-bin luma histogram from the ISP frontend stats, else None.
+
+        The PiSP frontend counts these bins for AGC on every frame, so the
+        histogram costs no per-pixel CPU work. Above ~30 fps libcamera skips
+        the blob on some frames (callers keep the previous histogram).
+        """
+        blob = metadata.get("PispStatsOutput")
+        if not blob:
+            return None
+        raw = bytes(blob)
+        if len(raw) < _AGC_HIST_OFFSET + _AGC_HIST_BINS * 4:
+            return None
+        return np.frombuffer(raw, dtype=np.uint32, count=_AGC_HIST_BINS,
+                             offset=_AGC_HIST_OFFSET)
 
     def _match_sensor_mode(self, sensor_cfg: dict) -> dict:
         """Find the sensor_modes entry matching the configured size + bit depth.
@@ -321,6 +365,12 @@ class CameraEngine:
         # Publish the frame's readout as one snapshot so the GUI reads a
         # consistent set (single atomic swap, no lock needed).
         self.telemetry = Telemetry(frame=frame, fps=fps, metadata=md)
+        # Latch the histogram off any frame carrying stats (~30 Hz ceiling),
+        # so the GUI's sampling never lands on a blob-less frame.
+        if self.stats_output:
+            hist = self.agc_histogram(md)
+            if hist is not None:
+                self.latest_histogram = hist
         if not self._first_frame_seen:
             self._first_frame_seen = True
             boot_time = time.clock_gettime(time.CLOCK_BOOTTIME)
@@ -338,6 +388,7 @@ class CameraEngine:
         # Fresh run: clear the last snapshot so a mode switch reads as a new
         # capture (libcamera resets the request sequence itself on start).
         self.telemetry = Telemetry()
+        self.latest_histogram = None
         self._last_ts = 0
         self.picam2.pre_callback = self._pre_callback
         self.picam2.start()

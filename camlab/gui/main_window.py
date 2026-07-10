@@ -179,6 +179,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._wire()
         self._populate_static()
+        # Histogram overlay (beta easter egg), persisted app-wide, default off.
+        self._histogram_on = settings.get_histogram()
+        if self._histogram_on:
+            self.engine.set_stats_output(True)
+            self.viewfinder_area.set_histogram_enabled(True)
         # Start with focus on the inert sink so nothing is highlighted until Tab.
         central.setFocus(Qt.FocusReason.OtherFocusReason)
 
@@ -313,6 +318,11 @@ class MainWindow(QtWidgets.QMainWindow):
         # SensorTemperature is not offered by every sensor (None keeps the
         # last reading).
         self.status.set_temperature(md.get("SensorTemperature"))
+        # ISP histogram rides the same 10 Hz tick. The engine latches it off
+        # any frame carrying stats, so this read never goes stale even when
+        # the newest frame has no blob (libcamera skips some above 30 fps).
+        if self._histogram_on and self.engine.latest_histogram is not None:
+            self.viewfinder_area.update_histogram(self.engine.latest_histogram)
         # Control chips carry live values too, and the open sheet tracks its
         # value while in auto.
         st = self.engine.control_state
@@ -554,9 +564,18 @@ class MainWindow(QtWidgets.QMainWindow):
         poweroff()
 
     def _open_settings(self) -> None:
-        card = SettingsCard(on_apply_network=self._apply_network,
+        card = SettingsCard(histogram_on=self._histogram_on,
+                            on_apply_network=self._apply_network,
+                            on_apply_histogram=self._apply_histogram,
                             on_cancel=self._close_modal)
         self._open_modal(card)
+
+    def _apply_histogram(self, enabled: bool) -> None:
+        self._histogram_on = bool(enabled)
+        self.engine.set_stats_output(self._histogram_on)
+        self.viewfinder_area.set_histogram_enabled(self._histogram_on)
+        self.settings.set_histogram(self._histogram_on)
+        log.info("histogram overlay %s", "on" if enabled else "off")
 
     def _apply_network(self, enabled: bool) -> None:
         self._close_modal()
