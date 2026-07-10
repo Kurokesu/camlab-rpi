@@ -1,7 +1,7 @@
 """Shared in-window controls for the kiosk UI.
 
 Under the Cage compositor the app renders as a single fullscreen surface, and
-separate top-level surfaces (QDialog/QMessageBox, and also QComboBox dropdown
+separate top-level surfaces (QDialog/QMessageBox and QComboBox dropdown
 popups) misbehave - they render as a tiny artifact or open at the screen corner.
 ModalOverlay already replaces dialogs. SegmentedSelector replaces dropdowns with
 an inline exclusive button row, so every choice stays on the main surface.
@@ -12,6 +12,13 @@ from __future__ import annotations
 from typing import Any
 
 from ..qt import Qt, QtWidgets, Signal
+
+
+def repolish(*widgets: QtWidgets.QWidget) -> None:
+    """Re-evaluate QSS after a dynamic property change ([prop="..."] selectors)."""
+    for w in widgets:
+        w.style().unpolish(w)
+        w.style().polish(w)
 
 
 def hline(parent=None) -> QtWidgets.QFrame:
@@ -59,7 +66,7 @@ class SegmentedSelector(QtWidgets.QWidget):
         """Populate (text, value) options, preselecting `current` if present.
 
         `stretch` trails the row with an expanding spacer (left-packs the
-        buttons in a wide form); pass False to keep the row hugging its buttons
+        buttons in a wide form). Pass False to keep the row hugging its buttons
         (e.g. inline in a toolbar header).
         """
         for btn in self._group.buttons():
@@ -76,7 +83,7 @@ class SegmentedSelector(QtWidgets.QWidget):
         for i, (text, _value) in enumerate(options):
             btn = QtWidgets.QPushButton(text)
             btn.setObjectName("segment")
-            # Position drives which outer corners round; non-first buttons overlap
+            # Position drives which outer corners round. Non-first buttons overlap
             # the previous border by 1px so the shared edge is a single hairline.
             if last == 0:
                 pos = "only"
