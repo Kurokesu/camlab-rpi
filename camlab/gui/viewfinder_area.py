@@ -40,9 +40,15 @@ class ViewfinderArea(QtWidgets.QWidget):
         return self.width(), self.height()
 
     def set_frost(self, frosted: bool) -> None:
-        """Blur the live viewfinder in-shader (no-op without a camera)."""
+        """Blur the live viewfinder in-shader.
+
+        Without a camera the placeholder text cannot blur, so it hides while
+        frosted instead of shining sharply through the modal glass.
+        """
         if hasattr(self._live, "set_frosted"):
             self._live.set_frosted(frosted)
+        else:
+            self._live.setVisible(not frosted)
 
     def set_assists(self, peaking: bool, zebra: bool,
                     zebra_threshold: float) -> None:

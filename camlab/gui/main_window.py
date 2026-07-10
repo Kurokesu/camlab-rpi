@@ -467,10 +467,11 @@ class MainWindow(QtWidgets.QMainWindow):
         # close it (state lives in the engine, nothing is lost).
         self._close_sheet()
         # Frost the live viewfinder and leave its area undimmed, so it reads at
-        # full strength while the surrounding chrome dims for focus.
+        # full strength while the surrounding chrome dims for focus. Without a
+        # camera this hides the placeholder text instead (it cannot blur).
+        self.viewfinder_area.set_frost(True)
         clear = None
         if self.viewfinder_area.has_camera:
-            self.viewfinder_area.set_frost(True)
             clear = self.viewfinder_area.geometry()
         # The overlay traps Tab and swallows backdrop clicks. Enter/Escape come
         # from MainWindow's window shortcuts (they fire regardless of focus).

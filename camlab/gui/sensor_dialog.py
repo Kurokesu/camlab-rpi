@@ -73,6 +73,11 @@ class SensorCard(QtWidgets.QFrame):
         self._rebuild_variant(current_name, self._init_mono)
         self._update_notes(current_name)
 
+        # Daily-workflow reminder of the README hot-plug warning, kept as a
+        # quiet hint next to the actions.
+        hint = QtWidgets.QLabel("Power off and unplug RPi before swapping sensors")
+        hint.setObjectName("modalHint")
+
         buttons = QtWidgets.QHBoxLayout()
         cancel_btn = QtWidgets.QPushButton("Cancel")
         cancel_btn.clicked.connect(on_cancel)
@@ -84,6 +89,8 @@ class SensorCard(QtWidgets.QFrame):
         # needs a deliberate Tab-to-Apply then Enter, or a click.
         self.primary_button = cancel_btn
         buttons.addWidget(cancel_btn)
+        buttons.addStretch(1)
+        buttons.addWidget(hint)
         buttons.addStretch(1)
         buttons.addWidget(self.apply_btn)
 
