@@ -5,4 +5,4 @@ viewfinder, sensor selection (writes the dtoverlay) and signal-integrity / statu
 surfacing. Runs fullscreen under a Cage kiosk. See the repo README and the spec.
 """
 
-__version__ = "0.2.0-dev"
+__version__ = "1.0.0-beta-dev"

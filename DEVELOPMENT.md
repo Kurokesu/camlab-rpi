@@ -28,7 +28,7 @@ Root is read-only (overlayfs, RAM upper) so a yanked power cable can't corrupt i
 
 ## Boot storage
 
-Ships from eMMC. NVMe was tested and dropped: it boots ~1s slower (~16s vs ~15s power-on to viewfinder, from the NVMe controller init the CM5 eMMC fast-path skips) and the app needs neither the capacity nor the bandwidth.
+README walkthrough targets SD on a Pi 5, any boot storage works. CM5 eMMC boots fastest, ~15 s power-on to viewfinder vs ~21 s from SD on the bench. NVMe was tested and brings no benefit: it boots ~1 s slower than eMMC (from the NVMe controller init the eMMC fast-path skips) and the app needs neither the capacity nor the bandwidth.
 
 ## Environment variables
 

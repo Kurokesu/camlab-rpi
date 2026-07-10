@@ -2,13 +2,24 @@
 
 [![CI](https://github.com/Kurokesu/camlab-rpi/actions/workflows/ci.yml/badge.svg)](https://github.com/Kurokesu/camlab-rpi/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/Kurokesu/camlab-rpi?include_prereleases&label=release)](https://github.com/Kurokesu/camlab-rpi/releases)
-![OS](https://img.shields.io/badge/OS-RPi%20Trixie%20Lite-lightgrey?logo=raspberrypi&logoColor=white)
-![Platform](https://img.shields.io/badge/platform-Pi%205%20%7C%20CM5-lightgrey?logo=raspberrypi&logoColor=white)
-![Sensors](https://img.shields.io/badge/sensors-AR0234%20%7C%20AR0822%20%7C%20IMX283%20%7C%20IMX462%20%7C%20IMX477%20%7C%20IMX585-lightgrey)
+![OS](https://img.shields.io/badge/OS-RPi%20Trixie%20Lite-blue?logo=raspberrypi&logoColor=white)
+![Platform](https://img.shields.io/badge/platform-Pi%205%20%7C%20CM5-blue?logo=raspberrypi&logoColor=white)
+![GUI](https://img.shields.io/badge/GUI-PyQt6-41cd52?logo=qt&logoColor=white)
+
+![onsemi AR0234](https://img.shields.io/badge/onsemi-AR0234-008E9B?style=flat-square)
+![onsemi AR0822](https://img.shields.io/badge/onsemi-AR0822-008E9B?style=flat-square)
+![Sony IMX283](https://img.shields.io/badge/Sony-IMX283-008E9B?style=flat-square)
+![Sony IMX462](https://img.shields.io/badge/Sony-IMX462-008E9B?style=flat-square)
+![Sony IMX477](https://img.shields.io/badge/Sony-IMX477-008E9B?style=flat-square)
+![Sony IMX585](https://img.shields.io/badge/Sony-IMX585-008E9B?style=flat-square)
 
 Kiosk app for previewing and testing Kurokesu camera modules on Raspberry Pi.
 
+![camlab GUI](docs/hero.png)
+
 ## Setup
+
+*camlab runs on Raspberry Pi 5 or CM5. Any RAM size works, 2 GB is enough.*
 
 ### Prepare Raspberry Pi
 
@@ -24,7 +35,7 @@ Flash Raspberry Pi OS Lite (Trixie 64-bit) to an SD card using [Raspberry Pi Ima
 Connect and boot:
 
 - Connect your camera module to either CSI port
-- Attach HDMI display, keyboard and/or mouse
+- Attach HDMI display (1920×1080 recommended, other resolutions untested), keyboard and/or mouse
 - Connect Ethernet, unless Wi-Fi was configured in Imager (install needs internet)
 - Insert SD card and power on your Pi
 
@@ -70,7 +81,7 @@ sudo systemctl start camlab
 
 By default `install.sh`:
 
-- Enables [Kurokesu apt archive](https://apt.kurokesu.com) 
+- Enables [Kurokesu apt archive](https://apt.kurokesu.com)
 - Installs Kurokesu libcamera fork
 - Installs Kurokesu sensor drivers
 - Removes unused packages (rpicam-apps stack, sibling kernel flavor)
