@@ -418,6 +418,12 @@ class MainWindow(QtWidgets.QMainWindow):
         st = self.engine.control_state
         self.settings.set_controls(overlay, st.exposure_us, st.gain, st.colour_temp)
 
+    def _flush_pending_persist(self) -> None:
+        """Persist a control change still sitting in the debounce window."""
+        if self._persist_timer.isActive():
+            self._persist_timer.stop()
+            self._persist_controls()
+
     @property
     def _modal_active(self) -> bool:
         return self._overlay is not None
@@ -531,6 +537,9 @@ class MainWindow(QtWidgets.QMainWindow):
         options = list(chosen.options)
         if mono and chosen.mono_option and chosen.mono_option not in options:
             options.append(chosen.mono_option)
+        # Flush before the config rewrite: _persist_controls keys by the
+        # current overlay, which apply() is about to change.
+        self._flush_pending_persist()
         try:
             self.config.apply(chosen.overlay, port, options)
         except Exception as exc:  # surface the failure, do not power off
@@ -558,6 +567,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _shutdown(self) -> None:
         # No confirmation by design: this is a power-cycle-heavy bench tool, so
         # the button powers off immediately to save a click.
+        self._flush_pending_persist()
         try:
             poweroff()
         except Exception as exc:
