@@ -57,10 +57,9 @@ Start **camlab** when install finishes:
 sudo systemctl start camlab
 ```
 
-App starts with sensor defaults (AR0234 on `cam1`). Open **Select sensor** --> pick your camera and CSI port --> **Apply & Shutdown**.
+App starts with sensor defaults (AR0234 on `cam1`) and no live image, sensor overlay loads on next boot.
 
-> [!NOTE]
-> No live image on this first start, sensor overlay loads at next boot.
+Open **Select sensor** --> pick your camera and CSI port --> **Apply & Shutdown**.
 
 Power the Pi back on. App starts automatically on boot, choices persist across reboots.
 
