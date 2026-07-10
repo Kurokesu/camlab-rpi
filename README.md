@@ -23,9 +23,13 @@ Flash Raspberry Pi OS Lite (Trixie 64-bit) to an SD card using [Raspberry Pi Ima
 
 Connect and boot:
 
+- Connect your camera module to either CSI port
 - Attach HDMI display, keyboard and/or mouse
 - Connect Ethernet, unless Wi-Fi was configured in Imager (install needs internet)
 - Insert SD card and power on your Pi
+
+> [!WARNING]
+> Connect or swap camera modules only when Pi is powered off and unplugged.
 
 > [!NOTE]
 > App needs a display and one input device.
@@ -47,20 +51,21 @@ unzip camlab-rpi.zip && cd camlab-rpi
 sudo ./install.sh
 ```
 
-Reboot when install finishes:
+Start **camlab** when install finishes:
 
 ```bash
-sudo reboot
+sudo systemctl start camlab
 ```
 
-> [!NOTE]
-> Device auto-reboots once more to init read-only root, app starts automatically on boot.
+App starts with sensor defaults (AR0234 on `cam1`). Open **Select sensor** --> pick your camera and CSI port --> **Apply & Shutdown**.
 
 > [!NOTE]
-> First time **camlab** starts with sensor defaults (AR0234 on `cam1`). Open **Select sensor** --> pick your camera and CSI port. Choice persists across reboots.
+> No live image on this first start, sensor overlay loads at next boot.
 
-> [!WARNING]
-> Connect or swap camera modules only when Pi is powered off and unplugged.
+Power the Pi back on. App starts automatically on boot, choices persist across reboots.
+
+> [!NOTE]
+> First power-on auto-reboots once to init read-only root.
 
 ## Install details
 
@@ -76,7 +81,6 @@ By default `install.sh`:
 
 Optional flags:
 
-- `--port=cam0` set CSI port to `cam0`. Defaults to `cam1`, switchable later in the GUI.
 - `--no-readonly` keep root filesystem writable, for development.
 
 ## Development

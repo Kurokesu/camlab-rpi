@@ -10,8 +10,7 @@
 # under scripts/setup/.
 #
 # Usage:
-#   sudo ./install.sh                     # full install (port defaults to cam1)
-#   sudo ./install.sh --port=cam0         # override CSI port to cam0
+#   sudo ./install.sh                     # full install
 #   sudo ./install.sh --no-readonly       # keep root fs writable (dev install)
 #   ./install.sh --help                   # this message
 #
@@ -36,12 +35,9 @@ DEV_CLUTTER+=(.git .venv)
 source "$REPO_DIR/scripts/common.sh"
 
 DO_READONLY=1
-PORT_ARGS=()
 for arg in "$@"; do
     case "$arg" in
         --no-readonly) DO_READONLY=0 ;;
-        --port) die "use --port=cam0 form" ;;
-        --port=*) PORT_ARGS=(--port "${arg#*=}") ;;
         -h|--help) help_text; exit 0 ;;
         *) die "Unknown argument: $arg" ;;
     esac
@@ -106,7 +102,7 @@ python3 -m compileall -q -j 0 "$APP_DIR/camlab"
 "$APP_DIR/scripts/setup/deps.sh"
 "$APP_DIR/scripts/setup/kernel.sh"
 "$APP_DIR/scripts/setup/drivers.sh"
-"$APP_DIR/scripts/setup/config.sh" "${PORT_ARGS[@]}"
+"$APP_DIR/scripts/setup/config.sh"
 "$APP_DIR/scripts/setup/journald.sh"
 "$APP_DIR/scripts/setup/boot.sh"
 "$APP_DIR/scripts/setup/splash.sh"
