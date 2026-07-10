@@ -35,7 +35,7 @@ Flash Raspberry Pi OS Lite (Trixie 64-bit) to an SD card using [Raspberry Pi Ima
 Connect and boot:
 
 - Connect your camera module to either CSI port
-- Attach HDMI display, keyboard and/or mouse
+- Attach HDMI display (1920×1080 recommended, other resolutions untested), keyboard and/or mouse
 - Connect Ethernet, unless Wi-Fi was configured in Imager (install needs internet)
 - Insert SD card and power on your Pi
 
