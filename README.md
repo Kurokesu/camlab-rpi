@@ -13,7 +13,9 @@
 ![Sony IMX477](https://img.shields.io/badge/Sony-IMX477-008E9B?style=flat-square)
 ![Sony IMX585](https://img.shields.io/badge/Sony-IMX585-008E9B?style=flat-square)
 
-Kiosk app for previewing and testing Kurokesu camera modules on Raspberry Pi.
+*Camera modules built on these sensors are available at [kurokesu.com](https://www.kurokesu.com/item/CAM-CSI).*
+
+Kiosk app for previewing and testing MIPI CSI camera modules on Raspberry Pi.
 
 ![camlab GUI](https://raw.githubusercontent.com/Kurokesu/camlab-rpi/main/docs/hero.png)
 
