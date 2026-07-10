@@ -33,7 +33,5 @@ Ships from eMMC. NVMe was tested and dropped: it boots ~1s slower (~16s vs ~15s 
 ## Environment variables
 
 - `CAMLAB_CAMERA_NUM` (default `0`)
-- `CAMLAB_DISPLAY_MAX_FPS` display fps ceiling (default: screen refresh, capped at 60)
-- `CAMLAB_BUFFER_COUNT` capture buffers per stream (default `4`)
 - `CAMLAB_STATE_FILE` persisted mode/fps settings path
 - `CAMLAB_NO_CAPTURE` disable stderr splicing
