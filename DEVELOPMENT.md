@@ -28,13 +28,12 @@ Root is read-only (overlayfs, RAM upper) so a yanked power cable can't corrupt i
 
 ## Boot storage
 
-Ships from eMMC. NVMe was tested and dropped: it boots ~1s slower (~16s vs ~15s power-on to preview, from the NVMe controller init the CM5 eMMC fast-path skips) and the app needs neither the capacity nor the bandwidth.
+Ships from eMMC. NVMe was tested and dropped: it boots ~1s slower (~16s vs ~15s power-on to viewfinder, from the NVMe controller init the CM5 eMMC fast-path skips) and the app needs neither the capacity nor the bandwidth.
 
 ## Environment variables
 
 - `CAMLAB_CAMERA_NUM` (default `0`)
 - `CAMLAB_DISPLAY_MAX_FPS` display fps ceiling (default: screen refresh, capped at 60)
-- `CAMLAB_BUFFER_COUNT` preview buffers per stream (default `4`)
+- `CAMLAB_BUFFER_COUNT` capture buffers per stream (default `4`)
 - `CAMLAB_STATE_FILE` persisted mode/fps settings path
 - `CAMLAB_NO_CAPTURE` disable stderr splicing
-- `QT_QPA_PLATFORM` defaults to `wayland` under a Wayland session
