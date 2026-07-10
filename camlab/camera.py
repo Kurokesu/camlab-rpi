@@ -62,7 +62,7 @@ class Telemetry:
     one reference, so it always gets #frame, fps and metadata from the same
     frame without locking (the swap is atomic under CPython).
     """
-    frame: int = 0
+    frame: int | None = None  # None until a frame has been captured
     fps: float = 0.0
     metadata: dict = field(default_factory=dict)
 
