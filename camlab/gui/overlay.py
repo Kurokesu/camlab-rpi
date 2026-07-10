@@ -10,10 +10,6 @@ A QWidget is not a focus scope, so the part QDialog would give for free - keepin
 Tab inside the card - is added here via an app-level event filter. Enter and
 Escape are handled by MainWindow's window shortcuts (they fire regardless of which
 child holds focus), so one path covers both the main screen and the overlay.
-
-Note: the caller must hide any native child (the QGlPicamera2 GL preview) while an
-overlay is shown, because native windows stack above Qt-painted widgets and would
-otherwise cover it. MainWindow does this in _open_modal.
 """
 
 from __future__ import annotations
@@ -21,15 +17,16 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from ..qt import QtCore, QtGui, QtWidgets
+from .widgets import SegmentedSelector
 
 _DIM = QtGui.QColor(12, 13, 16, 165)
 
 
 class ModalOverlay(QtWidgets.QWidget):
-    """Covers its host, dims it, blocks input, and centers a card widget.
+    """Covers its host, dims it, blocks input and centers a card widget.
 
-    The dim skips an optional clear_rect (the frozen-preview area) so a frosted
-    backdrop reads at full strength while the surrounding chrome stays dimmed.
+    The dim skips an optional clear_rect (the live frosted viewfinder) so the
+    frost reads at full strength while the surrounding chrome stays dimmed.
 
     Behaves as a modal: an app-level event filter keeps Tab inside the card (one
     stop per SegmentedSelector, the rest individual), and backdrop clicks are
@@ -62,10 +59,8 @@ class ModalOverlay(QtWidgets.QWidget):
         outer.addStretch(1)
 
         host.installEventFilter(self)
-        # Trap Tab for the whole app while shown: a plain QWidget is not a focus
-        # scope, so without this Tab would escape into the dimmed chrome. instance()
-        # is always set here (this widget can only exist under a QApplication), but
-        # guard anyway to mirror dismiss().
+        # Trap Tab for the whole app while shown: a plain QWidget is not a
+        # focus scope, so without this Tab would escape into the dimmed chrome.
         self._app = QtWidgets.QApplication.instance()
         if self._app is not None:
             self._app.installEventFilter(self)
@@ -79,7 +74,7 @@ class ModalOverlay(QtWidgets.QWidget):
     def paintEvent(self, event) -> None:
         painter = QtGui.QPainter(self)
         if self._clear_rect is not None and self._clear_rect.isValid():
-            # Dim everything but the frozen-preview rect.
+            # Dim everything but the live-viewfinder rect.
             region = QtGui.QRegion(self.rect()).subtracted(
                 QtGui.QRegion(self._clear_rect))
             painter.setClipRegion(region)
@@ -92,9 +87,9 @@ class ModalOverlay(QtWidgets.QWidget):
     def _tab_targets(self) -> list[QtWidgets.QWidget]:
         """Card widgets that are Tab stops, in order.
 
-        Each SegmentedSelector contributes one stop (its checked segment); arrow
-        keys move within it, the native radio convention. Action buttons are
-        individual stops.
+        Each SegmentedSelector contributes one stop (its checked segment) and
+        arrow keys move within it, the native radio convention. Action buttons
+        are individual stops.
         """
         targets: list[QtWidgets.QWidget] = []
         seen_selectors: set[int] = set()
@@ -115,7 +110,6 @@ class ModalOverlay(QtWidgets.QWidget):
 
     @staticmethod
     def _selector_of(w: QtWidgets.QWidget):
-        from .widgets import SegmentedSelector
         p = w.parent()
         while p is not None:
             if isinstance(p, SegmentedSelector):
@@ -132,7 +126,7 @@ class ModalOverlay(QtWidgets.QWidget):
             idx = (targets.index(cur) + (1 if forward else -1)) % len(targets)
         else:
             idx = 0 if forward else len(targets) - 1
-            targets[idx].setFocus(QtCore.Qt.FocusReason.TabFocusReason)
+        targets[idx].setFocus(QtCore.Qt.FocusReason.TabFocusReason)
 
     def eventFilter(self, obj, event) -> bool:
         if obj is self._host and event.type() == QtCore.QEvent.Type.Resize:
