@@ -179,11 +179,6 @@ class CameraEngine:
             self.start()
 
     # camera controls (exposure / gain / white balance)
-    @property
-    def has_split_ae(self) -> bool:
-        """True when libcamera offers per-control AE modes (split API, 0.7+)."""
-        return self.picam2 is not None and "ExposureTimeMode" in self.picam2.camera_controls
-
     def control_ranges(self) -> dict[str, tuple]:
         """(min, max) per manual control for the current configuration.
 
@@ -251,29 +246,15 @@ class CameraEngine:
         if self.picam2 is None:
             return
         st = self.control_state
-        cc = self.picam2.camera_controls
         ctrls: dict = {}
-        if self.has_split_ae:
-            # 0 = auto, 1 = manual (libcamera ExposureTimeMode/AnalogueGainMode).
-            ctrls["ExposureTimeMode"] = 0 if st.exposure_us is None else 1
-            if st.exposure_us is not None:
-                ctrls["ExposureTime"] = int(st.exposure_us)
-            ctrls["AnalogueGainMode"] = 0 if st.gain is None else 1
-            if st.gain is not None:
-                ctrls["AnalogueGain"] = float(st.gain)
-        elif "AeEnable" in cc:
-            # Legacy joint AE: either manual side forces AE off, freezing the
-            # other at its last metered value.
-            manual = st.exposure_us is not None or st.gain is not None
-            ctrls["AeEnable"] = not manual
-            if manual:
-                md = self.telemetry.metadata or {}
-                exp = st.exposure_us if st.exposure_us is not None else md.get("ExposureTime")
-                gain = st.gain if st.gain is not None else md.get("AnalogueGain")
-                if exp:
-                    ctrls["ExposureTime"] = int(exp)
-                if gain:
-                    ctrls["AnalogueGain"] = float(gain)
+        # 0 = auto, 1 = manual (libcamera ExposureTimeMode/AnalogueGainMode,
+        # split AE API, always present on our pinned libcamera).
+        ctrls["ExposureTimeMode"] = 0 if st.exposure_us is None else 1
+        if st.exposure_us is not None:
+            ctrls["ExposureTime"] = int(st.exposure_us)
+        ctrls["AnalogueGainMode"] = 0 if st.gain is None else 1
+        if st.gain is not None:
+            ctrls["AnalogueGain"] = float(st.gain)
         if "colour_temp" in self.control_ranges():
             ctrls["AwbEnable"] = st.colour_temp is None
             if st.colour_temp is not None:
