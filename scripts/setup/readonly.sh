@@ -18,11 +18,11 @@
 # install.sh + one reboot ends up read-only with no extra operator steps.
 #
 # Stages, each idempotent:
-#   1. packages   overlayroot + initramfs tooling
-#   2. data       loopback image -> /var/lib/camlab (fstab, survives the overlay)
-#   3. overlay    overlayroot.local.conf + auto_initramfs + update-initramfs
-#   4. swap       force zram swap (no swapfile under the overlay)
-#   5. finalise   install the finaliser script + arm the one-shot unit
+#   packages   overlayroot + initramfs tooling
+#   data       loopback image -> /var/lib/camlab (fstab, survives the overlay)
+#   overlay    overlayroot.local.conf + auto_initramfs + update-initramfs
+#   swap       force zram swap (no swapfile under the overlay)
+#   finalise   install the finaliser script + arm the one-shot unit
 #
 # Safe to re-run. Requires sudo. --revert undoes every stage and unlocks the box
 # (the unlock takes effect on the next reboot).
@@ -86,15 +86,16 @@ REPO_DIR="$(resolve_repo_dir)"
 
 # Stage 1: packages
 stage_packages() {
+    log "Stage: packages"
     if [ "$REVERT" -eq 1 ]; then
-        log "1) leaving overlayroot package installed (harmless; removal is manual)"
+        log "leaving overlayroot package installed (harmless, removal is manual)"
         return
     fi
     if dpkg -s overlayroot >/dev/null 2>&1; then
-        log "1) overlayroot already installed"
+        log "overlayroot already installed"
         return
     fi
-    log "1) installing overlayroot + initramfs tooling"
+    log "installing overlayroot + initramfs tooling"
     DEBIAN_FRONTEND=noninteractive apt-get install -y \
         overlayroot initramfs-tools busybox-static >/dev/null
 }
@@ -102,6 +103,7 @@ stage_packages() {
 # Stage 2: loopback data partition mounted at /var/lib/camlab.
 # Created on the writable boot partition so it survives the read-only overlay.
 stage_data() {
+    log "Stage: data partition"
     if [ "$REVERT" -eq 1 ]; then
         if mountpoint -q "$DATA_MNT"; then
             umount "$DATA_MNT" 2>/dev/null || true
@@ -109,9 +111,9 @@ stage_data() {
         block_strip /etc/fstab "$BEGIN" "$END"
         if [ -f "$DATA_IMG" ]; then
             rm -f "$DATA_IMG"
-            log "2) removed $DATA_IMG and its fstab line"
+            log "removed $DATA_IMG and its fstab line"
         else
-            log "2) no data image to remove"
+            log "no data image to remove"
         fi
         return
     fi
@@ -122,20 +124,20 @@ stage_data() {
         local free_mb
         free_mb="$(df -m --output=avail "$FW_DIR" | tail -1 | tr -d ' ')"
         if [ "$free_mb" -lt "$((DATA_SIZE_MB + 16))" ]; then
-            die "2) not enough room on $FW_DIR (${free_mb}MB free, need ~$((DATA_SIZE_MB + 16))MB). Lower CAMLAB_DATA_SIZE_MB."
+            die "not enough room on $FW_DIR (${free_mb}MB free, need ~$((DATA_SIZE_MB + 16))MB). Lower CAMLAB_DATA_SIZE_MB."
         fi
-        log "2) creating ${DATA_SIZE_MB}MB data image at $DATA_IMG"
+        log "creating ${DATA_SIZE_MB}MB data image at $DATA_IMG"
         truncate -s "${DATA_SIZE_MB}M" "$DATA_IMG"
         mkfs.ext4 -q -L camlab-data "$DATA_IMG"
     else
-        log "2) data image already present, keeping it"
+        log "data image already present, keeping it"
     fi
 
     # fstab line via managed block. The loop option + nofail keeps a missing image
     # from blocking boot; x-systemd ordering puts the mount before the service.
     block_write /etc/fstab "$BEGIN" "$END" \
         "$DATA_IMG $DATA_MNT ext4 loop,nofail,x-systemd.before=camlab.service 0 2"
-    log "2) ensured fstab mount $DATA_IMG -> $DATA_MNT"
+    log "ensured fstab mount $DATA_IMG -> $DATA_MNT"
 
     # Mount now (writable root) and migrate any existing state into the image, so
     # nothing is lost and camlab can read/write straight away.
@@ -152,7 +154,7 @@ stage_data() {
             cp -a "$staged/." "$DATA_MNT/" 2>/dev/null || true
             rm -rf "$staged"
         fi
-        log "2) mounted $DATA_MNT (migrated existing state if any)"
+        log "mounted $DATA_MNT (migrated existing state if any)"
     fi
     # Marker the one-shot unit keys off (ConditionPathExists) to confirm the
     # writable data mount is actually live before it ever locks the box down.
@@ -162,21 +164,22 @@ stage_data() {
 
 # Stage 3: overlay configuration (staged, not active until the finaliser locks in).
 stage_overlay() {
+    log "Stage: overlay config"
     if [ "$REVERT" -eq 1 ]; then
-        [ -f "$OVERLAY_CONF" ] && { rm -f "$OVERLAY_CONF"; log "3) removed $OVERLAY_CONF"; }
-        [ -f "$REMOUNT_DROPIN" ] && { rm -f "$REMOUNT_DROPIN"; log "3) removed $REMOUNT_DROPIN"; }
+        [ -f "$OVERLAY_CONF" ] && { rm -f "$OVERLAY_CONF"; log "removed $OVERLAY_CONF"; }
+        [ -f "$REMOUNT_DROPIN" ] && { rm -f "$REMOUNT_DROPIN"; log "removed $REMOUNT_DROPIN"; }
         block_strip "$CONFIG_TXT" "$BEGIN" "$END"
         # Drop the disable token too, so a clean revert leaves cmdline.txt as it was.
         cmdline_remove "$CMDLINE_TXT" "overlayroot=disabled"
         update-initramfs -u >/dev/null 2>&1 || true
-        log "3) overlay config removed (reboot to fully unlock)"
+        log "overlay config removed (reboot to fully unlock)"
         return
     fi
 
     # recurse=0 is load-bearing: without it the overlay drives every other mount
     # (including our /var/lib/camlab loop) read-only too.
     atomic_write "$OVERLAY_CONF" 'overlayroot="tmpfs:recurse=0"'$'\n'
-    log "3) wrote $OVERLAY_CONF (tmpfs:recurse=0)"
+    log "wrote $OVERLAY_CONF (tmpfs:recurse=0)"
 
     # Force the legacy mount API so systemd-remount-fs does not fail under the
     # overlay (Trixie/systemd #39558). Keeps the box out of 'degraded' state and
@@ -184,12 +187,12 @@ stage_overlay() {
     install -d -m 0755 "$(dirname "$REMOUNT_DROPIN")"
     atomic_write "$REMOUNT_DROPIN" \
         '[Manager]'$'\n''DefaultEnvironment="LIBMOUNT_FORCE_MOUNT2=always"'$'\n'
-    log "3) wrote $REMOUNT_DROPIN (legacy mount API for remount-fs)"
+    log "wrote $REMOUNT_DROPIN (legacy mount API for remount-fs)"
 
     # auto_initramfs=1 makes the firmware load the initramfs that carries the
     # overlay hook. Managed block so it is reversible.
     block_write "$CONFIG_TXT" "$BEGIN" "$END" "auto_initramfs=1"
-    log "3) config.txt: enabled auto_initramfs"
+    log "config.txt: enabled auto_initramfs"
 
     # Stage the overlay DISABLED. The first post-install boot then comes up
     # writable so first-boot tasks settle; the one-shot finaliser removes this
@@ -197,35 +200,37 @@ stage_overlay() {
     # overlay would engage on the very next boot with no writable settle-boot.
     if ! cmdline_has "$CMDLINE_TXT" "overlayroot=disabled"; then
         cmdline_add "$CMDLINE_TXT" "overlayroot=disabled"
-        log "3) cmdline.txt: staged overlay disabled (writable settle-boot)"
+        log "cmdline.txt: staged overlay disabled (writable settle-boot)"
     else
-        log "3) cmdline.txt: overlay-disabled token already present"
+        log "cmdline.txt: overlay-disabled token already present"
     fi
 
     update-initramfs -u >/dev/null
-    log "3) refreshed initramfs"
+    log "refreshed initramfs"
 }
 
 # Stage 4: swap mechanism. Switch rpi-swap to plain zram so it never tries to
 # write a swapfile onto the read-only/tmpfs root.
 stage_swap() {
+    log "Stage: swap"
     if [ "$REVERT" -eq 1 ]; then
-        [ -f "$SWAP_DROPIN" ] && { rm -f "$SWAP_DROPIN"; log "4) removed $SWAP_DROPIN"; }
+        [ -f "$SWAP_DROPIN" ] && { rm -f "$SWAP_DROPIN"; log "removed $SWAP_DROPIN"; }
         return
     fi
     install -d -m 0755 "$(dirname "$SWAP_DROPIN")"
     atomic_write "$SWAP_DROPIN" '[Main]'$'\n''Mechanism=zram'$'\n'
-    log "4) wrote $SWAP_DROPIN (zram swap, no swapfile under overlay)"
+    log "wrote $SWAP_DROPIN (zram swap, no swapfile under overlay)"
 }
 
 # Stage 5: finaliser script + one-shot unit. This is what actually locks the box
 # down, on the NEXT boot, after the writable settle-boot. Must be the last stage.
 stage_finalise() {
+    log "Stage: finaliser"
     if [ "$REVERT" -eq 1 ]; then
         systemctl disable "$ONESHOT_UNIT" >/dev/null 2>&1 || true
         rm -f "/etc/systemd/system/$ONESHOT_UNIT" "$FINALISE_SCRIPT"
         systemctl daemon-reload 2>/dev/null || true
-        log "5) removed finaliser + one-shot unit"
+        log "removed finaliser + one-shot unit"
         return
     fi
 
@@ -277,12 +282,12 @@ sync
 systemctl reboot
 FINEOF
     chmod 0755 "$FINALISE_SCRIPT"
-    log "5) installed finaliser $FINALISE_SCRIPT"
+    log "installed finaliser $FINALISE_SCRIPT"
 
     cp "$REPO_DIR/deploy/$ONESHOT_UNIT" "/etc/systemd/system/$ONESHOT_UNIT"
     systemctl daemon-reload
     systemctl enable "$ONESHOT_UNIT" >/dev/null 2>&1 || true
-    log "5) armed $ONESHOT_UNIT (locks down on next boot)"
+    log "armed $ONESHOT_UNIT (locks down on next boot)"
 }
 
 if [ "$REVERT" -eq 1 ]; then
