@@ -61,7 +61,7 @@ sudo systemctl start camlab
 
 Open **Select sensor** --> pick your camera and CSI port --> **Apply & Shutdown**.
 
-Power the Pi back on. App starts automatically on boot, choices persist across reboots.
+Once Pi powers off, power it back on. App starts automatically on boot, choices persist across reboots.
 
 > [!NOTE]
 > First power-on auto-reboots once to init read-only root.
