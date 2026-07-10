@@ -47,15 +47,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def __init__(self, engine: CameraEngine, registry: SensorRegistry,
                  config: ConfigManager, capture: StderrCapture,
-                 classifier: LogClassifier, settings: SettingsStore,
-                 display_max_fps: float):
+                 classifier: LogClassifier, settings: SettingsStore):
         super().__init__()
         self.engine = engine
         self.registry = registry
         self.config = config
         self.capture = capture
         self.settings = settings
-        self.display_max_fps = display_max_fps
         self.monitor = IntegrityMonitor(classifier)
         self._overlay: ModalOverlay | None = None
         self._boot_cover: QtWidgets.QWidget | None = None
@@ -498,7 +496,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Viewfinder area at open time sizes the new mode's lores (display) stream.
         self._mode_avail = self.viewfinder_area.lores_size()
         card = ModeCard(self.engine.modes, self.engine.current_mode,
-                        self.engine.current_fps, self.display_max_fps,
+                        self.engine.current_fps,
                         on_apply=self._apply_mode, on_cancel=self._close_modal)
         self._open_modal(card)
 

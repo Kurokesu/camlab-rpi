@@ -11,7 +11,7 @@ from .config_manager import ConfigManager
 from .gl_viewfinder import install_gles_format
 from .gui.main_window import MainWindow
 from .integrity import LogClassifier, NullCapture, StderrCapture
-from .modes import DEFAULT_DISPLAY_MAX_FPS, resolve_initial_mode
+from .modes import resolve_initial_mode
 from .qt import QtWidgets
 from .sensors import SensorRegistry
 from .settings import SettingsStore
@@ -24,25 +24,11 @@ log = logging.getLogger("camlab")
 _CHROME_PX = 90
 
 
-def _display_limits(app) -> tuple[float, tuple[int, int]]:
-    """(display_max_fps, viewfinder_avail_size) derived from the primary screen.
-
-    display_max_fps is capped at the bench ceiling (60) unless overridden via
-    CAMLAB_DISPLAY_MAX_FPS. avail size is the screen minus estimated chrome.
-    """
+def _avail_size(app) -> tuple[int, int]:
+    """Viewfinder area estimate (screen minus chrome), for the boot lores size."""
     screen = app.primaryScreen()
     geo = screen.geometry() if screen else None
-    avail = (geo.width(), max(1, geo.height() - _CHROME_PX)) if geo else (1280, 720)
-
-    override = os.environ.get("CAMLAB_DISPLAY_MAX_FPS")
-    if override:
-        try:
-            return float(override), avail
-        except ValueError:
-            log.warning("ignoring bad CAMLAB_DISPLAY_MAX_FPS=%r", override)
-    rate = screen.refreshRate() if screen else 0.0
-    rate = round(rate) if rate and rate >= 1 else DEFAULT_DISPLAY_MAX_FPS
-    return min(float(rate), DEFAULT_DISPLAY_MAX_FPS), avail
+    return (geo.width(), max(1, geo.height() - _CHROME_PX)) if geo else (1280, 720)
 
 
 _LEVELS = {
@@ -92,14 +78,13 @@ def main(argv: list[str] | None = None) -> int:
     install_gles_format()
     app = QtWidgets.QApplication(argv if argv is not None else sys.argv)
 
-    display_max_fps, avail = _display_limits(app)
+    avail = _avail_size(app)
 
     # Resolve and configure the boot mode: a valid persisted selection, else the
-    # heaviest runnable mode (max-stress default). Single configure at boot.
+    # heaviest runnable mode. Single configure at boot.
     if engine.picam2 is not None and engine.modes:
         overlay = config.get_current().get("overlay") or ""
-        mode, fps = resolve_initial_mode(
-            engine.modes, settings.get_mode(overlay), display_max_fps)
+        mode, fps = resolve_initial_mode(engine.modes, settings.get_mode(overlay))
         try:
             engine.configure_mode(mode, fps, avail)
             # Restore persisted manual overrides. Must follow configure so
@@ -108,8 +93,7 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as exc:
             log.error("camera configure failed: %s", exc)
 
-    win = MainWindow(engine, registry, config, capture, classifier,
-                     settings, display_max_fps)
+    win = MainWindow(engine, registry, config, capture, classifier, settings)
     win.showFullScreen()
 
     # The camera is started by the window once it reaches fullscreen (see

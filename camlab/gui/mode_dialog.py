@@ -32,14 +32,13 @@ from .widgets import SegmentedSelector, hline
 
 class ModeCard(QtWidgets.QFrame):
     def __init__(self, modes: list[SensorMode], current_mode: SensorMode | None,
-                 current_fps: float | None, display_max_fps: float,
+                 current_fps: float | None,
                  on_apply: Callable[[tuple[int, int], int, float], None],
                  on_cancel: Callable[[], None]):
         super().__init__()
         self.setObjectName("modalCard")
         self.setMinimumWidth(420)
         self._modes = modes
-        self._display_max_fps = display_max_fps
         self._on_apply = on_apply
 
         title = QtWidgets.QLabel("Sensor mode")
@@ -119,7 +118,7 @@ class ModeCard(QtWidgets.QFrame):
     def _rebuild_fps(self, prefer_fps: float | None) -> None:
         m = mode_for(self._modes, self.res_sel.current_value(),
                      self.depth_sel.current_value())
-        opts = fps_options(m.max_fps, self._display_max_fps) if m else [30.0]
+        opts = fps_options(m.max_fps) if m else [30.0]
         # Carry the chosen rate over: keep it when still offered, else the nearest.
         self.fps_sel.set_options([(f"{format_fps(o)} fps", o) for o in opts],
                                  current=nearest_fps_option(opts, prefer_fps),

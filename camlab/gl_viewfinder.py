@@ -371,9 +371,11 @@ class GlViewfinder(QOpenGLWidget):
     def render_request(self, completed_request) -> None:
         """Called by picamera2 with each frame to display (GUI thread).
 
-        Holds only the newest request (previous one goes back to the pipeline)
-        and schedules a repaint. update() coalesces to display refresh, so a
-        stream faster than the screen naturally becomes latest-frame-wins.
+        Pull model: hold only the newest request (the previous one goes back
+        to the pipeline) and make sure one repaint is scheduled. The paint
+        draws whatever request is newest when it runs, so a stream faster
+        than the display collapses to latest-frame-wins and the camera rate
+        is never throttled by the screen.
         """
         if self.current_request is not None and self.own_current:
             self.current_request.release()
@@ -381,6 +383,8 @@ class GlViewfinder(QOpenGLWidget):
         self.own_current = completed_request.config['buffer_count'] > 1
         if self.own_current:
             self.current_request.acquire()
+        # update() coalesces (Qt paints once per compositor frame callback),
+        # so no explicit pacing is needed here.
         self.update()
 
     def _teardown(self) -> None:
