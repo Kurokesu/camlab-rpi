@@ -15,7 +15,7 @@
 
 Kiosk app for previewing and testing Kurokesu camera modules on Raspberry Pi.
 
-![camlab GUI](docs/hero.png)
+![camlab GUI](https://raw.githubusercontent.com/Kurokesu/camlab-rpi/main/docs/hero.png)
 
 ## Setup
 
