@@ -57,7 +57,7 @@ Start **camlab** when install finishes:
 sudo systemctl start camlab
 ```
 
-App starts with sensor defaults (AR0234 on `cam1`) and no live image, sensor overlay loads on next boot.
+*App starts with sensor defaults (AR0234 on `cam1`) and no live image, sensor overlay loads on next boot.*
 
 Open **Select sensor** --> pick your camera and CSI port --> **Apply & Shutdown**.
 
