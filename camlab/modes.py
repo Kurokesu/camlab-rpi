@@ -7,7 +7,7 @@ that combination. The GUI lets the operator pick one at runtime as a cascade:
     Resolution  ->  Bit depth  ->  FPS
 
 FPS choices follow a fixed policy (see fps_options): the standard bench rates
-(30, 60, 120) capped by what the sensor mode can sustain and by the app
+(24, 30, 60, 120) capped by what the sensor mode can sustain and by the app
 ceiling MAX_FPS, with the sensor's own maximum surfaced as the top option
 when it falls between two standard rates. The display never limits the
 sensor rate: the viewfinder draws the latest frame at each screen refresh
@@ -23,9 +23,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-# Standard bench framerates, lowest first. Anything else offered is a
-# sensor-imposed cap surfaced alongside these.
-BASE_FPS: tuple[float, ...] = (30.0, 60.0, 120.0)
+# Standard bench framerates, lowest first (24 for cinema work). Anything
+# else offered is a sensor-imposed cap surfaced alongside these.
+BASE_FPS: tuple[float, ...] = (24.0, 30.0, 60.0, 120.0)
 
 # App-supported ceiling. Rates above run the pipeline fine, but sensor mode
 # tables advertising them have proven unreliable to start (AR0234 960x600
@@ -94,10 +94,11 @@ def fps_options(max_fps: float) -> list[float]:
     """FPS choices for a mode, honouring the bench policy.
 
     eff = min(sensor max, MAX_FPS). Then:
-      - eff <= 30  -> a single locked option (30 if it lands on 30, else eff).
-      - eff > 30   -> the standard rates (30, 60, 120) that fit under eff,
+      - eff <= 24  -> a single locked option (24 if it lands on 24, else eff).
+      - eff > 24   -> the standard rates (24, 30, 60, 120) that fit under eff,
                       plus eff itself when it sits strictly between two standard
-                      rates (e.g. 33.89 -> [30, 33.89], 120.21 -> [30, 60, 120]).
+                      rates (e.g. 33.89 -> [24, 30, 33.89],
+                      120.21 -> [24, 30, 60, 120]).
     A single-element result means the selector should be locked (unselectable).
     """
     eff = min(max_fps, MAX_FPS)
