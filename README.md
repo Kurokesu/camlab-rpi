@@ -2,9 +2,16 @@
 
 [![CI](https://github.com/Kurokesu/camlab-rpi/actions/workflows/ci.yml/badge.svg)](https://github.com/Kurokesu/camlab-rpi/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/Kurokesu/camlab-rpi?include_prereleases&label=release)](https://github.com/Kurokesu/camlab-rpi/releases)
-![OS](https://img.shields.io/badge/OS-RPi%20Trixie%20Lite-lightgrey?logo=raspberrypi&logoColor=white)
-![Platform](https://img.shields.io/badge/platform-Pi%205%20%7C%20CM5-lightgrey?logo=raspberrypi&logoColor=white)
-![Sensors](https://img.shields.io/badge/sensors-AR0234%20%7C%20AR0822%20%7C%20IMX283%20%7C%20IMX462%20%7C%20IMX477%20%7C%20IMX585-lightgrey)
+![OS](https://img.shields.io/badge/OS-RPi%20Trixie%20Lite-blue?logo=raspberrypi&logoColor=white)
+![Platform](https://img.shields.io/badge/platform-Pi%205%20%7C%20CM5-blue?logo=raspberrypi&logoColor=white)
+![GUI](https://img.shields.io/badge/GUI-PyQt6-41cd52?logo=qt&logoColor=white)
+
+![onsemi AR0234](https://img.shields.io/badge/onsemi-AR0234-008E9B?style=flat-square)
+![onsemi AR0822](https://img.shields.io/badge/onsemi-AR0822-008E9B?style=flat-square)
+![Sony IMX283](https://img.shields.io/badge/Sony-IMX283-008E9B?style=flat-square)
+![Sony IMX462](https://img.shields.io/badge/Sony-IMX462-008E9B?style=flat-square)
+![Sony IMX477](https://img.shields.io/badge/Sony-IMX477-008E9B?style=flat-square)
+![Sony IMX585](https://img.shields.io/badge/Sony-IMX585-008E9B?style=flat-square)
 
 Kiosk app for previewing and testing Kurokesu camera modules on Raspberry Pi.
 
