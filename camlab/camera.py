@@ -16,7 +16,6 @@ setting FrameDurationLimits min == max.
 from __future__ import annotations
 
 import logging
-import os
 import time
 from dataclasses import dataclass, field
 
@@ -124,11 +123,15 @@ class CameraEngine:
                  self.info.model, self.info.id, len(self.modes))
 
     @staticmethod
-    def _buffer_count() -> int:
-        try:
-            return max(1, int(os.environ.get("CAMLAB_BUFFER_COUNT", "4")))
-        except ValueError:
-            return 4
+    def _buffer_count(fps: float) -> int:
+        """Buffer sets per stream, scaled with the frame rate.
+
+        The viewfinder holds one request while it draws, so the pool must
+        cover a display interval plus GUI pauses. Four sets give ~130 ms of
+        slack at 30 fps but only ~33 ms at 120, hence high rates get eight
+        (measured: 4 sets dip to half rate at 120 fps when a modal opens).
+        """
+        return 8 if fps > 60.5 else 4
 
     def configure_mode(self, mode: SensorMode, fps: float, avail_size) -> None:
         """Configure raw + main + lores for a mode at a locked fps.
@@ -146,7 +149,7 @@ class CameraEngine:
             lores={"size": lores_size, "format": "YUV420"},
             sensor={"output_size": main_size, "bit_depth": int(mode.bit_depth)},
             display="lores",
-            buffer_count=self._buffer_count(),
+            buffer_count=self._buffer_count(fps),
             controls={"FrameDurationLimits": (dur, dur)},
         )
         self.picam2.configure(cfg)
