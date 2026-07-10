@@ -4,3 +4,4 @@
 .gitattributes export-ignore
 .shellcheckrc export-ignore
 pyproject.toml export-ignore
+docs/ export-ignore

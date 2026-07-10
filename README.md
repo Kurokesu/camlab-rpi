@@ -15,6 +15,8 @@
 
 Kiosk app for previewing and testing Kurokesu camera modules on Raspberry Pi.
 
+![camlab GUI](docs/hero.png)
+
 ## Setup
 
 *camlab runs on Raspberry Pi 5 or CM5. Any RAM size works, 2 GB is enough.*
