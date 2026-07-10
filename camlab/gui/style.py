@@ -97,6 +97,7 @@ QFrame#modalCard QPushButton#segment:focus { background: #2f3949; }
 QFrame#modalCard QPushButton#segment:checked:focus { background: #45526a; }
 QLabel#modalTitle { font-size: 16px; font-weight: 600; color: #e8eaed; }
 QLabel#modalText { color: #aeb4bf; }
+QLabel#modalHint { color: #9aa1ac; font-size: 12px; }
 """
 
 
