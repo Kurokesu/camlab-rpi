@@ -1,4 +1,4 @@
-"""Application entry point: build the Qt app, capture, camera, and main window."""
+"""Application entry point: build the Qt app, capture, camera and main window."""
 
 from __future__ import annotations
 
@@ -6,9 +6,10 @@ import logging
 import os
 import sys
 
-from . import qt
 from .camera import CameraEngine
 from .config_manager import ConfigManager
+from .gl_viewfinder import install_gles_format
+from .gui.main_window import MainWindow
 from .integrity import LogClassifier, NullCapture, StderrCapture
 from .modes import DEFAULT_DISPLAY_MAX_FPS, resolve_initial_mode
 from .qt import QtWidgets
@@ -17,14 +18,14 @@ from .settings import SettingsStore
 
 log = logging.getLogger("camlab")
 
-# Estimated non-preview chrome height (status strip + controls row) used to size
-# the lores stream before the window is laid out. Runtime mode changes use the
-# preview widget's real size instead.
+# Estimated non-viewfinder chrome height (status strip + controls row) used to size
+# lores stream before the window is laid out. Runtime mode changes use the
+# viewfinder widget's real size instead.
 _CHROME_PX = 90
 
 
 def _display_limits(app) -> tuple[float, tuple[int, int]]:
-    """(display_max_fps, preview_avail_size) derived from the primary screen.
+    """(display_max_fps, viewfinder_avail_size) derived from the primary screen.
 
     display_max_fps is capped at the bench ceiling (60) unless overridden via
     CAMLAB_DISPLAY_MAX_FPS. avail size is the screen minus estimated chrome.
@@ -62,14 +63,6 @@ def _setup_logging() -> None:
 def main(argv: list[str] | None = None) -> int:
     _setup_logging()
 
-    # Prefer the native Wayland platform under a Wayland session (e.g. Cage).
-    # Qt5 defaults to xcb (Xwayland), where the window maps at its X11 size and
-    # is only then fullscreened - a visible small-window flash on every boot. A
-    # native Wayland client gets the fullscreen size in its first configure, so
-    # it maps fullscreen immediately. Explicit QT_QPA_PLATFORM still wins.
-    if os.environ.get("WAYLAND_DISPLAY") and "QT_QPA_PLATFORM" not in os.environ:
-        os.environ["QT_QPA_PLATFORM"] = "wayland"
-
     # Splice stderr BEFORE libcamera/Picamera2 init so the IPA child inherits it.
     # StderrCapture is a plain QObject and is safe to build before QApplication.
     capture = NullCapture() if os.environ.get("CAMLAB_NO_CAPTURE") else StderrCapture()
@@ -79,16 +72,24 @@ def main(argv: list[str] | None = None) -> int:
     config = ConfigManager()
     settings = SettingsStore()
 
-    # Open the camera BEFORE QApplication (matches the working Phase 1 proto). Doing
-    # it after QApplication lets Xwayland's EGL init first and the picamera2 GL
-    # preview surface then fails with EGL_BAD_ALLOC. open() only enumerates modes.
-    # The stream is configured below once the display size is known.
+    # open() only enumerates modes. The stream is configured below once the
+    # display size is known.
     engine = CameraEngine()
     try:
         engine.open(camera_num=int(os.environ.get("CAMLAB_CAMERA_NUM", "0")))
     except Exception as exc:
         log.error("camera open failed: %s", exc)
 
+    # Run natively on Wayland under a Wayland session (e.g. Cage). Importing
+    # picamera2 force-sets QT_QPA_PLATFORM=xcb there, which is poison for the
+    # in-scene viewfinder: its PyOpenGL calls need the Qt context EGL-current,
+    # and under Xwayland it is GLX-current (xcb also flashes the window at its
+    # X11 size before fullscreening).
+    if os.environ.get("WAYLAND_DISPLAY"):
+        os.environ["QT_QPA_PLATFORM"] = "wayland"
+
+    # Viewfinder needs a GLES context (samplerExternalOES), set before QApplication.
+    install_gles_format()
     app = QtWidgets.QApplication(argv if argv is not None else sys.argv)
 
     display_max_fps, avail = _display_limits(app)
@@ -101,16 +102,14 @@ def main(argv: list[str] | None = None) -> int:
             engine.modes, settings.get_mode(overlay), display_max_fps)
         try:
             engine.configure_mode(mode, fps, avail)
-            # Restore manual control overrides after mode is configured
+            # Restore persisted manual overrides. Must follow configure so
+            # they clamp against the new mode's ranges.
             engine.set_control_state(**settings.get_controls(overlay))
         except Exception as exc:
             log.error("camera configure failed: %s", exc)
 
-    binding_label = qt.BINDING_LABEL
-
-    from .gui.main_window import MainWindow
     win = MainWindow(engine, registry, config, capture, classifier,
-                     settings, display_max_fps, binding_label)
+                     settings, display_max_fps)
     win.showFullScreen()
 
     # The camera is started by the window once it reaches fullscreen (see

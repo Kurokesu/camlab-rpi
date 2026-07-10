@@ -9,6 +9,7 @@ venv/
 camlab-live*.png
 *.local.png
 /tmp/
+/.dev/
 
 # Editor
 .vscode/

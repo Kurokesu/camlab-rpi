@@ -1,16 +1,16 @@
-"""CameraEngine - thin wrapper over Picamera2 for the bench preview.
+"""CameraEngine - thin wrapper over Picamera2 for the bench viewfinder.
 
-Owns the Picamera2 instance, enumerates the sensor's runtime-selectable modes,
-configures a (raw + main + lores) preview pipeline, builds the Qt preview widget,
+Owns Picamera2 instance, enumerates sensor's runtime-selectable modes,
+configures a (raw + main + lores) pipeline, builds the Qt viewfinder widget,
 holds exposure/gain/WB control state and exposes detection + a first-frame
-hook (for boot-to-preview timing). Designed to degrade gracefully: if no camera
-enumerates, GUI still comes up and reports "no camera".
+hook (for boot-to-viewfinder timing). Designed to degrade gracefully: if no
+camera enumerates, GUI still comes up and reports "no camera".
 
-Stream topology (per mode): the raw stream carries the selected sensor mode, the
-main stream is the full-resolution ISP output (XBGR8888, exercises the pipeline),
-and the lores stream (YUV420) is scaled to the on-screen preview and is what the
-GL widget displays (display="lores"). The framerate is locked exactly by setting
-FrameDurationLimits min == max.
+Stream topology (per mode): the raw stream carries the selected sensor mode,
+main stream is the full-resolution ISP output (XBGR8888, exercises the pipeline)
+and lores stream (YUV420) is scaled to the on-screen viewfinder and is what
+the GL widget displays (display="lores"). The framerate is locked exactly by
+setting FrameDurationLimits min == max.
 """
 
 from __future__ import annotations
@@ -20,14 +20,15 @@ import os
 import time
 from dataclasses import dataclass, field
 
-from .gl_frost import frost_widget_class
+from picamera2 import Picamera2
+
+from .gl_viewfinder import GlViewfinder
 from .modes import (
     SensorMode,
     enumerate_modes,
     fps_to_frame_duration,
     plan_lores_size,
 )
-from .qt import preview_widget_class
 
 log = logging.getLogger(__name__)
 
@@ -102,12 +103,6 @@ class CameraEngine:
         self._started = False
         self._first_frame_cb = None
         self._first_frame_seen = False
-        self._snap_cb = None          # one-shot freeze-frame grab (camera thread)
-
-    @staticmethod
-    def detect() -> list[CameraInfo]:
-        from picamera2 import Picamera2
-        return [CameraInfo.from_dict(d) for d in Picamera2.global_camera_info()]
 
     def open(self, camera_num: int = 0) -> None:
         """Open the camera and enumerate its modes. Does NOT configure a stream.
@@ -119,7 +114,6 @@ class CameraEngine:
         as a side effect and leaves the camera on the last probed (640x480)
         mode, so the very next configure() we issue must be the real one.
         """
-        from picamera2 import Picamera2
         infos = Picamera2.global_camera_info()
         if not infos:
             raise RuntimeError("no camera enumerated by libcamera")
@@ -139,8 +133,8 @@ class CameraEngine:
     def configure_mode(self, mode: SensorMode, fps: float, avail_size) -> None:
         """Configure raw + main + lores for a mode at a locked fps.
 
-        avail_size is the on-screen preview area in pixels. It sizes the lores
-        (display) stream to the largest size of the mode's aspect ratio that fits.
+        avail_size is the on-screen viewfinder area in pixels. It sizes lores
+        (display) stream to the largest size of mode's aspect ratio that fits.
         """
         if self.picam2 is None:
             raise RuntimeError("camera not opened")
@@ -316,33 +310,12 @@ class CameraEngine:
             return f"{depth}-bit {size[0]}x{size[1]}"
         return "?"
 
-    def make_preview_widget(self, software=False):
-        # Create the widget WITHOUT a parent: QGlPicamera2 allocates its EGL surface
-        # in __init__ via winId(), and an unrealized child parent yields
-        # EGL_BAD_ALLOC. The layout reparents it afterwards.
-        cls = preview_widget_class(software=software)
-        if not software:
-            cls = frost_widget_class(cls)
-        w, h = self.size
-        widget = cls(self.picam2, width=w, height=h, keep_ar=True)
-        return widget
+    def make_viewfinder(self):
+        return GlViewfinder(self.picam2)
 
     def on_first_frame(self, callback) -> None:
         """Register a one-shot callback(boot_time_s) fired on the first captured frame."""
         self._first_frame_cb = callback
-
-    def request_snapshot(self, callback) -> bool:
-        """Ask for a one-shot freeze-frame grabbed from the next delivered frame.
-
-        callback(pil_image) fires once on the camera thread. Grabbing the
-        already-delivered frame instead of a separate capture_image avoids a
-        pipeline round-trip, so the live preview does not hitch. Returns False if
-        not running.
-        """
-        if self.picam2 is None or not self._started:
-            return False
-        self._snap_cb = callback
-        return True
 
     def _pre_callback(self, request) -> None:
         # Camera thread, per delivered frame. fps is rpicam-style: 1e9 / the delta
@@ -364,13 +337,6 @@ class CameraEngine:
         # Publish the frame's readout as one snapshot so the GUI reads a
         # consistent set (single atomic swap, no lock needed).
         self.telemetry = Telemetry(frame=frame, fps=fps, metadata=md)
-        if self._snap_cb is not None:
-            cb, self._snap_cb = self._snap_cb, None
-            try:
-                # The main (ISP RGB) buffer: make_image can't convert YUV420 lores.
-                cb(request.make_image("main"))
-            except Exception:  # never let the freeze-frame break capture
-                log.exception("freeze-frame grab failed")
         if not self._first_frame_seen:
             self._first_frame_seen = True
             boot_time = time.clock_gettime(time.CLOCK_BOOTTIME)

@@ -43,7 +43,7 @@ apt-get install -y eatmydata
 # One resolver pass, recommends off to keep GUI extras (VA/VDPAU/Vulkan, GTK,
 # QML) away. Hard deps stay unlisted: picamera2 pulls the +krks libcamera
 # fork. Recommends the kiosk does need are pinned: python3-opengl
-# (QGl6Picamera2 imports it), qt6-wayland (Qt under Cage), awb-nn
+# (GlViewfinder imports it), qt6-wayland (Qt under Cage), awb-nn
 # (libcamera-ipa AWB models).
 log "Installing packages..."
 apt_get install -y --no-install-recommends \
