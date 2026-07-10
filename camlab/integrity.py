@@ -94,14 +94,6 @@ class IntegrityStats:
     warnings: int = 0
     by_category: dict[str, int] = field(default_factory=dict)
 
-    @property
-    def total(self) -> int:
-        return self.errors + self.warnings
-
-    @property
-    def healthy(self) -> bool:
-        return self.errors == 0 and self.warnings == 0
-
 
 class NullCapture(QtCore.QObject):
     """Drop-in that does no fd splicing (debug: CAMLAB_NO_CAPTURE=1)."""
@@ -158,7 +150,6 @@ class IntegrityMonitor(QtCore.QObject):
     """Consumes log lines, classifies integrity issues, emits rolling stats."""
 
     stats_changed = Signal(object)   # IntegrityStats
-    matched = Signal(str, str)       # (category, line) for matched lines
     # NB: do NOT name a signal 'event' - it shadows QObject.event() and aborts.
 
     def __init__(self, classifier: LogClassifier | None = None,
@@ -186,7 +177,6 @@ class IntegrityMonitor(QtCore.QObject):
             self._warnings += 1
         self._by_cat[cat] += 1
         self._dirty = True
-        self.matched.emit(cat, line)
 
     def reset(self) -> None:
         self._errors = 0
