@@ -1,0 +1,60 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+name: Bug report
+description: Something is broken or behaves unexpectedly
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: camlab version
+      description: Shown in the status strip, bottom of the screen
+      placeholder: 1.0.0-beta.2
+    validations:
+      required: true
+  - type: dropdown
+    id: hardware
+    attributes:
+      label: Hardware
+      options:
+        - Raspberry Pi 5
+        - Compute Module 5
+    validations:
+      required: true
+  - type: dropdown
+    id: sensor
+    attributes:
+      label: Sensor
+      options:
+        - AR0234
+        - AR0822
+        - IMX283
+        - IMX462
+        - IMX477
+        - IMX585
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: storage
+    attributes:
+      label: Boot storage
+      options:
+        - SD card
+        - eMMC
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you saw and what you expected instead
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Output of `camlabctl logs`, trimmed to the relevant part if long
+      render: text
