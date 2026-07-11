@@ -37,7 +37,8 @@ Flash Raspberry Pi OS Lite (Trixie 64-bit) to an SD card using [Raspberry Pi Ima
 Connect and boot:
 
 - Connect your camera module to either CSI port
-- Attach HDMI display (1920×1080 recommended, other resolutions untested), keyboard and/or mouse
+- Attach HDMI display (1920×1080 recommended, other resolutions untested)
+- Connect keyboard and/or mouse
 - Connect Ethernet, unless Wi-Fi was configured in Imager (install needs internet)
 - Insert SD card and power on your Pi
 
@@ -59,7 +60,7 @@ sudo reboot
 - Download latest [release](https://github.com/Kurokesu/camlab-rpi/releases) and install:
 
 ```bash
-curl -#LO https://github.com/Kurokesu/camlab-rpi/releases/latest/download/camlab-rpi.zip
+curl -#LO https://github.com/Kurokesu/camlab-rpi/releases/download/v1.0.0-beta.1/camlab-rpi.zip
 unzip camlab-rpi.zip && cd camlab-rpi
 sudo ./install.sh
 ```
