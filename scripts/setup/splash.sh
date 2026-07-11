@@ -1,6 +1,6 @@
 #!/usr/bin/bash
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright (C) 2026, UAB Kurokesu
 #
 # Boot splash via the kernel fullscreen logo (no daemon, no DRM, no Plymouth).
 # The rpi kernel draws deploy/splash/logo.tga from the initramfs at fbcon

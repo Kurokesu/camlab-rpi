@@ -1,5 +1,5 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright (C) 2026, UAB Kurokesu
 #
 # Rendered to /etc/sudoers.d/camlab by scripts/setup/config.sh (substitutes
 # CAMLAB_USER, validates with visudo -c). Minimal NOPASSWD rights for the

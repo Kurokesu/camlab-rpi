@@ -1,6 +1,6 @@
 #!/usr/bin/bash
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright (C) 2026, UAB Kurokesu
 #
 # Cap journald so logs never fill the rootfs on a long-lived bench box. The GUI
 # surfaces camera errors via in-process stderr capture, so we don't rely on the

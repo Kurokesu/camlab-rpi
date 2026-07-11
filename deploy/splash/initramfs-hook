@@ -1,5 +1,5 @@
 #!/bin/sh
-# SPDX-FileCopyrightText: Copyright (C) 2026, UAB Kurokesu
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # initramfs hook: bundle the kernel fullscreen-logo TGA so fbcon can draw it

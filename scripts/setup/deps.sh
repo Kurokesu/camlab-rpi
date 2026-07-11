@@ -1,6 +1,6 @@
 #!/usr/bin/bash
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright (C) 2026, UAB Kurokesu
 #
 # Install camlab APT dependencies: Kurokesu apt archive, Kurokesu libcamera
 # fork, Python preview/GUI stack (picamera2 + PyQt6 + OpenGL) and Cage.

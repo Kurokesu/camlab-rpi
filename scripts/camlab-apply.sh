@@ -1,6 +1,6 @@
 #!/usr/bin/bash
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright (C) 2026, UAB Kurokesu
 #
 # Privileged apply shim - rendered to /usr/local/bin/camlab-apply by
 # scripts/setup/config.sh (CAMLAB_REPO_DIR substituted). This is the ONLY
