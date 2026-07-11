@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # Keep repo metadata out of git archive release zips.
 .github/ export-ignore
 .gitignore export-ignore

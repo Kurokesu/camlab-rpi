@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Settings card - app-level system options, one row per setting.
 
 Rendered inside a ModalOverlay like the sensor/mode cards. Rows: the

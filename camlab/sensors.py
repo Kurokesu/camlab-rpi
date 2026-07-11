@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Sensor registry loader (reads sensors.yaml)."""
 
 from __future__ import annotations

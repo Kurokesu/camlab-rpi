@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """RpiStats - board health facts (CPU, RAM, GPU, SoC temperature).
 
 Everything comes from procfs/sysfs, no subprocess calls. CPU and GPU loads

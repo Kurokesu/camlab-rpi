@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """camlab - Kurokesu camera test bench tool.
 
 A single-operator bench GUI for validating Kurokesu RPi camera modules: live

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """HistogramOverlay - live luma histogram in the viewfinder's corner.
 
 Data comes from the PiSP frontend's AGC statistics (CameraEngine.agc_histogram),

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Networking state for the Settings dialog.
 
 Reading is unprivileged. Writing shells out to camlabctl net via sudo
