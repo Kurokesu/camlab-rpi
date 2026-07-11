@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """CameraEngine - thin wrapper over Picamera2 for the bench viewfinder.
 
 Owns Picamera2 instance, enumerates sensor's runtime-selectable modes,

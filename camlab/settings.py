@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Boot-persistent settings store (per-sensor mode/fps and control overrides).
 
 A tiny atomic JSON file. Selections are keyed by the sensor's dtoverlay token so

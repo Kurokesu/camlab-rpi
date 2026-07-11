@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """MainWindow - fullscreen bench UI: viewfinder + status strip + controls + log."""
 
 from __future__ import annotations

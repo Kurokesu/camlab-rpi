@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """ViewfinderArea - hosts the live viewfinder widget.
 
 Thin wrapper: owns the slot in the main layout and exposes the frost toggle

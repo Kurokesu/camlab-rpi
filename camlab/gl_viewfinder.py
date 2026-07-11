@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """GlViewfinder - zero-copy camera viewfinder rendered inside Qt's own scene.
 
 Replaces picamera2's QGlPicamera2, which renders through a private EGL context

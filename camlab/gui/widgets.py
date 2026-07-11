@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Shared in-window controls for the kiosk UI.
 
 Under the Cage compositor the app renders as a single fullscreen surface, and

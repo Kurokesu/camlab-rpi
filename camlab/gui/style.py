@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Application stylesheet, set once on MainWindow.
 
 Everything is styled from this one QSS blob plus two generated pieces: the

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Status strip - the top bar of live, read-only facts about the capture.
 
 Everything here is a FACT, never a pass/fail verdict (per spec). The left side

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Application entry point: build the Qt app, capture, camera and main window."""
 
 from __future__ import annotations

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Material Symbols icon helper.
 
 The bundled font (assets/MaterialSymbolsOutlined.ttf, from Google Fonts) is loaded

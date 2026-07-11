@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Signal-integrity / error surfacing.
 
 libcamera (and its IPA proxy child) log to stderr. We splice fd 2 onto a pipe so

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Sheets docked over viewfinder's bottom edge: camera controls and display assists.
 
 Sheets are plain Qt widgets stacked over the viewfinder (it renders in-scene

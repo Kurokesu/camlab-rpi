@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Sensor selection card - pick sensor + CSI port (+ color/mono), then shut down.
 
 Rendered inside a ModalDialog (not a separate window, which a Cage kiosk renders

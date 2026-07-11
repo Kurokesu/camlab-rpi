@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """ConfigManager - owns a delimited managed block in /boot/firmware/config.txt.
 
 The managed block is the single source of truth for the selected sensor overlay

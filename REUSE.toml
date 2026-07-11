@@ -1,0 +1,22 @@
+version = 1
+
+# Markdown and binary assets, annotated here instead of in-file headers.
+
+[[annotations]]
+path = [
+    "README.md",
+    "DEVELOPMENT.md",
+    "RELEASING.md",
+    ".github/pull_request_template.md",
+    "docs/hero.png",
+    "deploy/splash/logo.tga",
+    "deploy/splash/splash.png",
+]
+SPDX-FileCopyrightText = "2026 UAB Kurokesu"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
+# Material Symbols subset, see https://github.com/google/material-design-icons
+[[annotations]]
+path = "camlab/assets/MaterialSymbolsOutlined.ttf"
+SPDX-FileCopyrightText = "2026 Google LLC"
+SPDX-License-Identifier = "Apache-2.0"

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Sensor mode catalogue + selection logic (pure, no Picamera2/Qt imports).
 
 A "mode" is one raw output the sensor can deliver: a libcamera packed format

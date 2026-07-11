@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Collapsible log panel - shows the captured camera-stack stderr stream.
 
 Lines matching an integrity pattern are coloured by severity (errors red,

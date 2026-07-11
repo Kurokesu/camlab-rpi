@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """In-window modal overlays.
 
 The kiosk runs as a single fullscreen surface under Cage. Separate top-level

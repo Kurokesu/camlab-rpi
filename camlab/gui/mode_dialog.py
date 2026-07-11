@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 """Sensor mode selection card - Resolution -> Bit depth -> FPS cascade.
 
 Rendered inside a ModalDialog using inline SegmentedSelectors (not dropdowns,
