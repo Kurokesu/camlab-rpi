@@ -15,7 +15,7 @@ ceiling MAX_FPS, with the sensor's own maximum surfaced as the top option
 when it falls between two standard rates. The display never limits the
 sensor rate: the viewfinder draws the latest frame at each screen refresh
 and drops the ones between. With no valid persisted selection the default
-is the heaviest mode (largest area, deepest bits, highest fps).
+is the heaviest mode (largest area, deepest bits) at DEFAULT_FPS.
 
 Everything here is deterministic and side-effect free so it can be unit tested
 and reasoned about without a camera. CameraEngine turns a (SensorMode, fps) pair
@@ -35,6 +35,9 @@ BASE_FPS: tuple[float, ...] = (24.0, 30.0, 60.0, 120.0)
 # claims 236.85, locks maybe half the time), so the beta stops at the rate
 # every bench sensor starts dependably.
 MAX_FPS = 120.0
+
+# Boot rate when nothing is persisted. Higher rates are opt-in.
+DEFAULT_FPS = 30.0
 
 # Tolerance when comparing reported fps (floats like 33.89) to nominal rates.
 _FPS_EPS = 0.5
@@ -169,15 +172,16 @@ def mode_for(modes: list[SensorMode], size: tuple[int, int],
 
 
 def default_mode(modes: list[SensorMode]) -> tuple[SensorMode, float]:
-    """Heaviest mode: largest area, then deepest bits, then highest fps.
+    """Heaviest mode (largest area, deepest bits) at DEFAULT_FPS.
 
     No per-sensor defaults are predefined: the heaviest runnable mode is the
-    default whenever there is no (valid) persisted selection.
+    default whenever there is no (valid) persisted selection. Its rate is
+    DEFAULT_FPS, or the nearest offered rate when the mode cannot do it.
     """
     if not modes:
         raise ValueError("no sensor modes to choose from")
     best = max(modes, key=lambda m: (m.area, m.bit_depth, m.max_fps))
-    return best, fps_options(best.max_fps)[-1]
+    return best, nearest_fps_option(fps_options(best.max_fps), DEFAULT_FPS)
 
 
 def resolve_initial_mode(modes: list[SensorMode],
