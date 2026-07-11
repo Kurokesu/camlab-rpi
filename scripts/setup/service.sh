@@ -1,6 +1,6 @@
 #!/usr/bin/bash
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright (C) 2026, UAB Kurokesu
 #
 # Install camlab.service (systemd unit) + its PAM config.
 # Safe to re-run. Requires sudo.

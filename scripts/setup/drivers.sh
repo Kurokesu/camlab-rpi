@@ -1,6 +1,6 @@
 #!/usr/bin/bash
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright (C) 2026, UAB Kurokesu
 #
 # Install Kurokesu out-of-tree sensor drivers, DKMS source packages from the
 # Kurokesu apt archive (enabled by deps.sh). Package postinst compiles

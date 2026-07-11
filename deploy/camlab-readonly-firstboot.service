@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (C) 2026, UAB Kurokesu
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # One-shot read-only finaliser. Installed and enabled by scripts/setup/readonly.sh

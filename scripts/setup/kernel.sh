@@ -1,6 +1,6 @@
 #!/usr/bin/bash
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright (C) 2026, UAB Kurokesu
 #
 # Purge the kernel flavor the board never boots (RPi OS ships both 2712 and
 # v8. Firmware picks by SoC). Detected from running kernel, so it works

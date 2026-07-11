@@ -1,6 +1,6 @@
 #!/usr/bin/bash
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright (C) 2026, UAB Kurokesu
 #
 # Boot-time tuning: trims power-on to first preview by cutting work the kiosk
 # never needs. Disables Bluetooth in config.txt (managed block) and masks unused

@@ -1,6 +1,6 @@
 #!/usr/bin/bash
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright (C) 2026, UAB Kurokesu
 #
 # Configure camera overlay + GUI privileges:
 #   1. Write camlab managed block in /boot/firmware/config.txt
