@@ -4,7 +4,10 @@
 [![Release](https://img.shields.io/github/v/release/Kurokesu/camlab-rpi?include_prereleases&label=release)](https://github.com/Kurokesu/camlab-rpi/releases)
 ![OS](https://img.shields.io/badge/OS-RPi%20Trixie%20Lite-blue?logo=raspberrypi&logoColor=white)
 ![Platform](https://img.shields.io/badge/platform-Pi%205%20%7C%20CM5-blue?logo=raspberrypi&logoColor=white)
-![GUI](https://img.shields.io/badge/GUI-PyQt6-41cd52?logo=qt&logoColor=white)
+![GUI](https://img.shields.io/badge/GUI-PyQt6-blue?logo=qt&logoColor=white)
+[![libcamera](https://img.shields.io/badge/libcamera-Kurokesu%20fork-blue)](https://github.com/Kurokesu/libcamera)
+[![picamera2](https://img.shields.io/badge/picamera2-0.3.36-blue)](https://github.com/raspberrypi/picamera2)
+![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
 
 ![onsemi AR0234](https://img.shields.io/badge/onsemi-AR0234-008E9B?style=flat-square)
 ![onsemi AR0822](https://img.shields.io/badge/onsemi-AR0822-008E9B?style=flat-square)
