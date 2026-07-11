@@ -126,16 +126,6 @@ def fps_to_frame_duration(fps: float) -> int:
     return int(round(1_000_000.0 / fps))
 
 
-def match_fps_option(options: list[float], fps: float | None) -> float | None:
-    """Return the option matching fps within tolerance, else None."""
-    if fps is None:
-        return None
-    for o in options:
-        if abs(o - fps) <= _FPS_EPS:
-            return o
-    return None
-
-
 def nearest_fps_option(options: list[float], target: float | None) -> float:
     """Option closest to target (ties favour the lower rate).
 
@@ -189,8 +179,9 @@ def resolve_initial_mode(modes: list[SensorMode],
     """Pick the boot mode: a valid persisted selection, else the heaviest mode.
 
     A persisted selection is honoured only if its (size, bit_depth) still exists.
-    Its fps is used when it is still a valid option, otherwise we snap to the max
-    available fps for that mode (no stale, unrunnable rates).
+    Its fps snaps to the nearest offered rate when no longer offered (no stale,
+    unrunnable rates), same as a runtime mode change. Missing fps means no
+    intent to preserve, so DEFAULT_FPS applies.
     """
     if saved:
         size = saved.get("size")
@@ -199,9 +190,9 @@ def resolve_initial_mode(modes: list[SensorMode],
         if size is not None and depth is not None:
             m = mode_for(modes, (int(size[0]), int(size[1])), int(depth))
             if m is not None:
-                opts = fps_options(m.max_fps)
-                chosen = match_fps_option(opts, saved.get("fps"))
-                return m, (chosen if chosen is not None else opts[-1])
+                fps = saved.get("fps")
+                return m, nearest_fps_option(fps_options(m.max_fps),
+                                             DEFAULT_FPS if fps is None else fps)
     return default_mode(modes)
 
 
