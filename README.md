@@ -9,6 +9,8 @@
 [![picamera2](https://img.shields.io/badge/picamera2-0.3.36-blue)](https://github.com/raspberrypi/picamera2)
 ![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
 
+Kiosk app for previewing and testing MIPI CSI camera modules on Raspberry Pi.
+
 ![onsemi AR0234](https://img.shields.io/badge/onsemi-AR0234-008E9B?style=flat-square)
 ![onsemi AR0822](https://img.shields.io/badge/onsemi-AR0822-008E9B?style=flat-square)
 ![Sony IMX283](https://img.shields.io/badge/Sony-IMX283-008E9B?style=flat-square)
@@ -16,9 +18,7 @@
 ![Sony IMX477](https://img.shields.io/badge/Sony-IMX477-008E9B?style=flat-square)
 ![Sony IMX585](https://img.shields.io/badge/Sony-IMX585-008E9B?style=flat-square)
 
-*Camera modules built on these sensors are available at [kurokesu.com](https://www.kurokesu.com/item/CAM-CSI).*
-
-Kiosk app for previewing and testing MIPI CSI camera modules on Raspberry Pi.
+*Camera modules based on these sensors are available at [kurokesu.com](https://www.kurokesu.com/item/CAM-CSI)*
 
 ![camlab GUI](https://raw.githubusercontent.com/Kurokesu/camlab-rpi/main/docs/hero.png)
 
