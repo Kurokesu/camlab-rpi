@@ -50,9 +50,7 @@ _AGC_HIST_BINS = 1024
 # Frame duration ceiling when FPS is exposure driven
 _MAX_FRAME_US = 1_000_000
 
-# Frame duration above which queued-control latency reads as sluggish. New
-# controls ride behind ~4 in-flight requests at the old duration, so past
-# this the GUI flushes the pipeline instead of waiting it out.
+# Flush controls when queued frames would add visible latency.
 _SLOW_FRAME_US = 100_000
 
 
@@ -71,12 +69,7 @@ class ControlState:
 
 @dataclass(frozen=True)
 class Telemetry:
-    """One frame's live readout for the GUI.
-
-    _pre_callback builds a fresh instance per frame and swaps it into
-    CameraEngine.telemetry in a single assignment, so a reader always gets
-    #frame, fps and metadata from the same frame.
-    """
+    """Atomic per-frame snapshot for GUI readers."""
     frame: int | None = None  # None until a frame has been captured
     fps: float = 0.0
     metadata: dict = field(default_factory=dict)
@@ -115,10 +108,7 @@ class CameraEngine:
         self.fps_fixed = True  # False lets exposure extend frame duration to 1 s
         self.control_state = ControlState()
         self.stats_output = False   # ISP statistics in metadata (histogram)
-        # Latest parsed AGC histogram, latched in _pre_callback. Kept outside
-        # Telemetry: above 30 fps libcamera attaches stats to only some
-        # frames (~30 Hz), so the newest frame often has no blob and the GUI
-        # would go stale sampling telemetry alone.
+        # Latch histogram because stats arrive below frame rate.
         self.latest_histogram: np.ndarray | None = None
         self.telemetry = Telemetry()  # latest per-frame snapshot
         self._last_ts = 0             # previous SensorTimestamp (ns), for fps
@@ -153,27 +143,14 @@ class CameraEngine:
 
     @staticmethod
     def _buffer_count(fps: float) -> int:
-        """Buffer sets per stream, scaled with the frame rate.
-
-        The viewfinder holds one request while it draws, so the pool must
-        cover a display interval plus GUI pauses. Four sets give ~130 ms of
-        slack at 30 fps but only ~33 ms at 120, hence high rates get eight
-        (measured: 4 sets dip to half rate at 120 fps when a modal opens).
-        Exposure driven FPS keeps the standard pool: a shallow one starves
-        the pipeline at short exposures and control latency at long ones is
-        dominated by in-flight frames at the old duration either way.
-        """
+        """Use eight buffers above 60 fps to absorb GUI pauses, four otherwise."""
         return 8 if fps > 60.5 else 4
 
     def configure_mode(self, mode: SensorMode, fps: float, avail_size,
                        fps_fixed: bool = True) -> None:
-        """Configure raw + main + lores for a mode at a locked fps.
+        """Configure mode streams and fit lores within avail_size.
 
-        avail_size is the on-screen viewfinder area in pixels. It sizes lores
-        (display) stream to the largest size of mode's aspect ratio that fits.
-        Without fps_fixed upper frame duration limit widens to 1 s, so
-        exposure (manual or AGC) extends the frame and rate follows it down.
-        Selected fps stays the ceiling.
+        Selected FPS is fixed or the exposure-driven ceiling.
         """
         if self.picam2 is None:
             raise RuntimeError("camera not opened")
@@ -456,11 +433,8 @@ class CameraEngine:
         self._frame_cb = callback
 
     def _pre_callback(self, request) -> None:
-        # Runs per delivered frame, on the thread driving picamera2's event
-        # loop (the GUI thread in-app, via viewfinder's socket notifier).
-        # fps is rpicam-style: 1e9 / the delta between consecutive
-        # SensorTimestamps (ns), so a dropped frame reads as a lower rate.
-        # #frame is the libcamera request sequence plus the flush offset.
+        # Picamera2 calls this from Qt's event loop. Sensor timestamps yield fps.
+        # Sequence offset preserves frame numbering across flushes.
         prev = self.telemetry
         lib_req = getattr(request, "request", None)
         frame = (lib_req.sequence + self._seq_base
