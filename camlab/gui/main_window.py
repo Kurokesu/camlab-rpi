@@ -551,12 +551,12 @@ class MainWindow(QtWidgets.QMainWindow):
         # Viewfinder area at open time sizes the new mode's lores (display) stream.
         self._mode_avail = self.viewfinder_area.lores_size()
         card = ModeCard(self.engine.modes, self.engine.current_mode,
-                        self.engine.current_fps, self.engine.low_light,
+                        self.engine.fps_current, self.engine.fps_fixed,
                         on_apply=self._apply_mode, on_cancel=self._close_modal)
         self._open_modal(card)
 
     def _apply_mode(self, size: tuple[int, int], bit_depth: int, fps: float,
-                    low_light: bool) -> None:
+                    fps_fixed: bool) -> None:
         self._close_modal()
         mode = mode_for(self.engine.modes, tuple(size), int(bit_depth))
         if mode is None:  # re-validate at apply time
@@ -564,7 +564,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         avail = getattr(self, "_mode_avail", self.viewfinder_area.lores_size())
         try:
-            self.engine.apply_mode(mode, float(fps), avail, low_light)
+            self.engine.apply_mode(mode, float(fps), avail, fps_fixed)
         except Exception as exc:
             log.exception("apply mode failed")
             self._show_message("Mode change failed", str(exc))
@@ -575,7 +575,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # config). The key is the selected sensor's overlay token.
         overlay = self.config.get_current().get("overlay") or ""
         self.settings.set_mode(overlay, tuple(size), int(bit_depth), float(fps),
-                               low_light)
+                               fps_fixed)
         self.monitor.reset()
         self._refresh_mode_status()
         # New mode may have re-clamped manual values (exposure vs new frame

@@ -12,8 +12,9 @@ offers it, otherwise the nearest achievable rate (e.g. 60 -> 33.89 when 60 drops
 out at 4K). The FPS row locks when a mode offers only one rate. The UI can
 therefore only ever present a combination the hardware actually supports.
 
-A fourth row toggles low light mode: exposure may then extend frame duration
-up to 1 s and framerate follows it down (selected FPS stays the ceiling).
+A fourth row picks the FPS lock policy: Fixed pins the frame duration to the
+selected rate, Exposure driven lets exposure extend it up to 1 s and framerate
+follows it down (selected FPS stays the ceiling).
 
 Applying does not persist directly: MainWindow applies it to the camera first and
 only writes the persisted selection if the reconfigure succeeds.
@@ -38,7 +39,7 @@ from .widgets import SegmentedSelector, hline
 
 class ModeCard(QtWidgets.QFrame):
     def __init__(self, modes: list[SensorMode], current_mode: SensorMode | None,
-                 current_fps: float | None, current_low_light: bool,
+                 fps_current: float | None, fps_fixed: bool,
                  on_apply: Callable[[tuple[int, int], int, float, bool], None],
                  on_cancel: Callable[[], None]):
         super().__init__()
@@ -53,39 +54,33 @@ class ModeCard(QtWidgets.QFrame):
         self.res_sel = SegmentedSelector()
         self.depth_sel = SegmentedSelector()
         self.fps_sel = SegmentedSelector()
-        self.ll_sel = SegmentedSelector()
+        self.fps_lock_sel = SegmentedSelector()
 
         init_size = tuple(current_mode.size) if current_mode else None
         self.res_sel.set_options(
             [(f"{w} x {h}", (w, h)) for (w, h) in resolutions(modes)],
             current=init_size)
         self._rebuild_depths(current_mode.bit_depth if current_mode else None)
-        self._rebuild_fps(current_fps)
-        self.ll_sel.set_options([("Off", False), ("On", True)],
-                                current=bool(current_low_light))
-
-        self.ll_hint = QtWidgets.QLabel(
-            "Exposure may extend frame duration up to 1 s (sensor permitting), "
-            "framerate follows")
-        self.ll_hint.setObjectName("modalHint")
-        self.ll_hint.setVisible(bool(current_low_light))
+        self._rebuild_fps(fps_current)
+        self.fps_lock_sel.set_options(
+            [("Fixed", True), ("Exposure driven", False)],
+            current=bool(fps_fixed))
 
         # The dirty check compares against what the card actually shows after
-        # seeding (current_fps may have been snapped to the nearest option).
+        # seeding (fps_current may have been snapped to the nearest option).
         self._initial = self._selection()
 
         # Connect after the initial build so the seeding stays silent.
         self.res_sel.changed.connect(self._on_res_changed)
         self.depth_sel.changed.connect(self._on_depth_changed)
         self.fps_sel.changed.connect(self._refresh_apply)
-        self.ll_sel.changed.connect(self._on_low_light_changed)
+        self.fps_lock_sel.changed.connect(self._refresh_apply)
 
         form = QtWidgets.QFormLayout()
         form.addRow("Resolution:", self.res_sel)
         form.addRow("Bit depth:", self.depth_sel)
         form.addRow("FPS:", self.fps_sel)
-        form.addRow("Low light:", self.ll_sel)
-        form.addRow("", self.ll_hint)
+        form.addRow("FPS lock:", self.fps_lock_sel)
 
         buttons = QtWidgets.QHBoxLayout()
         cancel_btn = QtWidgets.QPushButton("Cancel")
@@ -112,15 +107,11 @@ class ModeCard(QtWidgets.QFrame):
         return (self.res_sel.current_value(),
                 self.depth_sel.current_value(),
                 self.fps_sel.current_value(),
-                self.ll_sel.current_value())
+                self.fps_lock_sel.current_value())
 
     def _refresh_apply(self) -> None:
         """Apply is live only when a selection changed."""
         self.apply_btn.setEnabled(self._selection() != self._initial)
-
-    def _on_low_light_changed(self) -> None:
-        self.ll_hint.setVisible(bool(self.ll_sel.current_value()))
-        self._refresh_apply()
 
     def _on_res_changed(self) -> None:
         prev_depth = self.depth_sel.current_value()
@@ -151,4 +142,4 @@ class ModeCard(QtWidgets.QFrame):
         self._on_apply(self.res_sel.current_value(),
                        int(self.depth_sel.current_value()),
                        float(self.fps_sel.current_value()),
-                       bool(self.ll_sel.current_value()))
+                       bool(self.fps_lock_sel.current_value()))

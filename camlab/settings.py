@@ -67,7 +67,7 @@ class SettingsStore:
 
     def get_mode(self, overlay: str) -> dict | None:
         """Return {'size': [w, h], 'bit_depth': int, 'fps': float,
-        'low_light': bool} or None. Missing low_light reads as off."""
+        'fps_fixed': bool} or None. Missing fps_fixed reads as fixed."""
         if not overlay:
             return None
         entry = (self._load().get("modes") or {}).get(overlay)
@@ -75,18 +75,23 @@ class SettingsStore:
             return None
         try:
             size = entry["size"]
+            if "fps_fixed" in entry:
+                fps_fixed = bool(entry["fps_fixed"])
+            else:
+                # Legacy key with inverted meaning, dropped on next write.
+                fps_fixed = not entry.get("low_light", False)
             return {
                 "size": [int(size[0]), int(size[1])],
                 "bit_depth": int(entry["bit_depth"]),
                 "fps": float(entry["fps"]),
-                "low_light": bool(entry.get("low_light", False)),
+                "fps_fixed": fps_fixed,
             }
         except (KeyError, TypeError, ValueError, IndexError):
             log.warning("settings entry for %s is malformed - ignoring", overlay)
             return None
 
     def set_mode(self, overlay: str, size: tuple[int, int], bit_depth: int,
-                 fps: float, low_light: bool = False) -> bool:
+                 fps: float, fps_fixed: bool = True) -> bool:
         """Persist a selection for a sensor. Returns True if written."""
         if not overlay:
             return False
@@ -97,7 +102,7 @@ class SettingsStore:
             "size": [int(size[0]), int(size[1])],
             "bit_depth": int(bit_depth),
             "fps": float(fps),
-            "low_light": bool(low_light),
+            "fps_fixed": bool(fps_fixed),
         }
         return self._atomic_write(data)
 
