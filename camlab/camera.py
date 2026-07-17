@@ -47,8 +47,8 @@ _UNSET = object()
 _AGC_HIST_OFFSET = 16448 + 2048
 _AGC_HIST_BINS = 1024
 
-# Low light mode's frame duration ceiling
-_LOW_LIGHT_MAX_US = 1_000_000
+# Frame duration ceiling when FPS is exposure driven
+_MAX_FRAME_US = 1_000_000
 
 # Frame duration above which queued-control latency reads as sluggish. New
 # controls ride behind ~4 in-flight requests at the old duration, so past
@@ -111,8 +111,8 @@ class CameraEngine:
         self.sensor_config: dict = {}
         self.sensor_mode: dict = {}
         self.current_mode: SensorMode | None = None
-        self.current_fps: float | None = None
-        self.low_light = False  # exposure may extend frame duration to 1 s
+        self.fps_current: float | None = None
+        self.fps_fixed = True  # False lets exposure extend frame duration to 1 s
         self.control_state = ControlState()
         self.stats_output = False   # ISP statistics in metadata (histogram)
         # Latest parsed AGC histogram, latched in _pre_callback. Kept outside
@@ -159,29 +159,29 @@ class CameraEngine:
         cover a display interval plus GUI pauses. Four sets give ~130 ms of
         slack at 30 fps but only ~33 ms at 120, hence high rates get eight
         (measured: 4 sets dip to half rate at 120 fps when a modal opens).
-        Low light keeps the standard pool: a shallow one starves the pipeline
-        at short exposures and control latency at long ones is dominated by
-        in-flight frames at the old duration either way.
+        Exposure driven FPS keeps the standard pool: a shallow one starves
+        the pipeline at short exposures and control latency at long ones is
+        dominated by in-flight frames at the old duration either way.
         """
         return 8 if fps > 60.5 else 4
 
     def configure_mode(self, mode: SensorMode, fps: float, avail_size,
-                       low_light: bool = False) -> None:
+                       fps_fixed: bool = True) -> None:
         """Configure raw + main + lores for a mode at a locked fps.
 
         avail_size is the on-screen viewfinder area in pixels. It sizes lores
         (display) stream to the largest size of mode's aspect ratio that fits.
-        With low_light upper frame duration limit widens to 1 s, so exposure
-        (manual or AGC) extends the frame and rate follows it down. Selected
-        fps stays the ceiling.
+        Without fps_fixed upper frame duration limit widens to 1 s, so
+        exposure (manual or AGC) extends the frame and rate follows it down.
+        Selected fps stays the ceiling.
         """
         if self.picam2 is None:
             raise RuntimeError("camera not opened")
-        self.low_light = bool(low_light)
+        self.fps_fixed = bool(fps_fixed)
         main_size = tuple(mode.size)
         lores_size = plan_lores_size(main_size, tuple(avail_size))
         dur = fps_to_frame_duration(fps)
-        upper = self._duration_ceiling(dur) if self.low_light else dur
+        upper = dur if self.fps_fixed else self._duration_ceiling(dur)
         cfg = self.picam2.create_preview_configuration(
             main={"size": main_size, "format": self.pixel_format},
             lores={"size": lores_size, "format": "YUV420"},
@@ -203,7 +203,7 @@ class CameraEngine:
         self.sensor_config = dict(full.get("sensor") or {})
         self.sensor_mode = self._match_sensor_mode(self.sensor_config)
         self.current_mode = mode
-        self.current_fps = float(fps)
+        self.fps_current = float(fps)
         self.size = tuple(self.lores_config.get("size", lores_size))
         # configure() resets picam2.controls to the config's, so re-clamp
         # manual values against the new mode and push them again.
@@ -214,19 +214,19 @@ class CameraEngine:
                  self.main_config.get("size"), self.size)
 
     def apply_mode(self, mode: SensorMode, fps: float, avail_size,
-                   low_light: bool = False) -> None:
+                   fps_fixed: bool = True) -> None:
         """Reconfigure to a new mode/fps while running (stop, configure, start)."""
         was_started = self._started
         if was_started:
             self.stop()
-        self.configure_mode(mode, fps, avail_size, low_light)
+        self.configure_mode(mode, fps, avail_size, fps_fixed)
         if was_started:
             self.start()
 
     def _duration_ceiling(self, dur: int) -> int:
-        """Upper frame duration limit for low light: 1 s, inside what sensor
-        advertises and never below selected rate's duration."""
-        hi = _LOW_LIGHT_MAX_US
+        """Upper frame duration limit for exposure driven FPS: 1 s, inside
+        what sensor advertises and never below selected rate's duration."""
+        hi = _MAX_FRAME_US
         limits = self._camera_controls.get("FrameDurationLimits")
         if limits is not None:
             hi = min(hi, int(limits[1]))
@@ -250,8 +250,8 @@ class CameraEngine:
         Keys mirror ControlState fields. A missing key means the camera does
         not offer that control (e.g. no ColourTemperature on mono sensors), so
         GUI hides it. Ranges come from camera_controls, except exposure max,
-        capped at one frame duration of the locked fps (the low light ceiling
-        when that mode is on).
+        capped at one frame duration of the locked fps (the 1 s ceiling when
+        FPS is exposure driven).
         """
         if self.picam2 is None:
             return {}
@@ -259,9 +259,9 @@ class CameraEngine:
         ranges: dict[str, tuple] = {}
         if "ExposureTime" in cc:
             lo, hi, _ = cc["ExposureTime"]
-            if self.current_fps:
-                dur = fps_to_frame_duration(self.current_fps)
-                cap = self._duration_ceiling(dur) if self.low_light else dur
+            if self.fps_current:
+                dur = fps_to_frame_duration(self.fps_current)
+                cap = dur if self.fps_fixed else self._duration_ceiling(dur)
                 hi = min(hi, cap)
             ranges["exposure_us"] = (int(lo), int(hi))
         if "AnalogueGain" in cc:
@@ -350,7 +350,7 @@ class CameraEngine:
         fresh start where a long manual exposure is set but no frame has
         arrived yet.
         """
-        if not (self._started and self.low_light):
+        if not self._started or self.fps_fixed:
             return False
         dur = self.telemetry.metadata.get("FrameDuration") or 0
         exp = self.control_state.exposure_us or 0
