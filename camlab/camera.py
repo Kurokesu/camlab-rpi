@@ -181,19 +181,21 @@ class CameraEngine:
         main_size = tuple(mode.size)
         lores_size = plan_lores_size(main_size, tuple(avail_size))
         dur = fps_to_frame_duration(fps)
-        upper = dur if self.fps_fixed else self._duration_ceiling(dur)
         cfg = self.picam2.create_preview_configuration(
             main={"size": main_size, "format": self.pixel_format},
             lores={"size": lores_size, "format": "YUV420"},
             sensor={"output_size": main_size, "bit_depth": int(mode.bit_depth)},
             display="lores",
             buffer_count=self._buffer_count(fps),
-            controls={"FrameDurationLimits": (dur, upper)},
+            controls={"FrameDurationLimits": (dur, dur)},
         )
         self.picam2.configure(cfg)
         # Control limits change with the mode (e.g. exposure scales with
         # line length), so the re-clamp below must see fresh ones.
         self._cc_cache = None
+        if not self.fps_fixed:
+            upper = self._duration_ceiling(dur)
+            self.picam2.set_controls({"FrameDurationLimits": (dur, upper)})
         full = self.picam2.camera_configuration()
         self.main_config = dict(full["main"])
         self.lores_config = dict(full.get("lores") or {})
