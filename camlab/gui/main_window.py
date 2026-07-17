@@ -224,11 +224,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self._persist_timer.setInterval(500)
         self._persist_timer.timeout.connect(self._persist_controls)
 
-        # Long exposures queue controls behind in-flight frames. Flushes
-        # (pipeline restart) are paced by frame arrivals so a drag coalesces.
-        self._flush_dirty = False
-        self.engine.on_frame(self._on_engine_frame)
-
         # Qt commits its first surface at the layout's size hint before the
         # compositor's fullscreen configure lands, so the window flashes small
         # on boot. A black screen-sized cover hides that until the window is
@@ -323,8 +318,6 @@ class MainWindow(QtWidgets.QMainWindow):
         log.info("first frame at boot time=%.1fs", boot_time)
 
     def _update_status(self) -> None:
-        # Retry pending flushes if frame callbacks stop.
-        self._maybe_flush()
         # One snapshot read: #frame, fps and metadata come from the same frame
         # (camera thread publishes them as one reference).
         t = self.engine.telemetry
@@ -438,33 +431,13 @@ class MainWindow(QtWidgets.QMainWindow):
                               peaking or zebra)
 
     def _on_control_changed(self, key: str, value) -> None:
-        # Sample old requests before applying the new control.
-        flush_worthwhile = self.engine.slow_pipeline
+        # Engine clamps (and flushes a slow pipeline itself), so reflect what
+        # was actually set while manual.
         st = self.engine.set_control_state(**{key: value})
-        # Engine clamps, so reflect what was actually set while manual.
         actual = getattr(st, key)
         if value is not None and actual is not None and actual != value:
             self._sheets[key].set_state(actual)
         self._persist_timer.start()
-        if flush_worthwhile:
-            self._flush_dirty = True
-            self._maybe_flush()
-
-    def _on_engine_frame(self) -> None:
-        # Runs inside picamera2's request processing (GUI thread), where a
-        # restart is off limits, so hop to the event loop first.
-        if self._flush_dirty:
-            QtCore.QTimer.singleShot(0, self._maybe_flush)
-
-    def _maybe_flush(self) -> None:
-        # Wait for a frame after the last restart before flushing again.
-        if not self._flush_dirty or not self.engine.flush_ready:
-            return
-        self._flush_dirty = False
-        try:
-            self.engine.flush_controls()
-        except Exception:
-            log.exception("pipeline flush failed")
 
     def _persist_controls(self) -> None:
         overlay = self.config.get_current().get("overlay") or ""
@@ -565,8 +538,6 @@ class MainWindow(QtWidgets.QMainWindow):
             log.exception("apply mode failed")
             self._show_message("Mode change failed", str(exc))
             return
-        # Reconfigure already restarted the pipeline, drop any pending flush.
-        self._flush_dirty = False
         # Persist only after a successful reconfigure (never store an unrunnable
         # config). The key is the selected sensor's overlay token.
         overlay = self.config.get_current().get("overlay") or ""
