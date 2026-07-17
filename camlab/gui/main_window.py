@@ -323,9 +323,7 @@ class MainWindow(QtWidgets.QMainWindow):
         log.info("first frame at boot time=%.1fs", boot_time)
 
     def _update_status(self) -> None:
-        # Backstop for a pending flush when frames stopped coming (frame
-        # arrivals are the primary trigger, flush_ready holds a 10 s valve
-        # for a dead pipeline).
+        # Retry pending flushes if frame callbacks stop.
         self._maybe_flush()
         # One snapshot read: #frame, fps and metadata come from the same frame
         # (camera thread publishes them as one reference).
@@ -440,9 +438,7 @@ class MainWindow(QtWidgets.QMainWindow):
                               peaking or zebra)
 
     def _on_control_changed(self, key: str, value) -> None:
-        # Slowness sampled before the set: in-flight requests carry the old
-        # state, and only a slow old state is worth flushing past (a
-        # short-frame queue drains faster than a restart).
+        # Sample old requests before applying the new control.
         flush_worthwhile = self.engine.slow_pipeline
         st = self.engine.set_control_state(**{key: value})
         # Engine clamps, so reflect what was actually set while manual.

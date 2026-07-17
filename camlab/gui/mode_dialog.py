@@ -12,9 +12,7 @@ offers it, otherwise the nearest achievable rate (e.g. 60 -> 33.89 when 60 drops
 out at 4K). The FPS row locks when a mode offers only one rate. The UI can
 therefore only ever present a combination the hardware actually supports.
 
-A fourth row picks the FPS lock policy: Fixed pins the frame duration to the
-selected rate, Exposure driven lets exposure extend it up to 1 s and framerate
-follows it down (selected FPS stays the ceiling).
+FPS lock is Fixed or Exposure driven. Selected FPS remains the ceiling.
 
 Applying does not persist directly: MainWindow applies it to the camera first and
 only writes the persisted selection if the reconfigure succeeds.
