@@ -203,13 +203,19 @@ class CameraEngine:
             self.start()
 
     def _duration_ceiling(self, dur: int) -> int:
-        """Upper frame duration limit for exposure driven FPS: 1 s, inside
-        what sensor advertises and never below selected rate's duration."""
-        hi = _MAX_FRAME_US
+        """Frame duration ceiling capped by app and sensor limits."""
+        if dur > _MAX_FRAME_US:
+            raise ValueError(f"frame duration {dur} exceeds {_MAX_FRAME_US}")
         limits = self._camera_controls.get("FrameDurationLimits")
-        if limits is not None:
-            hi = min(hi, int(limits[1]))
-        return max(hi, dur)
+        if not isinstance(limits, (tuple, list)) or len(limits) < 2:
+            return dur
+        try:
+            hi = min(_MAX_FRAME_US, int(limits[1]))
+        except (TypeError, ValueError, OverflowError):
+            return dur
+        if dur > hi:
+            raise ValueError(f"frame duration {dur} exceeds sensor limit {hi}")
+        return hi
 
     # camera controls (exposure / gain / white balance)
     @property
