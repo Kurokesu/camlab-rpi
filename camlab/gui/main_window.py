@@ -241,6 +241,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self._fallback_tries = 0
         QtCore.QTimer.singleShot(3000, self._reveal_fallback)
 
+        # A late-attached display leaves the window at its size hint: the
+        # boot fullscreen configure arrives 0x0 and is never re-sent.
+        # Re-assert fullscreen when the screen topology changes.
+        app = QtWidgets.QApplication.instance()
+        app.screenAdded.connect(self._on_screen_added)
+        app.primaryScreenChanged.connect(lambda _s: self._resync_fullscreen())
+        for scr in app.screens():
+            scr.geometryChanged.connect(lambda _g: self._resync_fullscreen())
+
     # wiring
     def _wire(self) -> None:
         self.capture.line_received.connect(self.log_panel.append_line)
@@ -642,6 +651,29 @@ class MainWindow(QtWidgets.QMainWindow):
         self._boot_cover.deleteLater()
         self._boot_cover = None
         QtCore.QTimer.singleShot(0, self._start_engine)
+
+    def _on_screen_added(self, screen) -> None:
+        screen.geometryChanged.connect(lambda _g: self._resync_fullscreen())
+        self._resync_fullscreen()
+
+    def _resync_fullscreen(self) -> None:
+        # Deferred so Qt finishes updating its QScreen state first.
+        QtCore.QTimer.singleShot(0, self._apply_fullscreen)
+
+    def _apply_fullscreen(self) -> None:
+        screen = self.screen() or QtWidgets.QApplication.primaryScreen()
+        if screen is None:
+            return
+        g = screen.geometry()
+        if self._boot_cover is not None:
+            self._boot_cover.setGeometry(0, 0, max(g.width(), self.width()),
+                                         max(g.height(), self.height()))
+        if self.width() >= g.width() - 1:
+            return
+        # showFullScreen() alone is a no-op while Qt still thinks it is
+        # fullscreen. Drop to normal to force a fresh set_fullscreen.
+        self.showNormal()
+        self.showFullScreen()
 
     def _start_engine(self) -> None:
         if self._engine_started:
