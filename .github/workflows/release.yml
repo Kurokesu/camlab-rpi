@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# Build install zip and publish a release on version tag push
+# Build versioned install archive and publish a release on version tag push
 name: Release
 
 on:
@@ -27,15 +27,19 @@ jobs:
           fi
 
       - name: Build archive
-        run: git archive --format=zip --prefix=camlab-rpi/ -o camlab-rpi.zip "$GITHUB_REF_NAME"
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          git archive --format=tar.gz --prefix="camlab-rpi-${version}/" \
+            -o "camlab-rpi-${version}.tar.gz" "$GITHUB_REF_NAME"
 
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          version="${GITHUB_REF_NAME#v}"
           prerelease=""
           case "$GITHUB_REF_NAME" in
             *-*) prerelease="--prerelease" ;;
           esac
-          gh release create "$GITHUB_REF_NAME" camlab-rpi.zip \
+          gh release create "$GITHUB_REF_NAME" "camlab-rpi-${version}.tar.gz" \
             --title "$GITHUB_REF_NAME" --verify-tag --generate-notes $prerelease
