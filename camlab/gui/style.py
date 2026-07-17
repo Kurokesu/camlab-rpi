@@ -3,10 +3,9 @@
 
 """Application stylesheet, set once on MainWindow.
 
-Everything is styled from this one QSS blob plus two generated pieces: the
-modal-card glass (derived from the sheet glass constants so sheets and modals
-stay in lockstep) and the checkbox tick (a glyph rasterised to a PNG, since
-QSS sub-controls need an image url).
+Everything is styled from this one QSS blob plus generated pieces: slider
+geometry (dial/groove constants), modal-card glass (sheet glass colors) and
+the checkbox tick (a glyph rasterised to a PNG, since QSS needs an image url).
 """
 
 from __future__ import annotations
@@ -14,6 +13,32 @@ from __future__ import annotations
 from ..qt import QtGui
 from . import icons
 from .control_sheet import GLASS_BG, GLASS_BORDER
+
+# Hit box follows dial. Groove remains independent.
+_SLIDER_DIAL_PX = 18
+_SLIDER_GROOVE_PX = 6
+_SLIDER_MARGIN_PX = (_SLIDER_DIAL_PX - _SLIDER_GROOVE_PX) // 2
+_SLIDER_RADIUS_PX = (_SLIDER_DIAL_PX + 1) // 2
+_SLIDER_GROOVE_RADIUS_PX = _SLIDER_GROOVE_PX // 2
+
+_SLIDER_STYLE = f"""
+QSlider {{ min-height: {_SLIDER_DIAL_PX}px; }}
+QSlider::groove:horizontal {{ height: {_SLIDER_GROOVE_PX}px; background: #2c303a;
+                             border: 1px solid #3a3f4b;
+                             border-radius: {_SLIDER_GROOVE_RADIUS_PX}px; }}
+QSlider::sub-page:horizontal {{ background: #56617a; border: 1px solid #3a3f4b;
+                               border-radius: {_SLIDER_GROOVE_RADIUS_PX}px; }}
+QSlider::handle:horizontal {{ width: {_SLIDER_DIAL_PX}px;
+                             margin: -{_SLIDER_MARGIN_PX}px 0;
+                             border-radius: {_SLIDER_RADIUS_PX}px;
+                             background: #c4c9d2; border: 1px solid #7f8aa0; }}
+QSlider::handle:horizontal:hover {{ background: #e8eaed; }}
+QSlider[auto="true"]::handle:horizontal {{ background: #5c6370;
+                                          border-color: #4a505c; }}
+QSlider[auto="true"]::sub-page:horizontal {{ background: #353b47; }}
+QSlider:focus {{ outline: none; }}
+QSlider:focus::handle:horizontal {{ border-color: #7aa2f7; }}
+"""
 
 _STYLE = """
 QWidget { background: #1b1d22; color: #d7dae0; font-size: 13px; }
@@ -64,17 +89,6 @@ QFrame#controlSheet QPushButton#segment { background: #262a33; }
 QFrame#controlSheet QPushButton#segment:checked { background: #3d4858; }
 QFrame#controlSheet QPushButton#segment:focus { background: #2f3949; }
 QFrame#controlSheet QPushButton#segment:checked:focus { background: #45526a; }
-QSlider::groove:horizontal { height: 6px; background: #2c303a;
-                             border: 1px solid #3a3f4b; border-radius: 3px; }
-QSlider::sub-page:horizontal { background: #56617a; border: 1px solid #3a3f4b;
-                               border-radius: 3px; }
-QSlider::handle:horizontal { width: 18px; margin: -7px 0; border-radius: 10px;
-                             background: #c4c9d2; border: 1px solid #7f8aa0; }
-QSlider::handle:horizontal:hover { background: #e8eaed; }
-QSlider[auto="true"]::handle:horizontal { background: #5c6370; border-color: #4a505c; }
-QSlider[auto="true"]::sub-page:horizontal { background: #353b47; }
-QSlider:focus { outline: none; }
-QSlider:focus::handle:horizontal { border-color: #7aa2f7; }
 QCheckBox { color: #aeb4bf; spacing: 6px; }
 QCheckBox::indicator { width: 20px; height: 20px; border: 1px solid #4a505c;
                        border-radius: 4px; background: #2c303a; }
@@ -116,4 +130,4 @@ def build_stylesheet() -> str:
              f" border: 1px solid {_rgba(GLASS_BORDER)}; }}\n")
     tick = icons.cached_png("check", 17, "#cdd3dd")
     tick_rule = f"QCheckBox::indicator:checked {{ image: url({tick}); }}" if tick else ""
-    return _STYLE + glass + tick_rule
+    return _STYLE + _SLIDER_STYLE + glass + tick_rule
