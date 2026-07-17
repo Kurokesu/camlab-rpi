@@ -91,7 +91,7 @@ def main(argv: list[str] | None = None) -> int:
         mode, fps = resolve_initial_mode(engine.modes, saved)
         try:
             engine.configure_mode(mode, fps, avail,
-                                  fps_fixed=bool((saved or {}).get("fps_fixed", True)))
+                                  fps_fixed=saved["fps_fixed"] if saved else True)
             # Restore persisted manual overrides. Must follow configure so
             # they clamp against the new mode's ranges.
             engine.set_control_state(**settings.get_controls(overlay))

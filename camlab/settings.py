@@ -75,16 +75,11 @@ class SettingsStore:
             return None
         try:
             size = entry["size"]
-            if "fps_fixed" in entry:
-                fps_fixed = bool(entry["fps_fixed"])
-            else:
-                # Legacy key with inverted meaning, dropped on next write.
-                fps_fixed = not entry.get("low_light", False)
             return {
                 "size": [int(size[0]), int(size[1])],
                 "bit_depth": int(entry["bit_depth"]),
                 "fps": float(entry["fps"]),
-                "fps_fixed": fps_fixed,
+                "fps_fixed": bool(entry.get("fps_fixed", True)),
             }
         except (KeyError, TypeError, ValueError, IndexError):
             log.warning("settings entry for %s is malformed - ignoring", overlay)
