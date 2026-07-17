@@ -87,9 +87,11 @@ def main(argv: list[str] | None = None) -> int:
     # heaviest runnable mode. Single configure at boot.
     if engine.picam2 is not None and engine.modes:
         overlay = config.get_current().get("overlay") or ""
-        mode, fps = resolve_initial_mode(engine.modes, settings.get_mode(overlay))
+        saved = settings.get_mode(overlay)
+        mode, fps = resolve_initial_mode(engine.modes, saved)
         try:
-            engine.configure_mode(mode, fps, avail)
+            engine.configure_mode(mode, fps, avail,
+                                  low_light=bool((saved or {}).get("low_light")))
             # Restore persisted manual overrides. Must follow configure so
             # they clamp against the new mode's ranges.
             engine.set_control_state(**settings.get_controls(overlay))

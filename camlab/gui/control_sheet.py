@@ -36,6 +36,8 @@ _STEPS = 1000
 
 
 def fmt_exposure(us: float) -> str:
+    if us >= 1_000_000:
+        return f"{us / 1_000_000:.2f} s"
     if us >= 10000:
         return f"{us / 1000:.1f} ms"
     if us >= 1000:
@@ -52,14 +54,47 @@ def fmt_ct(kelvin: float) -> str:
 
 
 class JumpSlider(QtWidgets.QSlider):
-    """QSlider whose groove click jumps the handle straight to that spot."""
+    """Absolute pointing: press and drag put the handle at the cursor.
+
+    Stock QSlider only drags from the handle and page-steps elsewhere. Own
+    the mouse so every press grabs and maps through the groove rect.
+    """
+
+    def _value_at(self, x: float) -> int:
+        opt = QtWidgets.QStyleOptionSlider()
+        self.initStyleOption(opt)
+        groove = self.style().subControlRect(
+            QtWidgets.QStyle.ComplexControl.CC_Slider, opt,
+            QtWidgets.QStyle.SubControl.SC_SliderGroove, self)
+        handle = self.style().subControlRect(
+            QtWidgets.QStyle.ComplexControl.CC_Slider, opt,
+            QtWidgets.QStyle.SubControl.SC_SliderHandle, self)
+        pos = round(x) - groove.x() - handle.width() // 2
+        span = groove.width() - handle.width()
+        return QtWidgets.QStyle.sliderValueFromPosition(
+            self.minimum(), self.maximum(), pos, span, opt.upsideDown)
 
     def mousePressEvent(self, event) -> None:
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.setValue(QtWidgets.QStyle.sliderValueFromPosition(
-                self.minimum(), self.maximum(),
-                int(event.position().x()), self.width()))
-        super().mousePressEvent(event)
+        if event.button() != Qt.MouseButton.LeftButton:
+            super().mousePressEvent(event)
+            return
+        event.accept()
+        self.setSliderDown(True)  # emits sliderPressed
+        self.setValue(self._value_at(event.position().x()))
+
+    def mouseMoveEvent(self, event) -> None:
+        if not self.isSliderDown():
+            super().mouseMoveEvent(event)
+            return
+        event.accept()
+        self.setValue(self._value_at(event.position().x()))
+
+    def mouseReleaseEvent(self, event) -> None:
+        if event.button() != Qt.MouseButton.LeftButton:
+            super().mouseReleaseEvent(event)
+            return
+        event.accept()
+        self.setSliderDown(False)  # emits sliderReleased
 
 
 def _jump_slider() -> JumpSlider:

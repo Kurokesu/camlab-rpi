@@ -47,6 +47,14 @@ _UNSET = object()
 _AGC_HIST_OFFSET = 16448 + 2048
 _AGC_HIST_BINS = 1024
 
+# Low light mode's frame duration ceiling
+_LOW_LIGHT_MAX_US = 1_000_000
+
+# Frame duration above which queued-control latency reads as sluggish. New
+# controls ride behind ~4 in-flight requests at the old duration, so past
+# this the GUI flushes the pipeline instead of waiting it out.
+_SLOW_FRAME_US = 100_000
+
 
 @dataclass
 class ControlState:
@@ -63,12 +71,11 @@ class ControlState:
 
 @dataclass(frozen=True)
 class Telemetry:
-    """One frame's live readout, published by the camera thread for the GUI.
+    """One frame's live readout for the GUI.
 
-    The camera thread builds a fresh instance per frame and swaps it into
-    CameraEngine.telemetry in a single attribute assignment. The GUI reads that
-    one reference, so it always gets #frame, fps and metadata from the same
-    frame without locking (the swap is atomic under CPython).
+    _pre_callback builds a fresh instance per frame and swaps it into
+    CameraEngine.telemetry in a single assignment, so a reader always gets
+    #frame, fps and metadata from the same frame.
     """
     frame: int | None = None  # None until a frame has been captured
     fps: float = 0.0
@@ -105,18 +112,24 @@ class CameraEngine:
         self.sensor_mode: dict = {}
         self.current_mode: SensorMode | None = None
         self.current_fps: float | None = None
+        self.low_light = False  # exposure may extend frame duration to 1 s
         self.control_state = ControlState()
         self.stats_output = False   # ISP statistics in metadata (histogram)
-        # Latest parsed AGC histogram (camera thread writes, GUI reads). Kept
-        # outside Telemetry: above 30 fps libcamera attaches stats to only
-        # some frames (~30 Hz), so the newest frame often has no blob and the
-        # GUI would go stale sampling telemetry alone.
+        # Latest parsed AGC histogram, latched in _pre_callback. Kept outside
+        # Telemetry: above 30 fps libcamera attaches stats to only some
+        # frames (~30 Hz), so the newest frame often has no blob and the GUI
+        # would go stale sampling telemetry alone.
         self.latest_histogram: np.ndarray | None = None
-        self.telemetry = Telemetry()  # latest per-frame snapshot (camera -> GUI)
+        self.telemetry = Telemetry()  # latest per-frame snapshot
         self._last_ts = 0             # previous SensorTimestamp (ns), for fps
+        self._seq_base = 0            # frame counter offset, keeps it continuous across flushes
+        self._frame_since_start = False
+        self._start_ts = 0.0
         self._started = False
         self._first_frame_cb = None
         self._first_frame_seen = False
+        self._frame_cb = None
+        self._cc_cache: dict | None = None  # camera_controls, per configure
 
     def open(self, camera_num: int = 0) -> None:
         """Open the camera and enumerate its modes. Does NOT configure a stream.
@@ -133,6 +146,7 @@ class CameraEngine:
             raise RuntimeError("no camera enumerated by libcamera")
         self.info = CameraInfo.from_dict(infos[camera_num])
         self.picam2 = Picamera2(camera_num)
+        self._cc_cache = None
         self.modes = enumerate_modes(self.picam2.sensor_modes)
         log.info("camera opened: %s (%s) with %d modes",
                  self.info.model, self.info.id, len(self.modes))
@@ -145,29 +159,41 @@ class CameraEngine:
         cover a display interval plus GUI pauses. Four sets give ~130 ms of
         slack at 30 fps but only ~33 ms at 120, hence high rates get eight
         (measured: 4 sets dip to half rate at 120 fps when a modal opens).
+        Low light keeps the standard pool: a shallow one starves the pipeline
+        at short exposures and control latency at long ones is dominated by
+        in-flight frames at the old duration either way.
         """
         return 8 if fps > 60.5 else 4
 
-    def configure_mode(self, mode: SensorMode, fps: float, avail_size) -> None:
+    def configure_mode(self, mode: SensorMode, fps: float, avail_size,
+                       low_light: bool = False) -> None:
         """Configure raw + main + lores for a mode at a locked fps.
 
         avail_size is the on-screen viewfinder area in pixels. It sizes lores
         (display) stream to the largest size of mode's aspect ratio that fits.
+        With low_light upper frame duration limit widens to 1 s, so exposure
+        (manual or AGC) extends the frame and rate follows it down. Selected
+        fps stays the ceiling.
         """
         if self.picam2 is None:
             raise RuntimeError("camera not opened")
+        self.low_light = bool(low_light)
         main_size = tuple(mode.size)
         lores_size = plan_lores_size(main_size, tuple(avail_size))
         dur = fps_to_frame_duration(fps)
+        upper = self._duration_ceiling(dur) if self.low_light else dur
         cfg = self.picam2.create_preview_configuration(
             main={"size": main_size, "format": self.pixel_format},
             lores={"size": lores_size, "format": "YUV420"},
             sensor={"output_size": main_size, "bit_depth": int(mode.bit_depth)},
             display="lores",
             buffer_count=self._buffer_count(fps),
-            controls={"FrameDurationLimits": (dur, dur)},
+            controls={"FrameDurationLimits": (dur, upper)},
         )
         self.picam2.configure(cfg)
+        # Control limits change with the mode (e.g. exposure scales with
+        # line length), so the re-clamp below must see fresh ones.
+        self._cc_cache = None
         full = self.picam2.camera_configuration()
         self.main_config = dict(full["main"])
         self.lores_config = dict(full.get("lores") or {})
@@ -187,32 +213,56 @@ class CameraEngine:
                  self.sensor_mode_str(), fps,
                  self.main_config.get("size"), self.size)
 
-    def apply_mode(self, mode: SensorMode, fps: float, avail_size) -> None:
+    def apply_mode(self, mode: SensorMode, fps: float, avail_size,
+                   low_light: bool = False) -> None:
         """Reconfigure to a new mode/fps while running (stop, configure, start)."""
         was_started = self._started
         if was_started:
             self.stop()
-        self.configure_mode(mode, fps, avail_size)
+        self.configure_mode(mode, fps, avail_size, low_light)
         if was_started:
             self.start()
 
+    def _duration_ceiling(self, dur: int) -> int:
+        """Upper frame duration limit for low light: 1 s, inside what sensor
+        advertises and never below selected rate's duration."""
+        hi = _LOW_LIGHT_MAX_US
+        limits = self._camera_controls.get("FrameDurationLimits")
+        if limits is not None:
+            hi = min(hi, int(limits[1]))
+        return max(hi, dur)
+
     # camera controls (exposure / gain / white balance)
+    @property
+    def _camera_controls(self) -> dict:
+        """picam2.camera_controls, cached per configure.
+
+        Each picamera2 access rebuilds the whole dict and a slider drag
+        reads it several times per tick.
+        """
+        if self._cc_cache is None:
+            self._cc_cache = self.picam2.camera_controls
+        return self._cc_cache
+
     def control_ranges(self) -> dict[str, tuple]:
         """(min, max) per manual control for the current configuration.
 
         Keys mirror ControlState fields. A missing key means the camera does
         not offer that control (e.g. no ColourTemperature on mono sensors), so
         GUI hides it. Ranges come from camera_controls, except exposure max,
-        which the locked fps caps at one frame duration.
+        capped at one frame duration of the locked fps (the low light ceiling
+        when that mode is on).
         """
         if self.picam2 is None:
             return {}
-        cc = self.picam2.camera_controls
+        cc = self._camera_controls
         ranges: dict[str, tuple] = {}
         if "ExposureTime" in cc:
             lo, hi, _ = cc["ExposureTime"]
             if self.current_fps:
-                hi = min(hi, fps_to_frame_duration(self.current_fps))
+                dur = fps_to_frame_duration(self.current_fps)
+                cap = self._duration_ceiling(dur) if self.low_light else dur
+                hi = min(hi, cap)
             ranges["exposure_us"] = (int(lo), int(hi))
         if "AnalogueGain" in cc:
             lo, hi, _ = cc["AnalogueGain"]
@@ -277,10 +327,57 @@ class CameraEngine:
             ctrls["AwbEnable"] = st.colour_temp is None
             if st.colour_temp is not None:
                 ctrls["ColourTemperature"] = int(st.colour_temp)
-        if "StatsOutputEnable" in self.picam2.camera_controls:
+        if "StatsOutputEnable" in self._camera_controls:
             ctrls["StatsOutputEnable"] = self.stats_output
         if ctrls:
             self.picam2.set_controls(ctrls)
+
+    @property
+    def flush_ready(self) -> bool:
+        """True once a frame arrived since the last start (or 10 s timeout).
+
+        Gates back-to-back flushes. The timeout only unjams a dead pipeline.
+        """
+        if self._frame_since_start:
+            return True
+        return time.monotonic() - self._start_ts > 10.0
+
+    @property
+    def slow_pipeline(self) -> bool:
+        """True when frame duration makes queued controls visibly laggy.
+
+        Checks programmed exposure besides live metadata, which covers a
+        fresh start where a long manual exposure is set but no frame has
+        arrived yet.
+        """
+        if not (self._started and self.low_light):
+            return False
+        dur = self.telemetry.metadata.get("FrameDuration") or 0
+        exp = self.control_state.exposure_us or 0
+        return max(dur, exp) > _SLOW_FRAME_US
+
+    def flush_controls(self) -> None:
+        """Restart capture so current controls reach the sensor now.
+
+        Drops the in-flight request queue. Preserves telemetry, histogram
+        and frame counter across the restart. Callers gate on slow_pipeline.
+        """
+        if not self._started:
+            return
+        st = self.control_state
+        log.debug("flush: restart with exposure=%s gain=%s", st.exposure_us,
+                  st.gain)
+        prev, hist = self.telemetry, self.latest_histogram
+        self.stop()
+        # Re-apply after stop: picamera2 controls are a pending delta wiped
+        # by start, and queued requests that held them are gone.
+        self._apply_controls()
+        self.start()
+        # Undo start()'s fresh-run reset. Nothing can slip in between: frame
+        # delivery runs on this same thread via the event loop.
+        self.telemetry = prev
+        self.latest_histogram = hist
+        self._seq_base = prev.frame + 1 if prev.frame is not None else 0
 
     def set_stats_output(self, enabled: bool) -> None:
         """Deliver ISP statistics (PispStatsOutput) with each frame's metadata.
@@ -292,7 +389,7 @@ class CameraEngine:
         if not self.stats_output:
             self.latest_histogram = None
         if (self.picam2 is not None
-                and "StatsOutputEnable" in self.picam2.camera_controls):
+                and "StatsOutputEnable" in self._camera_controls):
             self.picam2.set_controls({"StatsOutputEnable": self.stats_output})
 
     @staticmethod
@@ -348,13 +445,24 @@ class CameraEngine:
         """Register a one-shot callback(boot_time_s) fired on the first captured frame."""
         self._first_frame_cb = callback
 
+    def on_frame(self, callback) -> None:
+        """Register a callback fired after every captured frame.
+
+        Runs inside picamera2's request processing, so it must not touch the
+        pipeline (stop/start/configure). Defer such work to the event loop.
+        """
+        self._frame_cb = callback
+
     def _pre_callback(self, request) -> None:
-        # Camera thread, per delivered frame. fps is rpicam-style: 1e9 / the delta
-        # between consecutive SensorTimestamps (ns), so a dropped frame reads as a
-        # lower rate. #frame is the libcamera request sequence, not a metadata field.
+        # Runs per delivered frame, on the thread driving picamera2's event
+        # loop (the GUI thread in-app, via viewfinder's socket notifier).
+        # fps is rpicam-style: 1e9 / the delta between consecutive
+        # SensorTimestamps (ns), so a dropped frame reads as a lower rate.
+        # #frame is the libcamera request sequence plus the flush offset.
         prev = self.telemetry
         lib_req = getattr(request, "request", None)
-        frame = lib_req.sequence if lib_req is not None else prev.frame
+        frame = (lib_req.sequence + self._seq_base
+                 if lib_req is not None else prev.frame)
         try:
             md = request.get_metadata()
         except Exception:  # keep the last metadata on a parse failure
@@ -365,9 +473,19 @@ class CameraEngine:
             if self._last_ts and ts != self._last_ts:
                 fps = 1e9 / (ts - self._last_ts)
             self._last_ts = ts
-        # Publish the frame's readout as one snapshot so the GUI reads a
-        # consistent set (single atomic swap, no lock needed).
+        # Publish the frame's readout as one snapshot so readers get a
+        # consistent set.
         self.telemetry = Telemetry(frame=frame, fps=fps, metadata=md)
+        if not self._frame_since_start:
+            self._frame_since_start = True
+            log.debug("first frame %.2f s after start (exp=%s)",
+                      time.monotonic() - self._start_ts,
+                      md.get("ExposureTime"))
+        if self._frame_cb:
+            try:
+                self._frame_cb()
+            except Exception:  # never let UI work break capture
+                log.exception("frame callback failed")
         # Latch the histogram off any frame carrying stats (~30 Hz ceiling),
         # so the GUI's sampling never lands on a blob-less frame.
         if self.stats_output:
@@ -393,6 +511,9 @@ class CameraEngine:
         self.telemetry = Telemetry()
         self.latest_histogram = None
         self._last_ts = 0
+        self._seq_base = 0
+        self._frame_since_start = False
+        self._start_ts = time.monotonic()
         self.picam2.pre_callback = self._pre_callback
         self.picam2.start()
         self._started = True
