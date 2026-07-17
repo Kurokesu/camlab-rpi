@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""RpiStats - board health facts (CPU, RAM, GPU, SoC temperature).
+"""RpiStats - board health facts (CPU, RAM, GPU, SoC and RP1 temperatures).
 
 Everything comes from procfs/sysfs, no subprocess calls. CPU and GPU loads
 are derived from busy-time deltas between samples, so the first sample()
@@ -19,6 +19,22 @@ from dataclasses import dataclass
 _GPU_STATS_GLOB = "/sys/devices/platform/axi/*.v3d/gpu_stats"
 _SOC_TEMP = "/sys/class/thermal/thermal_zone0/temp"
 
+# RP1 hosts the camera's CSI-2 front end. hwmon indices are not boot-stable.
+_HWMON_GLOB = "/sys/class/hwmon/hwmon*"
+_RP1_HWMON_NAME = "rp1_adc"
+
+
+def _rp1_temp_path() -> str | None:
+    for hwmon in glob.glob(_HWMON_GLOB):
+        try:
+            with open(f"{hwmon}/name") as f:
+                name = f.read().strip()
+        except OSError:
+            continue
+        if name == _RP1_HWMON_NAME:
+            return f"{hwmon}/temp1_input"
+    return None
+
 
 @dataclass
 class RpiStatsSample:
@@ -27,17 +43,20 @@ class RpiStatsSample:
     ram_used_mb: float | None = None
     ram_total_mb: float | None = None
     soc_temp_c: float | None = None
+    rp1_temp_c: float | None = None
 
 
 class RpiStats:
     def __init__(self) -> None:
         self._cpu_prev: tuple[int, int] | None = None   # (busy, total) jiffies
         self._gpu_prev: dict[str, tuple[int, int]] = {}  # queue -> (ts, runtime)
+        self._rp1_temp = _rp1_temp_path()
 
     def sample(self) -> RpiStatsSample:
         return RpiStatsSample(
-            cpu_pct=self._cpu(), gpu_pct=self._gpu(),
-            **self._ram(), soc_temp_c=self._temp())
+            cpu_pct=self._cpu(), gpu_pct=self._gpu(), **self._ram(),
+            soc_temp_c=self._read_temp(_SOC_TEMP),
+            rp1_temp_c=self._read_temp(self._rp1_temp))
 
     def _cpu(self) -> float | None:
         try:
@@ -94,9 +113,12 @@ class RpiStats:
                 "ram_total_mb": total / 1024.0}
 
     @staticmethod
-    def _temp() -> float | None:
+    def _read_temp(path: str | None) -> float | None:
+        """Read a sysfs millidegree temperature, None when unavailable."""
+        if path is None:
+            return None
         try:
-            with open(_SOC_TEMP) as f:
+            with open(path) as f:
                 return int(f.read().strip()) / 1000.0
         except (OSError, ValueError):
             return None

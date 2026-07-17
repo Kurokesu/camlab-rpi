@@ -85,7 +85,7 @@ class StatusStrip(QtWidgets.QFrame):
         rrpi = QtWidgets.QHBoxLayout(self._rpi_box)
         rrpi.setContentsMargins(0, 0, 0, 0)
         rrpi.setSpacing(10)
-        for i in range(4):  # CPU, GPU, RAM, SoC
+        for i in range(5):  # CPU, GPU, RAM, SoC, RP1
             if i:
                 sep = QtWidgets.QFrame(self._rpi_box)
                 sep.setObjectName("vsep")
@@ -198,6 +198,7 @@ class StatusStrip(QtWidgets.QFrame):
             f"GPU {_pad(f'{s.gpu_pct:.0f}%', 4)}" if s.gpu_pct is not None else None,
             ram,
             f"SoC {s.soc_temp_c:.0f}\u00b0C" if s.soc_temp_c is not None else None,
+            f"RP1 {s.rp1_temp_c:.0f}\u00b0C" if s.rp1_temp_c is not None else None,
         ]
         shown_any = False
         for i, (lbl, text) in enumerate(zip(self._rpi_fields, texts)):
