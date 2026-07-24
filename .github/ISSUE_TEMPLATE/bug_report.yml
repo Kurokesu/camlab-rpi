@@ -9,8 +9,8 @@ body:
     id: version
     attributes:
       label: camlab version
-      description: Shown in the status strip, bottom of the screen
-      placeholder: 1.0.0-beta.2
+      description: Shown in the status strip, top left of the screen
+      value: 1.0.0
     validations:
       required: true
   - type: dropdown
