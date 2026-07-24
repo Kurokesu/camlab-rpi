@@ -118,12 +118,12 @@ def fps_options(max_fps: float) -> list[float]:
 
 def format_fps(fps: float) -> str:
     """Human fps: '30', '60', '33.89'. Whole numbers drop the decimals."""
-    return str(int(round(fps))) if abs(fps - round(fps)) < 1e-6 else f"{fps:.2f}"
+    return str(round(fps)) if abs(fps - round(fps)) < 1e-6 else f"{fps:.2f}"
 
 
 def fps_to_frame_duration(fps: float) -> int:
     """Frame duration in microseconds for a target fps (for FrameDurationLimits)."""
-    return int(round(1_000_000.0 / fps))
+    return round(1_000_000.0 / fps)
 
 
 def nearest_fps_option(options: list[float], target: float | None) -> float:

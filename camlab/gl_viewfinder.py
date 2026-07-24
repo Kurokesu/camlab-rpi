@@ -29,6 +29,7 @@ import ctypes
 import logging
 import os
 import time
+from typing import ClassVar
 
 os.environ.setdefault("PYOPENGL_PLATFORM", "egl")
 
@@ -48,8 +49,8 @@ from OpenGL.EGL.EXT.image_dma_buf_import import (
 from OpenGL.EGL.KHR.image import eglCreateImageKHR, eglDestroyImageKHR
 from OpenGL.EGL.VERSION.EGL_1_0 import (
     EGL_HEIGHT,
-    EGL_NONE,
     EGL_NO_CONTEXT,
+    EGL_NONE,
     EGL_WIDTH,
     eglGetCurrentDisplay,
     eglGetProcAddress,
@@ -269,7 +270,7 @@ class _Buffer:
     """One camera dmabuf imported as an external GL texture (zero-copy)."""
 
     # libcamera format string -> DRM fourcc (24-bit formats unsupported).
-    FMT_MAP = {
+    FMT_MAP: ClassVar[dict[str, str]] = {
         "XRGB8888": "XR24",
         "XBGR8888": "XB24",
         "YUYV": "YUYV",
@@ -513,7 +514,7 @@ class GlViewfinder(QOpenGLWidget):
         self._use(self._prog_fx)
         try:
             iw, ih = self._display_size()
-        except Exception:
+        except Exception:  # noqa: BLE001 fall back to widget size
             iw, ih = self.width(), self.height()
         loc = self._fx_locs
         glUniform2f(loc["texel"], 1.0 / max(iw, 1), 1.0 / max(ih, 1))
@@ -545,7 +546,7 @@ class GlViewfinder(QOpenGLWidget):
         ww, wh = round(self.width() * dpr), round(self.height() * dpr)
         try:
             iw, ih = self._display_size()
-        except Exception:
+        except Exception:  # noqa: BLE001 no stream size yet, fill the widget
             return 0, 0, ww, wh
         if iw * wh > ww * ih:
             w = ww
