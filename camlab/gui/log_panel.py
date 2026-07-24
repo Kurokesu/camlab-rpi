@@ -29,8 +29,9 @@ class LogPanel(QtWidgets.QWidget):
         super().__init__(parent)
         self._classifier = classifier or LogClassifier()
         # (line, severity): severity is None for unmatched lines.
-        self._buffer: collections.deque[tuple[str, str | None]] = \
-            collections.deque(maxlen=_MAX_LINES)
+        self._buffer: collections.deque[tuple[str, str | None]] = collections.deque(
+            maxlen=_MAX_LINES
+        )
         self._filter = "all"
 
         lay = QtWidgets.QVBoxLayout(self)
@@ -46,13 +47,17 @@ class LogPanel(QtWidgets.QWidget):
         self.filter = SegmentedSelector()
         self.filter.set_options(
             [("All", "all"), ("Warnings", "warning"), ("Errors", "error")],
-            current="all", stretch=False)
+            current="all",
+            stretch=False,
+        )
         self.filter.changed.connect(self._on_filter)
 
         self.autoscroll = QtWidgets.QCheckBox("autoscroll")
-        self.autoscroll.setToolTip("Follow new lines. Uncheck to freeze the view for "
-                                   "inspection. New lines keep buffering and reappear "
-                                   "when re-checked.")
+        self.autoscroll.setToolTip(
+            "Follow new lines. Uncheck to freeze the view for "
+            "inspection. New lines keep buffering and reappear "
+            "when re-checked."
+        )
         self.autoscroll.setChecked(True)
         # Indicator to the right of the label (reads label-then-box).
         self.autoscroll.setLayoutDirection(Qt.LayoutDirection.RightToLeft)

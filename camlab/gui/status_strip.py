@@ -130,17 +130,22 @@ class StatusStrip(QtWidgets.QFrame):
         left_min = self.version_lbl.sizeHint().width()
         if self._rpi_shown:
             left_min += 16 + self._rpi_box.sizeHint().width()
-        right_min = sum(w.sizeHint().width() for w in
-                        (self.boot_lbl, self.errors_lbl, self.warnings_lbl))
+        right_min = sum(
+            w.sizeHint().width() for w in (self.boot_lbl, self.errors_lbl, self.warnings_lbl)
+        )
         right_min += 2 * 16  # inter-label spacing
         width = max(left_min, right_min)
         self._left.setFixedWidth(width)
         self._right.setFixedWidth(width)
 
-    def set_telemetry(self, frame: int | None, fps: float | None,
-                      exposure_us: float | None = None,
-                      analogue_gain: float | None = None,
-                      digital_gain: float | None = None) -> None:
+    def set_telemetry(
+        self,
+        frame: int | None,
+        fps: float | None,
+        exposure_us: float | None = None,
+        analogue_gain: float | None = None,
+        digital_gain: float | None = None,
+    ) -> None:
         """Live per-frame numbers from the engine + libcamera metadata.
 
         frame None means no frame has been captured yet, which hides the

@@ -51,7 +51,7 @@ _LORES_ALIGN = 2
 class SensorMode:
     """One raw mode the sensor can deliver."""
 
-    format: str               # libcamera packed name, e.g. "SGRBG12_CSI2P"
+    format: str  # libcamera packed name, e.g. "SGRBG12_CSI2P"
     size: tuple[int, int]
     bit_depth: int
     max_fps: float
@@ -152,8 +152,7 @@ def bit_depths_for(modes: list[SensorMode], size: tuple[int, int]) -> list[int]:
     return sorted(depths, reverse=True)
 
 
-def mode_for(modes: list[SensorMode], size: tuple[int, int],
-             bit_depth: int) -> SensorMode | None:
+def mode_for(modes: list[SensorMode], size: tuple[int, int], bit_depth: int) -> SensorMode | None:
     """The mode with this exact size + bit depth, if any."""
     for m in modes:
         if m.size == size and m.bit_depth == bit_depth:
@@ -174,8 +173,7 @@ def default_mode(modes: list[SensorMode]) -> tuple[SensorMode, float]:
     return best, nearest_fps_option(fps_options(best.max_fps), DEFAULT_FPS)
 
 
-def resolve_initial_mode(modes: list[SensorMode],
-                         saved: dict | None) -> tuple[SensorMode, float]:
+def resolve_initial_mode(modes: list[SensorMode], saved: dict | None) -> tuple[SensorMode, float]:
     """Pick the boot mode: a valid persisted selection, else the heaviest mode.
 
     A persisted selection is honoured only if its (size, bit_depth) still exists.
@@ -191,13 +189,13 @@ def resolve_initial_mode(modes: list[SensorMode],
             m = mode_for(modes, (int(size[0]), int(size[1])), int(depth))
             if m is not None:
                 fps = saved.get("fps")
-                return m, nearest_fps_option(fps_options(m.max_fps),
-                                             DEFAULT_FPS if fps is None else fps)
+                return m, nearest_fps_option(
+                    fps_options(m.max_fps), DEFAULT_FPS if fps is None else fps
+                )
     return default_mode(modes)
 
 
-def plan_lores_size(main_size: tuple[int, int],
-                    avail_size: tuple[int, int]) -> tuple[int, int]:
+def plan_lores_size(main_size: tuple[int, int], avail_size: tuple[int, int]) -> tuple[int, int]:
     """Largest lores size with main aspect ratio that fits viewfinder area.
 
     Lores stream is what the GL widget shows. We keep it at the main aspect

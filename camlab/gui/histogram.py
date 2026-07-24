@@ -16,8 +16,8 @@ import numpy as np
 from ..qt import Qt, QtCore, QtGui, QtWidgets
 from .control_sheet import GLASS_BG
 
-MARGIN = 12           # from the viewfinder area's top-left corner
-_SIZE = (256, 96)     # card size, plot fills it minus padding
+MARGIN = 12  # from the viewfinder area's top-left corner
+_SIZE = (256, 96)  # card size, plot fills it minus padding
 _PAD = 8
 _CURVE = QtGui.QColor(215, 218, 224, 230)
 _FILL = QtGui.QColor(215, 218, 224, 90)
@@ -35,7 +35,7 @@ class HistogramOverlay(QtWidgets.QWidget):
         """Fold the 1024 ISP bins to plot columns and cache 0..1 levels."""
         cols = _SIZE[0] - 2 * _PAD
         group = len(bins) // cols
-        folded = bins[:group * cols].reshape(cols, group).sum(axis=1)
+        folded = bins[: group * cols].reshape(cols, group).sum(axis=1)
         peak = folded.max()
         if peak == 0:
             self._levels = None

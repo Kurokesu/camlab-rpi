@@ -261,8 +261,7 @@ def _egl_image_target_texture(target, image) -> None:
         addr = ctypes.cast(ptr, ctypes.c_void_p).value if ptr else None
         if not addr:
             raise RuntimeError("glEGLImageTargetTexture2DOES unavailable")
-        _egl_image_target_fn = ctypes.CFUNCTYPE(
-            None, ctypes.c_uint32, ctypes.c_void_p)(addr)
+        _egl_image_target_fn = ctypes.CFUNCTYPE(None, ctypes.c_uint32, ctypes.c_void_p)(addr)
     _egl_image_target_fn(int(target), ctypes.cast(image, ctypes.c_void_p))
 
 
@@ -296,33 +295,50 @@ class _Buffer:
             h2 = h // 2
             stride2 = cfg.stride // 2
             attribs = [
-                EGL_WIDTH, w,
-                EGL_HEIGHT, h,
-                EGL_LINUX_DRM_FOURCC_EXT, fmt,
-                EGL_DMA_BUF_PLANE0_FD_EXT, fb.planes[0].fd,
-                EGL_DMA_BUF_PLANE0_OFFSET_EXT, 0,
-                EGL_DMA_BUF_PLANE0_PITCH_EXT, cfg.stride,
-                EGL_DMA_BUF_PLANE1_FD_EXT, fb.planes[0].fd,
-                EGL_DMA_BUF_PLANE1_OFFSET_EXT, h * cfg.stride,
-                EGL_DMA_BUF_PLANE1_PITCH_EXT, stride2,
-                EGL_DMA_BUF_PLANE2_FD_EXT, fb.planes[0].fd,
-                EGL_DMA_BUF_PLANE2_OFFSET_EXT, h * cfg.stride + h2 * stride2,
-                EGL_DMA_BUF_PLANE2_PITCH_EXT, stride2,
+                EGL_WIDTH,
+                w,
+                EGL_HEIGHT,
+                h,
+                EGL_LINUX_DRM_FOURCC_EXT,
+                fmt,
+                EGL_DMA_BUF_PLANE0_FD_EXT,
+                fb.planes[0].fd,
+                EGL_DMA_BUF_PLANE0_OFFSET_EXT,
+                0,
+                EGL_DMA_BUF_PLANE0_PITCH_EXT,
+                cfg.stride,
+                EGL_DMA_BUF_PLANE1_FD_EXT,
+                fb.planes[0].fd,
+                EGL_DMA_BUF_PLANE1_OFFSET_EXT,
+                h * cfg.stride,
+                EGL_DMA_BUF_PLANE1_PITCH_EXT,
+                stride2,
+                EGL_DMA_BUF_PLANE2_FD_EXT,
+                fb.planes[0].fd,
+                EGL_DMA_BUF_PLANE2_OFFSET_EXT,
+                h * cfg.stride + h2 * stride2,
+                EGL_DMA_BUF_PLANE2_PITCH_EXT,
+                stride2,
                 EGL_NONE,
             ]
         else:
             attribs = [
-                EGL_WIDTH, w,
-                EGL_HEIGHT, h,
-                EGL_LINUX_DRM_FOURCC_EXT, fmt,
-                EGL_DMA_BUF_PLANE0_FD_EXT, fb.planes[0].fd,
-                EGL_DMA_BUF_PLANE0_OFFSET_EXT, 0,
-                EGL_DMA_BUF_PLANE0_PITCH_EXT, cfg.stride,
+                EGL_WIDTH,
+                w,
+                EGL_HEIGHT,
+                h,
+                EGL_LINUX_DRM_FOURCC_EXT,
+                fmt,
+                EGL_DMA_BUF_PLANE0_FD_EXT,
+                fb.planes[0].fd,
+                EGL_DMA_BUF_PLANE0_OFFSET_EXT,
+                0,
+                EGL_DMA_BUF_PLANE0_PITCH_EXT,
+                cfg.stride,
                 EGL_NONE,
             ]
 
-        image = eglCreateImageKHR(display, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT,
-                                  None, attribs)
+        image = eglCreateImageKHR(display, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, None, attribs)
         self.texture = glGenTextures(1)
         glBindTexture(GL_TEXTURE_EXTERNAL_OES, self.texture)
         glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
@@ -344,7 +360,7 @@ class GlViewfinder(QOpenGLWidget):
         self._bg = (0.0, 0.0, 0.0, 1.0)
         self.current_request = None
         self.own_current = False
-        self._buffers: dict = {}          # libcamera request -> _Buffer
+        self._buffers: dict = {}  # libcamera request -> _Buffer
         self._stop_count = 0
         self._frosted = False
         self._frost_broken = False
@@ -360,7 +376,8 @@ class GlViewfinder(QOpenGLWidget):
 
         picam2.attach_preview(None)
         self._notifier = QtCore.QSocketNotifier(
-            picam2.notifyme_r, QtCore.QSocketNotifier.Type.Read, self)
+            picam2.notifyme_r, QtCore.QSocketNotifier.Type.Read, self
+        )
         self._notifier.activated.connect(self._handle_requests)
         self.running = True
         self.destroyed.connect(lambda: self._teardown())
@@ -384,7 +401,7 @@ class GlViewfinder(QOpenGLWidget):
         if self.current_request is not None and self.own_current:
             self.current_request.release()
         self.current_request = completed_request
-        self.own_current = completed_request.config['buffer_count'] > 1
+        self.own_current = completed_request.config["buffer_count"] > 1
         if self.own_current:
             self.current_request.acquire()
         # update() coalesces (Qt paints once per compositor frame callback),
@@ -414,8 +431,7 @@ class GlViewfinder(QOpenGLWidget):
             self.update()
 
     # display assists
-    def set_assists(self, peaking: bool, zebra: bool,
-                    zebra_threshold: float) -> None:
+    def set_assists(self, peaking: bool, zebra: bool, zebra_threshold: float) -> None:
         """Toggle focus peaking / zebra and set the zebra clip level (0..1)."""
         self._peaking = bool(peaking)
         self._zebra = bool(zebra)
@@ -440,8 +456,9 @@ class GlViewfinder(QOpenGLWidget):
         self._target_size = None
 
     def _build_program(self, vsrc: str, fsrc: str):
-        prog = shaders.compileProgram(_compile(vsrc, GL_VERTEX_SHADER),
-                                      _compile(fsrc, GL_FRAGMENT_SHADER))
+        prog = shaders.compileProgram(
+            _compile(vsrc, GL_VERTEX_SHADER), _compile(fsrc, GL_FRAGMENT_SHADER)
+        )
         self._attr_locs[prog] = glGetAttribLocation(prog, "aPosition")
         glUseProgram(prog)
         glUniform1i(glGetUniformLocation(prog, "tex"), 0)
@@ -508,9 +525,10 @@ class GlViewfinder(QOpenGLWidget):
         """Activate the assist (peaking/zebra) program with fresh uniforms."""
         if self._prog_fx is None:
             self._prog_fx = self._build_program(_VERT, _FRAG_EXT_FX)
-            self._fx_locs = {name: glGetUniformLocation(self._prog_fx, name)
-                             for name in ("texel", "peaking", "zebra",
-                                          "zebraThr", "time")}
+            self._fx_locs = {
+                name: glGetUniformLocation(self._prog_fx, name)
+                for name in ("texel", "peaking", "zebra", "zebraThr", "time")
+            }
         self._use(self._prog_fx)
         try:
             iw, ih = self._display_size()
@@ -533,12 +551,12 @@ class GlViewfinder(QOpenGLWidget):
                 self._buffers = {}
                 self._stop_count = self.picamera2.stop_count
             self._buffers[completed_request.request] = _Buffer(
-                self._egl_display, completed_request, self._max_texture_size)
+                self._egl_display, completed_request, self._max_texture_size
+            )
         return self._buffers[completed_request.request].texture
 
     def _display_size(self) -> tuple[int, int]:
-        cfg = self.picamera2.stream_map[
-            self.picamera2.camera_config['display']].configuration
+        cfg = self.picamera2.stream_map[self.picamera2.camera_config["display"]].configuration
         return cfg.size.width, cfg.size.height
 
     def _letterbox_viewport(self) -> tuple[int, int, int, int]:
@@ -609,11 +627,9 @@ class GlViewfinder(QOpenGLWidget):
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tw, th, 0,
-                         GL_RGBA, GL_UNSIGNED_BYTE, None)
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tw, th, 0, GL_RGBA, GL_UNSIGNED_BYTE, None)
             glBindFramebuffer(GL_FRAMEBUFFER, fbo)
-            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                                   GL_TEXTURE_2D, tex, 0)
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0)
             if glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE:
                 raise RuntimeError("frost framebuffer incomplete")
         glBindFramebuffer(GL_FRAMEBUFFER, self.defaultFramebufferObject())

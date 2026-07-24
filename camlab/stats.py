@@ -48,15 +48,18 @@ class RpiStatsSample:
 
 class RpiStats:
     def __init__(self) -> None:
-        self._cpu_prev: tuple[int, int] | None = None   # (busy, total) jiffies
+        self._cpu_prev: tuple[int, int] | None = None  # (busy, total) jiffies
         self._gpu_prev: dict[str, tuple[int, int]] = {}  # queue -> (ts, runtime)
         self._rp1_temp = _rp1_temp_path()
 
     def sample(self) -> RpiStatsSample:
         return RpiStatsSample(
-            cpu_pct=self._cpu(), gpu_pct=self._gpu(), **self._ram(),
+            cpu_pct=self._cpu(),
+            gpu_pct=self._gpu(),
+            **self._ram(),
             soc_temp_c=self._read_temp(_SOC_TEMP),
-            rp1_temp_c=self._read_temp(self._rp1_temp))
+            rp1_temp_c=self._read_temp(self._rp1_temp),
+        )
 
     def _cpu(self) -> float | None:
         try:
@@ -109,8 +112,7 @@ class RpiStats:
             avail = fields["MemAvailable"]
         except (OSError, KeyError, ValueError):
             return {"ram_used_mb": None, "ram_total_mb": None}
-        return {"ram_used_mb": (total - avail) / 1024.0,
-                "ram_total_mb": total / 1024.0}
+        return {"ram_used_mb": (total - avail) / 1024.0, "ram_total_mb": total / 1024.0}
 
     @staticmethod
     def _read_temp(path: str | None) -> float | None:

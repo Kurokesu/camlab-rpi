@@ -85,8 +85,14 @@ class SettingsStore:
             log.warning("settings entry for %s is malformed - ignoring", overlay)
             return None
 
-    def set_mode(self, overlay: str, size: tuple[int, int], bit_depth: int,
-                 fps: float, fps_fixed: bool = True) -> bool:
+    def set_mode(
+        self,
+        overlay: str,
+        size: tuple[int, int],
+        bit_depth: int,
+        fps: float,
+        fps_fixed: bool = True,
+    ) -> bool:
         """Persist a selection for a sensor. Returns True if written."""
         if not overlay:
             return False
@@ -124,8 +130,9 @@ class SettingsStore:
             return {"exposure_us": None, "gain": None, "colour_temp": None}
         return out
 
-    def set_controls(self, overlay: str, exposure_us: int | None,
-                     gain: float | None, colour_temp: int | None) -> bool:
+    def set_controls(
+        self, overlay: str, exposure_us: int | None, gain: float | None, colour_temp: int | None
+    ) -> bool:
         """Persist control overrides for a sensor. Returns True if written."""
         if not overlay:
             return False
@@ -152,8 +159,7 @@ class SettingsStore:
     def _atomic_write(self, data: dict) -> bool:
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
-            fd, tmp = tempfile.mkstemp(dir=str(self._path.parent),
-                                       prefix=".state-", suffix=".json")
+            fd, tmp = tempfile.mkstemp(dir=str(self._path.parent), prefix=".state-", suffix=".json")
             try:
                 with os.fdopen(fd, "w") as f:
                     json.dump(data, f, indent=2)

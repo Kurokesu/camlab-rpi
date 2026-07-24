@@ -21,10 +21,13 @@ _ICON_PX = 20
 
 
 class SettingsCard(QtWidgets.QFrame):
-    def __init__(self, histogram_on: bool,
-                 on_apply_network: Callable[[bool], None],
-                 on_apply_histogram: Callable[[bool], None],
-                 on_cancel: Callable[[], None]):
+    def __init__(
+        self,
+        histogram_on: bool,
+        on_apply_network: Callable[[bool], None],
+        on_apply_histogram: Callable[[bool], None],
+        on_cancel: Callable[[], None],
+    ):
         super().__init__()
         self.setObjectName("modalCard")
         self.setMinimumWidth(420)
@@ -39,13 +42,13 @@ class SettingsCard(QtWidgets.QFrame):
 
         form = QtWidgets.QFormLayout()
         net_label = QtWidgets.QLabel()
-        net_label.setPixmap(icons.pixmap(
-            "lan", _ICON_PX, "#98c379" if self._net_initial else "#8a909b"))
+        net_label.setPixmap(
+            icons.pixmap("lan", _ICON_PX, "#98c379" if self._net_initial else "#8a909b")
+        )
         net_row = QtWidgets.QHBoxLayout()
         net_row.setSpacing(8)
         self.net_sel = SegmentedSelector()
-        self.net_sel.set_options([("On", True), ("Off", False)],
-                                 current=self._net_initial)
+        self.net_sel.set_options([("On", True), ("Off", False)], current=self._net_initial)
         self.net_sel.changed.connect(self._refresh_apply)
         net_row.addWidget(net_label)
         net_row.addWidget(self.net_sel, 1)
@@ -53,7 +56,8 @@ class SettingsCard(QtWidgets.QFrame):
 
         note = QtWidgets.QLabel(
             "Off makes the device boot faster. Applies immediately, except "
-            "Ethernet stays connected until next boot.")
+            "Ethernet stays connected until next boot."
+        )
         note.setObjectName("dialogNote")
         note.setWordWrap(True)
         note.setMaximumWidth(400)
@@ -67,8 +71,7 @@ class SettingsCard(QtWidgets.QFrame):
         hist_row = QtWidgets.QHBoxLayout()
         hist_row.setSpacing(8)
         self.hist_sel = SegmentedSelector()
-        self.hist_sel.set_options([("On", True), ("Off", False)],
-                                  current=self._hist_initial)
+        self.hist_sel.set_options([("On", True), ("Off", False)], current=self._hist_initial)
         self.hist_sel.changed.connect(self._refresh_apply)
         hist_row.addWidget(hist_label)
         hist_row.addWidget(self.hist_sel, 1)

@@ -59,6 +59,7 @@ class ControlState:
     libcamera's split AE API. Values clamp to the current mode's advertised
     range on every set and on mode change.
     """
+
     exposure_us: int | None = None
     gain: float | None = None
     colour_temp: int | None = None
@@ -67,6 +68,7 @@ class ControlState:
 @dataclass(frozen=True)
 class Telemetry:
     """Atomic per-frame snapshot for GUI readers."""
+
     frame: int | None = None  # None until a frame has been captured
     fps: float = 0.0
     metadata: dict = field(default_factory=dict)
@@ -91,7 +93,7 @@ class CameraInfo:
 
 class CameraEngine:
     def __init__(self, size=(1280, 720), pixel_format="XBGR8888"):
-        self.size = tuple(size)            # lores / display size (set on configure)
+        self.size = tuple(size)  # lores / display size (set on configure)
         self.pixel_format = pixel_format
         self.picam2 = None
         self.info: CameraInfo | None = None
@@ -104,12 +106,12 @@ class CameraEngine:
         self.fps_current: float | None = None
         self.fps_fixed = True  # False lets exposure extend frame duration to 1 s
         self.control_state = ControlState()
-        self.stats_output = False   # ISP statistics in metadata (histogram)
+        self.stats_output = False  # ISP statistics in metadata (histogram)
         # Latch histogram because stats arrive below frame rate.
         self.latest_histogram: np.ndarray | None = None
         self.telemetry = Telemetry()  # latest per-frame snapshot
-        self._last_ts = 0             # previous SensorTimestamp (ns), for fps
-        self._seq_base = 0            # frame counter offset, keeps it continuous across flushes
+        self._last_ts = 0  # previous SensorTimestamp (ns), for fps
+        self._seq_base = 0  # frame counter offset, keeps it continuous across flushes
         self._frame_since_start = False
         self._start_ts = 0.0
         self._started = False
@@ -137,16 +139,18 @@ class CameraEngine:
         self.picam2 = Picamera2(camera_num)
         self._cc_cache = None
         self.modes = enumerate_modes(self.picam2.sensor_modes)
-        log.info("camera opened: %s (%s) with %d modes",
-                 self.info.model, self.info.id, len(self.modes))
+        log.info(
+            "camera opened: %s (%s) with %d modes", self.info.model, self.info.id, len(self.modes)
+        )
 
     @staticmethod
     def _buffer_count(fps: float) -> int:
         """Use eight buffers above 60 fps to absorb GUI pauses, four otherwise."""
         return 8 if fps > 60.5 else 4
 
-    def configure_mode(self, mode: SensorMode, fps: float, avail_size,
-                       fps_fixed: bool = True) -> None:
+    def configure_mode(
+        self, mode: SensorMode, fps: float, avail_size, fps_fixed: bool = True
+    ) -> None:
         """Configure mode streams and fit lores within avail_size.
 
         Selected FPS is fixed or the exposure-driven ceiling.
@@ -172,8 +176,7 @@ class CameraEngine:
         self._cc_cache = None
         if not self.fps_fixed:
             if self._sensor_max_frame_us() is None:
-                log.warning("no usable FrameDurationLimits from sensor, "
-                            "FPS lock degrades to fixed")
+                log.warning("no usable FrameDurationLimits from sensor, FPS lock degrades to fixed")
                 self.fps_fixed = True
             else:
                 limits = self._frame_duration_limits(fps, fixed=False)
@@ -193,12 +196,15 @@ class CameraEngine:
         # manual values against the new mode and push them again.
         self._clamp_control_state()
         self._apply_controls()
-        log.info("configured: sensor_mode=%s fps=%.2f main=%s lores=%s",
-                 self.sensor_mode_str(), fps,
-                 self.main_config.get("size"), self.size)
+        log.info(
+            "configured: sensor_mode=%s fps=%.2f main=%s lores=%s",
+            self.sensor_mode_str(),
+            fps,
+            self.main_config.get("size"),
+            self.size,
+        )
 
-    def apply_mode(self, mode: SensorMode, fps: float, avail_size,
-                   fps_fixed: bool = True) -> None:
+    def apply_mode(self, mode: SensorMode, fps: float, avail_size, fps_fixed: bool = True) -> None:
         """Reconfigure to a new mode/fps while running (stop, configure, start)."""
         was_started = self._started
         if was_started:
@@ -266,8 +272,7 @@ class CameraEngine:
         if "ExposureTime" in cc:
             lo, hi, _ = cc["ExposureTime"]
             if self.fps_current:
-                _, cap = self._frame_duration_limits(self.fps_current,
-                                                     self.fps_fixed)
+                _, cap = self._frame_duration_limits(self.fps_current, self.fps_fixed)
                 hi = min(hi, cap)
             ranges["exposure_us"] = (int(lo), int(hi))
         if "AnalogueGain" in cc:
@@ -275,12 +280,12 @@ class CameraEngine:
             ranges["gain"] = (float(lo), float(hi))
         if "ColourTemperature" in cc and "AwbEnable" in cc:
             lo, hi, _ = cc["ColourTemperature"]
-            ranges["colour_temp"] = (max(int(lo), _CT_UI_RANGE[0]),
-                                     min(int(hi), _CT_UI_RANGE[1]))
+            ranges["colour_temp"] = (max(int(lo), _CT_UI_RANGE[0]), min(int(hi), _CT_UI_RANGE[1]))
         return ranges
 
-    def set_control_state(self, exposure_us=_UNSET, gain=_UNSET,
-                          colour_temp=_UNSET) -> ControlState:
+    def set_control_state(
+        self, exposure_us=_UNSET, gain=_UNSET, colour_temp=_UNSET
+    ) -> ControlState:
         """Update one or more controls (None = auto) and push them to libcamera.
 
         Values clamp to the current mode's range. Returns resulting state
@@ -406,8 +411,7 @@ class CameraEngine:
         if not self._started:
             return
         st = self.control_state
-        log.debug("flush: restart with exposure=%s gain=%s", st.exposure_us,
-                  st.gain)
+        log.debug("flush: restart with exposure=%s gain=%s", st.exposure_us, st.gain)
         self.stop()
         # Re-apply after stop: picamera2 controls are a pending delta wiped
         # by start, and queued requests that held them are gone.
@@ -423,8 +427,7 @@ class CameraEngine:
         self.stats_output = bool(enabled)
         if not self.stats_output:
             self.latest_histogram = None
-        if (self.picam2 is not None
-                and "StatsOutputEnable" in self._camera_controls):
+        if self.picam2 is not None and "StatsOutputEnable" in self._camera_controls:
             self.picam2.set_controls({"StatsOutputEnable": self.stats_output})
 
     @staticmethod
@@ -441,8 +444,7 @@ class CameraEngine:
         raw = bytes(blob)
         if len(raw) < _AGC_HIST_OFFSET + _AGC_HIST_BINS * 4:
             return None
-        return np.frombuffer(raw, dtype=np.uint32, count=_AGC_HIST_BINS,
-                             offset=_AGC_HIST_OFFSET)
+        return np.frombuffer(raw, dtype=np.uint32, count=_AGC_HIST_BINS, offset=_AGC_HIST_OFFSET)
 
     def _match_sensor_mode(self, sensor_cfg: dict) -> dict:
         """Find the sensor_modes entry matching the configured size + bit depth.
@@ -451,7 +453,7 @@ class CameraEngine:
         """
         size = tuple(sensor_cfg.get("output_size", ()) or ())
         depth = sensor_cfg.get("bit_depth")
-        for m in (self.picam2.sensor_modes if self.picam2 else []):
+        for m in self.picam2.sensor_modes if self.picam2 else []:
             if tuple(m.get("size", ()) or ()) == size and m.get("bit_depth") == depth:
                 return {
                     "format": str(m.get("format", "")),
@@ -485,8 +487,7 @@ class CameraEngine:
         # Sequence offset preserves frame numbering across flushes.
         prev = self.telemetry
         lib_req = getattr(request, "request", None)
-        frame = (lib_req.sequence + self._seq_base
-                 if lib_req is not None else prev.frame)
+        frame = lib_req.sequence + self._seq_base if lib_req is not None else prev.frame
         try:
             md = request.get_metadata()
         except Exception:  # noqa: BLE001 keep last metadata on parse failure
@@ -502,9 +503,11 @@ class CameraEngine:
         self.telemetry = Telemetry(frame=frame, fps=fps, metadata=md)
         if not self._frame_since_start:
             self._frame_since_start = True
-            log.debug("first frame %.2f s after start (exp=%s)",
-                      time.monotonic() - self._start_ts,
-                      md.get("ExposureTime"))
+            log.debug(
+                "first frame %.2f s after start (exp=%s)",
+                time.monotonic() - self._start_ts,
+                md.get("ExposureTime"),
+            )
         if self._flush_pending:
             # Runs inside request processing where a restart is off limits,
             # so drain on the event loop.
@@ -540,8 +543,7 @@ class CameraEngine:
         else:
             # libcamera restarts the request sequence at 0, offset it so the
             # frame counter continues from the last snapshot.
-            self._seq_base = (self.telemetry.frame + 1
-                              if self.telemetry.frame is not None else 0)
+            self._seq_base = self.telemetry.frame + 1 if self.telemetry.frame is not None else 0
         self._last_ts = 0
         self._frame_since_start = False
         self._start_ts = time.monotonic()

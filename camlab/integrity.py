@@ -152,11 +152,10 @@ class StderrCapture(QtCore.QObject):
 class IntegrityMonitor(QtCore.QObject):
     """Consumes log lines, classifies integrity issues, emits rolling stats."""
 
-    stats_changed = Signal(object)   # IntegrityStats
+    stats_changed = Signal(object)  # IntegrityStats
     # NB: do NOT name a signal 'event' - it shadows QObject.event() and aborts.
 
-    def __init__(self, classifier: LogClassifier | None = None,
-                 emit_hz: float = 4.0, parent=None):
+    def __init__(self, classifier: LogClassifier | None = None, emit_hz: float = 4.0, parent=None):
         super().__init__(parent)
         self._classifier = classifier or LogClassifier()
         self._errors = 0
@@ -191,8 +190,10 @@ class IntegrityMonitor(QtCore.QObject):
         if not self._dirty:
             return
         self._dirty = False
-        self.stats_changed.emit(IntegrityStats(
-            errors=self._errors,
-            warnings=self._warnings,
-            by_category=dict(self._by_cat),
-        ))
+        self.stats_changed.emit(
+            IntegrityStats(
+                errors=self._errors,
+                warnings=self._warnings,
+                by_category=dict(self._by_cat),
+            )
+        )
