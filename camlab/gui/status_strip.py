@@ -171,7 +171,7 @@ class StatusStrip(QtWidgets.QFrame):
             fps = f"{self._fps:.2f}" if self._fps is not None else "--.--"
             parts = [f"#{self._frame} ({fps} fps)"]
             if self._exp_us is not None:
-                parts.append(f"exp {int(round(self._exp_us))}")
+                parts.append(f"exp {round(self._exp_us)}")
             if self._ag is not None:
                 parts.append(f"ag {self._ag:.2f}")
             if self._dg is not None:

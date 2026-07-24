@@ -80,7 +80,7 @@ class CameraInfo:
     num: int = -1
 
     @classmethod
-    def from_dict(cls, d: dict) -> "CameraInfo":
+    def from_dict(cls, d: dict) -> CameraInfo:
         return cls(
             model=str(d.get("Model", "")),
             id=str(d.get("Id", "")),
@@ -489,7 +489,7 @@ class CameraEngine:
                  if lib_req is not None else prev.frame)
         try:
             md = request.get_metadata()
-        except Exception:  # keep the last metadata on a parse failure
+        except Exception:  # noqa: BLE001 keep last metadata on parse failure
             md = prev.metadata
         fps = prev.fps
         ts = md.get("SensorTimestamp")

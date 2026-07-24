@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import logging
+from typing import ClassVar
 
 from .. import network
 from ..camera import CameraEngine
@@ -42,7 +43,7 @@ class MainWindow(QtWidgets.QMainWindow):
     first_frame = Signal(float)
 
     # (chip label, icon glyph, metadata key, value formatter) per camera control.
-    _CTRL_SPEC = {
+    _CTRL_SPEC: ClassVar[dict[str, tuple]] = {
         "exposure_us": ("Exp", "shutter_speed", "ExposureTime", fmt_exposure),
         "gain": ("Gain", "iso", "AnalogueGain", fmt_gain),
         "colour_temp": ("WB", "wb_sunny", "ColourTemperature", fmt_ct),
@@ -571,7 +572,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._flush_pending_persist()
         try:
             self.config.apply(chosen.overlay, port, options)
-        except Exception as exc:  # surface the failure, do not power off
+        except Exception as exc:  # noqa: BLE001 surface the failure, do not power off
             self._show_message("Apply failed", str(exc))
             return
         # A sensor swap needs the box off, so power down rather than reboot: the
@@ -596,7 +597,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._close_modal()
         try:
             network.set_enabled(enabled)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             log.error("network toggle failed: %s", exc)
             self._show_message("Network toggle failed", str(exc))
             return
@@ -608,7 +609,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._flush_pending_persist()
         try:
             poweroff()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             log.error("poweroff failed: %s", exc)
             self._show_message("Shutdown failed", str(exc))
 
@@ -686,7 +687,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         try:
             self.engine.start()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             log.error("camera start failed: %s", exc)
 
     # No quit affordance by design: this is a kiosk. Exiting drops to a blank

@@ -42,7 +42,7 @@ def fmt_exposure(us: float) -> str:
         return f"{us / 1000:.1f} ms"
     if us >= 1000:
         return f"{us / 1000:.2f} ms"
-    return f"{int(round(us))} \u00b5s"
+    return f"{round(us)} \u00b5s"
 
 
 def fmt_gain(gain: float) -> str:
@@ -50,7 +50,7 @@ def fmt_gain(gain: float) -> str:
 
 
 def fmt_ct(kelvin: float) -> str:
-    return f"{int(round(kelvin))} K"
+    return f"{round(kelvin)} K"
 
 
 class JumpSlider(QtWidgets.QSlider):
@@ -204,7 +204,7 @@ class ControlSheet(SheetCard):
 
     def _value(self):
         v = self._from_pos(self.slider.value())
-        return int(round(v)) if self._int else v
+        return round(v) if self._int else v
 
     def _to_pos(self, value) -> int:
         v = min(max(float(value), self._lo), self._hi)
@@ -212,7 +212,7 @@ class ControlSheet(SheetCard):
             t = math.log(v / self._lo) / math.log(self._hi / self._lo)
         else:
             t = (v - self._lo) / (self._hi - self._lo)
-        return int(round(t * _STEPS))
+        return round(t * _STEPS)
 
     def _from_pos(self, pos: int) -> float:
         t = pos / _STEPS

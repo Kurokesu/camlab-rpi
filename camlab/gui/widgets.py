@@ -118,6 +118,6 @@ class SegmentedSelector(QtWidgets.QWidget):
         bid = self._group.checkedId()
         return self._values[bid] if 0 <= bid < len(self._values) else None
 
-    def checked_button(self) -> "QtWidgets.QAbstractButton | None":
+    def checked_button(self) -> QtWidgets.QAbstractButton | None:
         """The selected segment, the selector's single Tab stop."""
         return self._group.checkedButton()

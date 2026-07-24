@@ -58,7 +58,7 @@ class SensorRegistry:
         self._sensors = sensors
 
     @classmethod
-    def load(cls, path: str | os.PathLike | None = None) -> "SensorRegistry":
+    def load(cls, path: str | os.PathLike | None = None) -> SensorRegistry:
         path = Path(path) if path else DEFAULT_REGISTRY
         with open(path, "r") as f:
             data = yaml.safe_load(f) or {}

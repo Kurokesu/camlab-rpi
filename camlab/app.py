@@ -66,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     engine = CameraEngine()
     try:
         engine.open(camera_num=int(os.environ.get("CAMLAB_CAMERA_NUM", "0")))
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         log.error("camera open failed: %s", exc)
 
     # Run natively on Wayland under a Wayland session (e.g. Cage). Importing
@@ -95,7 +95,7 @@ def main(argv: list[str] | None = None) -> int:
             # Restore persisted manual overrides. Must follow configure so
             # they clamp against the new mode's ranges.
             engine.set_control_state(**settings.get_controls(overlay))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             log.error("camera configure failed: %s", exc)
 
     win = MainWindow(engine, registry, config, capture, classifier, settings)
