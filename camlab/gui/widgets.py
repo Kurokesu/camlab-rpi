@@ -64,8 +64,13 @@ class SegmentedSelector(QtWidgets.QWidget):
         self._row.setContentsMargins(0, 0, 0, 0)
         self._row.setSpacing(0)
 
-    def set_options(self, options: list[tuple[str, Any]], current: Any = None,
-                    enabled: bool = True, stretch: bool = True) -> None:
+    def set_options(
+        self,
+        options: list[tuple[str, Any]],
+        current: Any = None,
+        enabled: bool = True,
+        stretch: bool = True,
+    ) -> None:
         """Populate (text, value) options, preselecting `current` if present.
 
         `stretch` trails the row with an expanding spacer (left-packs the

@@ -24,10 +24,15 @@ from .widgets import SegmentedSelector, hline
 
 
 class SensorCard(QtWidgets.QFrame):
-    def __init__(self, registry: SensorRegistry, current_name: str | None,
-                 current_port: str, current_mono: bool,
-                 on_apply: Callable[[str, str, bool], None],
-                 on_cancel: Callable[[], None]):
+    def __init__(
+        self,
+        registry: SensorRegistry,
+        current_name: str | None,
+        current_port: str,
+        current_mono: bool,
+        on_apply: Callable[[str, str, bool], None],
+        on_cancel: Callable[[], None],
+    ):
         super().__init__()
         self.setObjectName("modalCard")
         self.setMinimumWidth(420)
@@ -45,8 +50,7 @@ class SensorCard(QtWidgets.QFrame):
         # does not split the selector rows.
         self.notes_lbl = QtWidgets.QLabel()
         self.notes_lbl.setObjectName("modalText")
-        self.notes_lbl.setAlignment(Qt.AlignmentFlag.AlignRight
-                                    | Qt.AlignmentFlag.AlignVCenter)
+        self.notes_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
         header = QtWidgets.QHBoxLayout()
         header.addWidget(title)
@@ -55,8 +59,7 @@ class SensorCard(QtWidgets.QFrame):
 
         form = QtWidgets.QFormLayout()
         self.sensor_sel = SegmentedSelector()
-        self.sensor_sel.set_options([(name, name) for name in registry.names],
-                                    current=current_name)
+        self.sensor_sel.set_options([(name, name) for name in registry.names], current=current_name)
         self.sensor_sel.changed.connect(self._on_sensor_changed)
 
         self.port_sel = SegmentedSelector()
@@ -117,9 +120,11 @@ class SensorCard(QtWidgets.QFrame):
 
     def _refresh_apply(self) -> None:
         """Apply is live only when a selection changed."""
-        selected = (self.sensor_sel.current_value(),
-                    self.port_sel.current_value(),
-                    bool(self.variant_sel.current_value()))
+        selected = (
+            self.sensor_sel.current_value(),
+            self.port_sel.current_value(),
+            bool(self.variant_sel.current_value()),
+        )
         initial = (self._init_name, self._init_port, self._init_mono)
         self.apply_btn.setEnabled(selected != initial)
 
@@ -132,15 +137,17 @@ class SensorCard(QtWidgets.QFrame):
         sensor = self._registry.by_name(sensor_name) if sensor_name else None
         capable = bool(sensor and sensor.mono_capable)
         if capable:
-            self.variant_sel.set_options([("Color", False), ("Mono", True)],
-                                         current=bool(mono), enabled=True)
+            self.variant_sel.set_options(
+                [("Color", False), ("Mono", True)], current=bool(mono), enabled=True
+            )
         else:  # color-only or auto-detecting: nothing to choose
-            self.variant_sel.set_options([("Color", False)], current=False,
-                                         enabled=False)
+            self.variant_sel.set_options([("Color", False)], current=False, enabled=False)
         self.variant_lbl.setVisible(capable)
         self.variant_sel.setVisible(capable)
 
     def _apply(self) -> None:
-        self._on_apply(self.sensor_sel.current_value(),
-                       self.port_sel.current_value(),
-                       bool(self.variant_sel.current_value()))
+        self._on_apply(
+            self.sensor_sel.current_value(),
+            self.port_sel.current_value(),
+            bool(self.variant_sel.current_value()),
+        )

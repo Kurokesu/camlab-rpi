@@ -125,9 +125,11 @@ def _rgba(c: QtGui.QColor) -> str:
 def build_stylesheet() -> str:
     # Modal cards wear the same glass as the sheets. Sheets paint it directly
     # in paintEvent, cards get it via QSS.
-    glass = (f"QFrame#modalCard {{ background: {_rgba(GLASS_BG)};"
-             f" border-radius: 10px;"
-             f" border: 1px solid {_rgba(GLASS_BORDER)}; }}\n")
+    glass = (
+        f"QFrame#modalCard {{ background: {_rgba(GLASS_BG)};"
+        f" border-radius: 10px;"
+        f" border: 1px solid {_rgba(GLASS_BORDER)}; }}\n"
+    )
     tick = icons.cached_png("check", 17, "#cdd3dd")
     tick_rule = f"QCheckBox::indicator:checked {{ image: url({tick}); }}" if tick else ""
     return _STYLE + _SLIDER_STYLE + glass + tick_rule

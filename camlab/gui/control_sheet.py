@@ -64,15 +64,22 @@ class JumpSlider(QtWidgets.QSlider):
         opt = QtWidgets.QStyleOptionSlider()
         self.initStyleOption(opt)
         groove = self.style().subControlRect(
-            QtWidgets.QStyle.ComplexControl.CC_Slider, opt,
-            QtWidgets.QStyle.SubControl.SC_SliderGroove, self)
+            QtWidgets.QStyle.ComplexControl.CC_Slider,
+            opt,
+            QtWidgets.QStyle.SubControl.SC_SliderGroove,
+            self,
+        )
         handle = self.style().subControlRect(
-            QtWidgets.QStyle.ComplexControl.CC_Slider, opt,
-            QtWidgets.QStyle.SubControl.SC_SliderHandle, self)
+            QtWidgets.QStyle.ComplexControl.CC_Slider,
+            opt,
+            QtWidgets.QStyle.SubControl.SC_SliderHandle,
+            self,
+        )
         pos = round(x) - groove.x() - handle.width() // 2
         span = groove.width() - handle.width()
         return QtWidgets.QStyle.sliderValueFromPosition(
-            self.minimum(), self.maximum(), pos, span, opt.upsideDown)
+            self.minimum(), self.maximum(), pos, span, opt.upsideDown
+        )
 
     def mousePressEvent(self, event) -> None:
         if event.button() != Qt.MouseButton.LeftButton:
@@ -135,8 +142,14 @@ class ControlSheet(SheetCard):
 
     changed = Signal(object)  # None = auto, else the manual value
 
-    def __init__(self, title: str, fmt: Callable[[float], str],
-                 log_scale: bool = False, integer: bool = True, parent=None):
+    def __init__(
+        self,
+        title: str,
+        fmt: Callable[[float], str],
+        log_scale: bool = False,
+        integer: bool = True,
+        parent=None,
+    ):
         super().__init__(parent)
         self._fmt = fmt
         self._log = log_scale
@@ -148,8 +161,9 @@ class ControlSheet(SheetCard):
         name = _sheet_title(title)
 
         self.mode_sel = SegmentedSelector()
-        self.mode_sel.set_options([("Auto", "auto"), ("Manual", "manual")],
-                                  current="auto", stretch=False)
+        self.mode_sel.set_options(
+            [("Auto", "auto"), ("Manual", "manual")], current="auto", stretch=False
+        )
         self.mode_sel.changed.connect(self._on_mode)
 
         self.slider = _jump_slider()
@@ -161,8 +175,7 @@ class ControlSheet(SheetCard):
         self.value_lbl.setObjectName("sheetValue")
         # Fixed width so the row holds still as digits change.
         self.value_lbl.setMinimumWidth(80)
-        self.value_lbl.setAlignment(Qt.AlignmentFlag.AlignRight
-                                    | Qt.AlignmentFlag.AlignVCenter)
+        self.value_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
         row = QtWidgets.QHBoxLayout(self)
         row.setContentsMargins(16, 10, 16, 10)
@@ -270,9 +283,9 @@ class MonitorSheet(SheetCard):
         name = _sheet_title("Monitor")
 
         self.peak_btn = QtWidgets.QPushButton(
-            icons.icon("center_focus_weak", _MONITOR_ICON_PX), " Focus Peaking")
-        self.zebra_btn = QtWidgets.QPushButton(
-            icons.icon("texture", _MONITOR_ICON_PX), " Zebra")
+            icons.icon("center_focus_weak", _MONITOR_ICON_PX), " Focus Peaking"
+        )
+        self.zebra_btn = QtWidgets.QPushButton(icons.icon("texture", _MONITOR_ICON_PX), " Zebra")
         for btn in (self.peak_btn, self.zebra_btn):
             # Segment look (square corners) to match the Auto/Manual rows.
             # No pos property, so these stay visually separate toggles.
@@ -296,8 +309,7 @@ class MonitorSheet(SheetCard):
         self.value_lbl.setObjectName("sheetValue")
         # Fixed width so the cluster holds still as digits change.
         self.value_lbl.setMinimumWidth(48)
-        self.value_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft
-                                    | Qt.AlignmentFlag.AlignVCenter)
+        self.value_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 
         row = QtWidgets.QHBoxLayout(self)
         row.setContentsMargins(16, 10, 16, 10)

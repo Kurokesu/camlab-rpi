@@ -62,8 +62,13 @@ class ConfigManager:
 
     def get_current(self) -> dict:
         """Parse the managed block. Returns dict(overlay, port, options, camera_auto_detect, present)."""
-        result = {"overlay": None, "port": "cam1", "options": [],
-                  "camera_auto_detect": None, "present": False}
+        result = {
+            "overlay": None,
+            "port": "cam1",
+            "options": [],
+            "camera_auto_detect": None,
+            "present": False,
+        }
         if not self.config_path.is_file():
             return result
         block = self._extract_block(self.config_path.read_text().splitlines())
@@ -95,12 +100,14 @@ class ConfigManager:
         return "dtoverlay=" + ",".join(parts)
 
     def _render_block(self, token: str, port: str, options: list[str] | None) -> str:
-        return "\n".join([
-            BEGIN,
-            "camera_auto_detect=0",
-            self.compose_dtoverlay(token, port, options),
-            END,
-        ])
+        return "\n".join(
+            [
+                BEGIN,
+                "camera_auto_detect=0",
+                self.compose_dtoverlay(token, port, options),
+                END,
+            ]
+        )
 
     # write (root)
     def apply(self, token: str, port: str, options: list[str] | None) -> None:
@@ -111,9 +118,18 @@ class ConfigManager:
         if os.path.exists(APPLY_BIN):
             cmd = ["sudo", APPLY_BIN, "set", "--overlay", token, "--port", port]
         else:  # dev fallback when the shim is not installed
-            cmd = ["sudo", sys.executable, "-m", "camlab.config_manager",
-                   "set", "--overlay", token, "--port", port]
-        for o in (options or []):
+            cmd = [
+                "sudo",
+                sys.executable,
+                "-m",
+                "camlab.config_manager",
+                "set",
+                "--overlay",
+                token,
+                "--port",
+                port,
+            ]
+        for o in options or []:
             cmd += ["--options", o]
         subprocess.run(cmd, check=True)
 
@@ -121,7 +137,8 @@ class ConfigManager:
         if not self.overlay_exists(token):
             raise ConfigError(
                 f"overlay '{token}.dtbo' not found in {self.overlays_dir} "
-                f"(is the driver installed?)")
+                f"(is the driver installed?)"
+            )
         text = self.config_path.read_text() if self.config_path.is_file() else ""
         lines = text.splitlines()
         kept = self._strip_block(lines)
@@ -146,7 +163,7 @@ class ConfigManager:
             return None
         if j <= i:
             return None
-        return lines[i + 1:j]
+        return lines[i + 1 : j]
 
     @staticmethod
     def _strip_block(lines: list[str]) -> list[str]:
@@ -187,7 +204,9 @@ def _main(argv: list[str] | None = None) -> int:
             print("error: 'set' must run as root (sudo)", file=sys.stderr)
             return 2
         cm._rewrite_in_place(args.overlay, args.port, args.options)
-        print(f"managed block updated: {cm.compose_dtoverlay(args.overlay, args.port, args.options)}")
+        print(
+            f"managed block updated: {cm.compose_dtoverlay(args.overlay, args.port, args.options)}"
+        )
         return 0
     return 1
 

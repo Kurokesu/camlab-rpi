@@ -49,9 +49,15 @@ class MainWindow(QtWidgets.QMainWindow):
         "colour_temp": ("WB", "wb_sunny", "ColourTemperature", fmt_ct),
     }
 
-    def __init__(self, engine: CameraEngine, registry: SensorRegistry,
-                 config: ConfigManager, capture: StderrCapture,
-                 classifier: LogClassifier, settings: SettingsStore):
+    def __init__(
+        self,
+        engine: CameraEngine,
+        registry: SensorRegistry,
+        config: ConfigManager,
+        capture: StderrCapture,
+        classifier: LogClassifier,
+        settings: SettingsStore,
+    ):
         super().__init__()
         self.engine = engine
         self.registry = registry
@@ -81,28 +87,25 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # viewfinder (live GL, frosted in-shader while a modal is up)
         self.viewfinder_area = ViewfinderArea(engine)
-        self.viewfinder_area.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding,
-                                        QtWidgets.QSizePolicy.Policy.Expanding)
+        self.viewfinder_area.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding
+        )
         root.addWidget(self.viewfinder_area, 1)
 
         # Control sheets dock over viewfinder's bottom edge as plain translucent
         # widgets (the in-scene viewfinder composites under them). Exposure
         # and gain span decades, hence log sliders.
         self._sheets: dict[str, QtWidgets.QWidget] = {
-            "exposure_us": ControlSheet("Exposure", fmt_exposure, log_scale=True,
-                                        parent=self),
-            "gain": ControlSheet("Gain", fmt_gain, log_scale=True, integer=False,
-                                 parent=self),
-            "colour_temp": ControlSheet("White balance", fmt_ct,
-                                        parent=self),
+            "exposure_us": ControlSheet("Exposure", fmt_exposure, log_scale=True, parent=self),
+            "gain": ControlSheet("Gain", fmt_gain, log_scale=True, integer=False, parent=self),
+            "colour_temp": ControlSheet("White balance", fmt_ct, parent=self),
             "monitor": MonitorSheet(parent=self),
         }
         self._open_sheet: str | None = None
         for sheet in self._sheets.values():
             sheet.setVisible(False)
         for key in self._CTRL_SPEC:
-            self._sheets[key].changed.connect(
-                lambda v, k=key: self._on_control_changed(k, v))
+            self._sheets[key].changed.connect(lambda v, k=key: self._on_control_changed(k, v))
         self._sheets["monitor"].changed.connect(self._on_monitor_changed)
         # Keep the open sheet glued to viewfinder's bottom edge on resize
         # (e.g. opening the log panel shrinks the viewfinder).
@@ -126,8 +129,7 @@ class MainWindow(QtWidgets.QMainWindow):
             key: QtWidgets.QPushButton(f" {label}")
             for key, (label, _glyph, _md, _fmt) in self._CTRL_SPEC.items()
         }
-        self.monitor_btn = QtWidgets.QPushButton(
-            icons.icon("stroke_partial", _ICON_PX), " Monitor")
+        self.monitor_btn = QtWidgets.QPushButton(icons.icon("stroke_partial", _ICON_PX), " Monitor")
         # Sheet-opening chips: camera controls plus the monitor-assist toggle.
         self._sheet_buttons = dict(self._ctrl_buttons, monitor=self.monitor_btn)
         for key, btn in self._sheet_buttons.items():
@@ -136,23 +138,29 @@ class MainWindow(QtWidgets.QMainWindow):
             # width while the value's tail grows and shrinks.
             btn.setObjectName("chip")
             btn.clicked.connect(lambda _=False, k=key: self._toggle_sheet(k))
-        self.settings_btn = QtWidgets.QPushButton(
-            icons.icon("settings", _ICON_PX), " Settings")
+        self.settings_btn = QtWidgets.QPushButton(icons.icon("settings", _ICON_PX), " Settings")
         self.settings_btn.clicked.connect(self._open_settings)
         self.log_btn = QtWidgets.QPushButton(icons.icon("terminal", _ICON_PX), " Log")
         self.log_btn.setCheckable(True)
         self.log_btn.toggled.connect(self._toggle_log)
         self.shutdown_btn = QtWidgets.QPushButton(
-            icons.icon("power_settings_new", _ICON_PX, "#d98b80"), " Shutdown")
+            icons.icon("power_settings_new", _ICON_PX, "#d98b80"), " Shutdown"
+        )
         self.shutdown_btn.setObjectName("danger")
         self.shutdown_btn.clicked.connect(self._shutdown)
 
         # QPushButton clamps the icon to a small default, so set the size explicitly.
         # TabFocus (not the default StrongFocus): these are reachable by Tab but a
         # mouse click does not leave a lingering focus ring on them.
-        for btn in (self.sensor_btn, self.mode_btn, *self._ctrl_buttons.values(),
-                    self.monitor_btn, self.settings_btn, self.log_btn,
-                    self.shutdown_btn):
+        for btn in (
+            self.sensor_btn,
+            self.mode_btn,
+            *self._ctrl_buttons.values(),
+            self.monitor_btn,
+            self.settings_btn,
+            self.log_btn,
+            self.shutdown_btn,
+        ):
             btn.setIconSize(QtCore.QSize(_ICON_PX, _ICON_PX))
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setFocusPolicy(Qt.FocusPolicy.TabFocus)
@@ -214,8 +222,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._rpi_stats = RpiStats()
         self._rpi_timer = QtCore.QTimer(self)
         self._rpi_timer.setInterval(1000)
-        self._rpi_timer.timeout.connect(
-            lambda: self.status.set_rpi_stats(self._rpi_stats.sample()))
+        self._rpi_timer.timeout.connect(lambda: self.status.set_rpi_stats(self._rpi_stats.sample()))
         self._rpi_timer.start()
 
         # Debounce control persistence so a slider drag is one write, not one
@@ -284,10 +291,17 @@ class MainWindow(QtWidgets.QMainWindow):
         if not detected:
             glyph, color, tip = "error", "#e06c75", "No camera detected by libcamera."
         elif overlay and detected.lower() == overlay.lower():
-            glyph, color, tip = "check_circle", "#98c379", f"Detected {detected} (matches selection)."
+            glyph, color, tip = (
+                "check_circle",
+                "#98c379",
+                f"Detected {detected} (matches selection).",
+            )
         elif overlay:
-            glyph, color, tip = ("warning", "#e5c07b",
-                                 f"Detected {detected}, selection is {overlay}.")
+            glyph, color, tip = (
+                "warning",
+                "#e5c07b",
+                f"Detected {detected}, selection is {overlay}.",
+            )
         else:
             glyph, color, tip = "photo_camera", "#aeb4bf", f"Detected {detected}."
         self.sensor_btn.setIcon(icons.icon(glyph, _ICON_PX, color))
@@ -323,11 +337,13 @@ class MainWindow(QtWidgets.QMainWindow):
         # (camera thread publishes them as one reference).
         t = self.engine.telemetry
         md = t.metadata or {}
-        self.status.set_telemetry(t.frame,
-                                  t.fps if t.fps > 0 else None,
-                                  md.get("ExposureTime"),
-                                  md.get("AnalogueGain"),
-                                  md.get("DigitalGain"))
+        self.status.set_telemetry(
+            t.frame,
+            t.fps if t.fps > 0 else None,
+            md.get("ExposureTime"),
+            md.get("AnalogueGain"),
+            md.get("DigitalGain"),
+        )
         # SensorTemperature is not offered by every sensor (None keeps the
         # last reading).
         self.status.set_temperature(md.get("SensorTemperature"))
@@ -353,14 +369,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 self._sheets[key].set_live(value)
 
     @staticmethod
-    def _set_chip_accent(btn: QtWidgets.QPushButton, glyph: str,
-                         active: bool) -> None:
+    def _set_chip_accent(btn: QtWidgets.QPushButton, glyph: str, active: bool) -> None:
         """Amber accent on/off. Re-polish (and tint the icon) only on a flip."""
         if btn.property("manual") == active:
             return
         btn.setProperty("manual", active)
-        btn.setIcon(icons.icon(glyph, _ICON_PX,
-                               _ACCENT_ON if active else _ACCENT_OFF))
+        btn.setIcon(icons.icon(glyph, _ICON_PX, _ACCENT_ON if active else _ACCENT_OFF))
         repolish(btn)
 
     def _toggle_log(self, checked: bool) -> None:
@@ -398,12 +412,14 @@ class MainWindow(QtWidgets.QMainWindow):
         h = sheet.sizeHint().height()
         pa = self.viewfinder_area
         origin = pa.mapTo(self, QtCore.QPoint(0, 0))
-        sheet.setGeometry(origin.x(), origin.y() + pa.height() - h,
-                          pa.width(), h)
+        sheet.setGeometry(origin.x(), origin.y() + pa.height() - h, pa.width(), h)
 
     def eventFilter(self, obj, event) -> bool:
-        if (obj is self.viewfinder_area and event.type() == QtCore.QEvent.Type.Resize
-                and self._open_sheet is not None):
+        if (
+            obj is self.viewfinder_area
+            and event.type() == QtCore.QEvent.Type.Resize
+            and self._open_sheet is not None
+        ):
             self._position_sheet(self._open_sheet)
         return super().eventFilter(obj, event)
 
@@ -423,13 +439,11 @@ class MainWindow(QtWidgets.QMainWindow):
             sheet.set_range(*rng)
         sheet.set_state(getattr(self.engine.control_state, key))
 
-    def _on_monitor_changed(self, peaking: bool, zebra: bool,
-                            threshold: float) -> None:
+    def _on_monitor_changed(self, peaking: bool, zebra: bool, threshold: float) -> None:
         self.viewfinder_area.set_assists(peaking, zebra, threshold)
         # Amber chip while any assist draws on the viewfinder, same accent as
         # a manual camera control.
-        self._set_chip_accent(self.monitor_btn, "stroke_partial",
-                              peaking or zebra)
+        self._set_chip_accent(self.monitor_btn, "stroke_partial", peaking or zebra)
 
     def _on_control_changed(self, key: str, value) -> None:
         # Engine clamps (and flushes a slow pipeline itself), so reflect what
@@ -511,8 +525,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.centralWidget().setFocus(Qt.FocusReason.OtherFocusReason)
 
     def _show_message(self, title: str, message: str) -> None:
-        self._open_modal(message_card(
-            title, message, [("OK", "", self._close_modal)]))
+        self._open_modal(message_card(title, message, [("OK", "", self._close_modal)]))
 
     def _choose_mode(self) -> None:
         if not self.engine.modes:
@@ -520,13 +533,19 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         # Viewfinder area at open time sizes the new mode's lores (display) stream.
         self._mode_avail = self.viewfinder_area.lores_size()
-        card = ModeCard(self.engine.modes, self.engine.current_mode,
-                        self.engine.fps_current, self.engine.fps_fixed,
-                        on_apply=self._apply_mode, on_cancel=self._close_modal)
+        card = ModeCard(
+            self.engine.modes,
+            self.engine.current_mode,
+            self.engine.fps_current,
+            self.engine.fps_fixed,
+            on_apply=self._apply_mode,
+            on_cancel=self._close_modal,
+        )
         self._open_modal(card)
 
-    def _apply_mode(self, size: tuple[int, int], bit_depth: int, fps: float,
-                    fps_fixed: bool) -> None:
+    def _apply_mode(
+        self, size: tuple[int, int], bit_depth: int, fps: float, fps_fixed: bool
+    ) -> None:
         self._close_modal()
         mode = mode_for(self.engine.modes, tuple(size), int(bit_depth))
         if mode is None:  # re-validate at apply time
@@ -542,8 +561,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Persist only after a successful reconfigure (never store an unrunnable
         # config). The key is the selected sensor's overlay token.
         overlay = self.config.get_current().get("overlay") or ""
-        self.settings.set_mode(overlay, tuple(size), int(bit_depth), float(fps),
-                               fps_fixed)
+        self.settings.set_mode(overlay, tuple(size), int(bit_depth), float(fps), fps_fixed)
         self.monitor.reset()
         self._refresh_mode_status()
         # New mode may have re-clamped manual values (exposure vs new frame
@@ -554,9 +572,14 @@ class MainWindow(QtWidgets.QMainWindow):
         cur = self.config.get_current()
         sensor = self.registry.by_overlay(cur["overlay"]) if cur["overlay"] else None
         mono = self._is_mono(sensor, cur["options"])
-        card = SensorCard(self.registry, sensor.name if sensor else None,
-                          cur["port"], mono, on_apply=self._apply_sensor,
-                          on_cancel=self._close_modal)
+        card = SensorCard(
+            self.registry,
+            sensor.name if sensor else None,
+            cur["port"],
+            mono,
+            on_apply=self._apply_sensor,
+            on_cancel=self._close_modal,
+        )
         self._open_modal(card)
 
     def _apply_sensor(self, sensor_name: str, port: str, mono: bool) -> None:
@@ -580,10 +603,12 @@ class MainWindow(QtWidgets.QMainWindow):
         poweroff()
 
     def _open_settings(self) -> None:
-        card = SettingsCard(histogram_on=self._histogram_on,
-                            on_apply_network=self._apply_network,
-                            on_apply_histogram=self._apply_histogram,
-                            on_cancel=self._close_modal)
+        card = SettingsCard(
+            histogram_on=self._histogram_on,
+            on_apply_network=self._apply_network,
+            on_apply_histogram=self._apply_histogram,
+            on_cancel=self._close_modal,
+        )
         self._open_modal(card)
 
     def _apply_histogram(self, enabled: bool) -> None:
@@ -640,8 +665,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if self._boot_cover is None:
             return
         screen = self.screen() or QtWidgets.QApplication.primaryScreen()
-        fullscreen = (screen is not None
-                      and self.width() >= screen.geometry().width() - 1)
+        fullscreen = screen is not None and self.width() >= screen.geometry().width() - 1
         self._fallback_tries += 1
         if fullscreen or self._fallback_tries >= 10:
             self._reveal()
@@ -670,8 +694,9 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         g = screen.geometry()
         if self._boot_cover is not None:
-            self._boot_cover.setGeometry(0, 0, max(g.width(), self.width()),
-                                         max(g.height(), self.height()))
+            self._boot_cover.setGeometry(
+                0, 0, max(g.width(), self.width()), max(g.height(), self.height())
+            )
         if self.width() >= g.width() - 1:
             return
         # showFullScreen() alone is a no-op while Qt still thinks it is

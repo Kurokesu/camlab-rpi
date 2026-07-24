@@ -53,8 +53,7 @@ def _ensure_loaded() -> None:
     if _LOADED:
         return
     _LOADED = True
-    path = os.path.join(os.path.dirname(__file__), "..", "assets",
-                        "MaterialSymbolsOutlined.ttf")
+    path = os.path.join(os.path.dirname(__file__), "..", "assets", "MaterialSymbolsOutlined.ttf")
     fid = QtGui.QFontDatabase.addApplicationFont(os.path.abspath(path))
     if fid != -1:
         families = QtGui.QFontDatabase.applicationFontFamilies(fid)

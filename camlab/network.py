@@ -21,9 +21,9 @@ _MANAGERS = ("NetworkManager.service", "systemd-networkd.service")
 
 def is_enabled() -> bool:
     for unit in _MANAGERS:
-        active = subprocess.run(
-            ["systemctl", "is-active", "--quiet", unit],
-            check=False).returncode == 0
+        active = (
+            subprocess.run(["systemctl", "is-active", "--quiet", unit], check=False).returncode == 0
+        )
         if active:
             return True
     return False
@@ -31,5 +31,4 @@ def is_enabled() -> bool:
 
 def set_enabled(enabled: bool) -> None:
     """Toggle networking now (no reboot). Raises CalledProcessError on failure."""
-    subprocess.run(["sudo", CAMLABCTL, "net", "on" if enabled else "off"],
-                   check=True)
+    subprocess.run(["sudo", CAMLABCTL, "net", "on" if enabled else "off"], check=True)

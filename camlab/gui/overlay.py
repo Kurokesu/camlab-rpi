@@ -36,8 +36,12 @@ class ModalOverlay(QtWidgets.QWidget):
     swallowed so the dimmed chrome stays inert. Enter/Escape come from MainWindow.
     """
 
-    def __init__(self, host: QtWidgets.QWidget, card: QtWidgets.QWidget,
-                 clear_rect: QtCore.QRect | None = None):
+    def __init__(
+        self,
+        host: QtWidgets.QWidget,
+        card: QtWidgets.QWidget,
+        clear_rect: QtCore.QRect | None = None,
+    ):
         super().__init__(host)
         self._host = host
         self.card = card
@@ -78,8 +82,7 @@ class ModalOverlay(QtWidgets.QWidget):
         painter = QtGui.QPainter(self)
         if self._clear_rect is not None and self._clear_rect.isValid():
             # Dim everything but the live-viewfinder rect.
-            region = QtGui.QRegion(self.rect()).subtracted(
-                QtGui.QRegion(self._clear_rect))
+            region = QtGui.QRegion(self.rect()).subtracted(QtGui.QRegion(self._clear_rect))
             painter.setClipRegion(region)
         painter.fillRect(self.rect(), _DIM)
 
@@ -97,8 +100,11 @@ class ModalOverlay(QtWidgets.QWidget):
         targets: list[QtWidgets.QWidget] = []
         seen_selectors: set[int] = set()
         for w in self.card.findChildren(QtWidgets.QWidget):
-            if not (w.isEnabled() and w.isVisibleTo(self.card)
-                    and w.focusPolicy().value & QtCore.Qt.FocusPolicy.TabFocus.value):
+            if not (
+                w.isEnabled()
+                and w.isVisibleTo(self.card)
+                and w.focusPolicy().value & QtCore.Qt.FocusPolicy.TabFocus.value
+            ):
                 continue
             sel = self._selector_of(w)
             if sel is not None:
@@ -140,7 +146,8 @@ class ModalOverlay(QtWidgets.QWidget):
             key = event.key()
             if key in (QtCore.Qt.Key.Key_Tab, QtCore.Qt.Key.Key_Backtab):
                 back = key == QtCore.Qt.Key.Key_Backtab or bool(
-                    event.modifiers() & QtCore.Qt.KeyboardModifier.ShiftModifier)
+                    event.modifiers() & QtCore.Qt.KeyboardModifier.ShiftModifier
+                )
                 self._cycle_focus(forward=not back)
                 return True  # consume: focus stays inside the card
         return super().eventFilter(obj, event)

@@ -79,8 +79,7 @@ class ViewfinderArea(QtWidgets.QWidget):
         self._histogram.setVisible(self._hist_enabled and not self._frosted)
         self._histogram.raise_()
 
-    def set_assists(self, peaking: bool, zebra: bool,
-                    zebra_threshold: float) -> None:
+    def set_assists(self, peaking: bool, zebra: bool, zebra_threshold: float) -> None:
         """Focus peaking / zebra overlays (no-op without a camera)."""
         if hasattr(self._live, "set_assists"):
             self._live.set_assists(peaking, zebra, zebra_threshold)

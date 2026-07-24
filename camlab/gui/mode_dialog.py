@@ -36,10 +36,15 @@ from .widgets import SegmentedSelector, hline
 
 
 class ModeCard(QtWidgets.QFrame):
-    def __init__(self, modes: list[SensorMode], current_mode: SensorMode | None,
-                 fps_current: float | None, fps_fixed: bool,
-                 on_apply: Callable[[tuple[int, int], int, float, bool], None],
-                 on_cancel: Callable[[], None]):
+    def __init__(
+        self,
+        modes: list[SensorMode],
+        current_mode: SensorMode | None,
+        fps_current: float | None,
+        fps_fixed: bool,
+        on_apply: Callable[[tuple[int, int], int, float, bool], None],
+        on_cancel: Callable[[], None],
+    ):
         super().__init__()
         self.setObjectName("modalCard")
         self.setMinimumWidth(420)
@@ -56,13 +61,13 @@ class ModeCard(QtWidgets.QFrame):
 
         init_size = tuple(current_mode.size) if current_mode else None
         self.res_sel.set_options(
-            [(f"{w} x {h}", (w, h)) for (w, h) in resolutions(modes)],
-            current=init_size)
+            [(f"{w} x {h}", (w, h)) for (w, h) in resolutions(modes)], current=init_size
+        )
         self._rebuild_depths(current_mode.bit_depth if current_mode else None)
         self._rebuild_fps(fps_current)
         self.fps_lock_sel.set_options(
-            [("Fixed", True), ("Exposure driven", False)],
-            current=bool(fps_fixed))
+            [("Fixed", True), ("Exposure driven", False)], current=bool(fps_fixed)
+        )
 
         # The dirty check compares against what the card actually shows after
         # seeding (fps_current may have been snapped to the nearest option).
@@ -102,10 +107,12 @@ class ModeCard(QtWidgets.QFrame):
         self._refresh_apply()
 
     def _selection(self) -> tuple:
-        return (self.res_sel.current_value(),
-                self.depth_sel.current_value(),
-                self.fps_sel.current_value(),
-                self.fps_lock_sel.current_value())
+        return (
+            self.res_sel.current_value(),
+            self.depth_sel.current_value(),
+            self.fps_sel.current_value(),
+            self.fps_lock_sel.current_value(),
+        )
 
     def _refresh_apply(self) -> None:
         """Apply is live only when a selection changed."""
@@ -124,20 +131,22 @@ class ModeCard(QtWidgets.QFrame):
 
     def _rebuild_depths(self, prefer_depth: int | None) -> None:
         depths = bit_depths_for(self._modes, self.res_sel.current_value())  # deepest first
-        self.depth_sel.set_options([(f"{d}-bit", d) for d in depths],
-                                   current=prefer_depth)
+        self.depth_sel.set_options([(f"{d}-bit", d) for d in depths], current=prefer_depth)
 
     def _rebuild_fps(self, prefer_fps: float | None) -> None:
-        m = mode_for(self._modes, self.res_sel.current_value(),
-                     self.depth_sel.current_value())
+        m = mode_for(self._modes, self.res_sel.current_value(), self.depth_sel.current_value())
         opts = fps_options(m.max_fps) if m else [30.0]
         # Carry the chosen rate over: keep it when still offered, else the nearest.
-        self.fps_sel.set_options([(f"{format_fps(o)} fps", o) for o in opts],
-                                 current=nearest_fps_option(opts, prefer_fps),
-                                 enabled=len(opts) > 1)
+        self.fps_sel.set_options(
+            [(f"{format_fps(o)} fps", o) for o in opts],
+            current=nearest_fps_option(opts, prefer_fps),
+            enabled=len(opts) > 1,
+        )
 
     def _apply(self) -> None:
-        self._on_apply(self.res_sel.current_value(),
-                       int(self.depth_sel.current_value()),
-                       float(self.fps_sel.current_value()),
-                       bool(self.fps_lock_sel.current_value()))
+        self._on_apply(
+            self.res_sel.current_value(),
+            int(self.depth_sel.current_value()),
+            float(self.fps_sel.current_value()),
+            bool(self.fps_lock_sel.current_value()),
+        )

@@ -35,8 +35,12 @@ def _avail_size(app) -> tuple[int, int]:
 
 
 _LEVELS = {
-    "trace": logging.DEBUG, "debug": logging.DEBUG, "info": logging.INFO,
-    "warn": logging.WARNING, "warning": logging.WARNING, "error": logging.ERROR,
+    "trace": logging.DEBUG,
+    "debug": logging.DEBUG,
+    "info": logging.INFO,
+    "warn": logging.WARNING,
+    "warning": logging.WARNING,
+    "error": logging.ERROR,
     "off": logging.CRITICAL + 10,
 }
 
@@ -44,9 +48,11 @@ _LEVELS = {
 def _setup_logging() -> None:
     level = _LEVELS.get(os.environ.get("CAMLAB_LOG_LEVEL", "info").lower(), logging.INFO)
     logging.basicConfig(
-        level=level, stream=sys.stderr,
+        level=level,
+        stream=sys.stderr,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        datefmt="%H:%M:%S")
+        datefmt="%H:%M:%S",
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -90,8 +96,7 @@ def main(argv: list[str] | None = None) -> int:
         saved = settings.get_mode(overlay)
         mode, fps = resolve_initial_mode(engine.modes, saved)
         try:
-            engine.configure_mode(mode, fps, avail,
-                                  fps_fixed=saved["fps_fixed"] if saved else True)
+            engine.configure_mode(mode, fps, avail, fps_fixed=saved["fps_fixed"] if saved else True)
             # Restore persisted manual overrides. Must follow configure so
             # they clamp against the new mode's ranges.
             engine.set_control_state(**settings.get_controls(overlay))
