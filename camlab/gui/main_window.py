@@ -38,6 +38,9 @@ _ICON_PX = 21
 _ACCENT_ON = "#e5c07b"
 _ACCENT_OFF = "#d7dae0"
 
+# Log button tint by worst severity seen, mirroring log filter glyphs.
+_SEV_ACCENT = {"error": "#e06c75", "warning": "#e5c07b"}
+
 
 class MainWindow(QtWidgets.QMainWindow):
     first_frame = Signal(float)
@@ -68,6 +71,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._overlay: ModalOverlay | None = None
         self._boot_cover: QtWidgets.QWidget | None = None
         self._engine_started = False
+        self._sev = ""  # worst integrity severity seen, tints the log button
 
         self.setWindowTitle("camlab")
         self.setStyleSheet(build_stylesheet())
@@ -217,12 +221,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self._status_timer.timeout.connect(self._update_status)
         self._status_timer.start()
 
-        # Board health at 1 Hz: load percentages are deltas, and a second is a
+        # Board stats at 1 Hz: load percentages are deltas, and a second is a
         # meaningful averaging window (10 Hz would read as noise).
         self._rpi_stats = RpiStats()
         self._rpi_timer = QtCore.QTimer(self)
         self._rpi_timer.setInterval(1000)
-        self._rpi_timer.timeout.connect(lambda: self.status.set_rpi_stats(self._rpi_stats.sample()))
+        self._rpi_timer.timeout.connect(self._sample_rpi)
         self._rpi_timer.start()
 
         # Debounce control persistence so a slider drag is one write, not one
@@ -262,7 +266,10 @@ class MainWindow(QtWidgets.QMainWindow):
     def _wire(self) -> None:
         self.capture.line_received.connect(self.log_panel.append_line)
         self.capture.line_received.connect(self.monitor.feed)
-        self.monitor.stats_changed.connect(self.status.update_integrity)
+        self.monitor.stats_changed.connect(self.log_panel.update_integrity)
+        self.monitor.stats_changed.connect(self._on_integrity)
+        # Clearing the view resets the counts, so the two never disagree.
+        self.log_panel.cleared.connect(self.monitor.reset)
         self.first_frame.connect(self._on_first_frame)
         self.engine.on_first_frame(lambda boot_time: self.first_frame.emit(boot_time))
 
@@ -327,10 +334,21 @@ class MainWindow(QtWidgets.QMainWindow):
         self.monitor_btn.setVisible(self.viewfinder_area.has_camera)
 
     # slots
+    def _sample_rpi(self) -> None:
+        """One sample feeds both stats views, each renders its own fields."""
+        s = self._rpi_stats.sample()
+        self.status.set_rpi_stats(s)
+        self.log_panel.set_rpi_stats(s)
+
     @Slot(float)
     def _on_first_frame(self, boot_time: float) -> None:
-        self.status.set_boot_time(boot_time)
+        self.log_panel.set_boot_time(boot_time)
         log.info("first frame at boot time=%.1fs", boot_time)
+
+    @Slot(object)
+    def _on_integrity(self, stats) -> None:
+        self._sev = "error" if stats.errors else ("warning" if stats.warnings else "")
+        self._sync_log_button(self.log_btn.isChecked())
 
     def _update_status(self) -> None:
         # One snapshot read: #frame, fps and metadata come from the same frame
@@ -379,14 +397,21 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _toggle_log(self, checked: bool) -> None:
         self.log_panel.setVisible(checked)
+        self._sync_log_button(checked)
+
+    def _sync_log_button(self, checked: bool) -> None:
         # The button is how you close it again, so make the open state read as a
-        # pressed toggle (QSS :checked) and relabel it accordingly.
+        # pressed toggle (QSS :checked) and relabel it accordingly. Closed, it
+        # carries the severity tint so trouble shows without opening the panel.
+        color = _SEV_ACCENT.get(self._sev, _ACCENT_OFF)
         if checked:
             self.log_btn.setIcon(icons.icon("close", _ICON_PX))
             self.log_btn.setText(" Close log")
         else:
-            self.log_btn.setIcon(icons.icon("terminal", _ICON_PX))
+            self.log_btn.setIcon(icons.icon("terminal", _ICON_PX, color))
             self.log_btn.setText(" Log")
+        self.log_btn.setProperty("sev", self._sev or None)
+        repolish(self.log_btn)
 
     # control sheets (floating, viewfinder stays live)
     def _toggle_sheet(self, key: str) -> None:

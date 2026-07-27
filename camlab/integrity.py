@@ -7,7 +7,7 @@ libcamera (and its IPA proxy child) log to stderr. We splice fd 2 onto a pipe so
 we can (a) re-emit every byte to the real stderr -> journald (nothing lost) and
 (b) feed each line through a classifier. Matched lines (e.g. AR0822 embedded-data
 parse failures from a marginal CSI cable) are split by severity (error vs
-warning) into two running counts the status strip surfaces as FACTs (no pass/fail
+warning) into two running counts the log panel surfaces as FACTs (no pass/fail
 verdict, per spec).
 
 fd splicing must happen before Picamera2()/libcamera init so the IPA child
@@ -96,6 +96,19 @@ class IntegrityStats:
     errors: int = 0
     warnings: int = 0
     by_category: dict[str, int] = field(default_factory=dict)
+
+
+def breakdown_text(stats: IntegrityStats, severity: str) -> str:
+    """Per-category tally for one severity, as tooltip text."""
+    noun = "errors" if severity == "error" else "warnings"
+    rows = [
+        f"  {CATEGORY_LABELS.get(cat, cat)}: {n}"
+        for cat, n in sorted(stats.by_category.items(), key=lambda kv: -kv[1])
+        if n and CATEGORY_SEVERITY.get(cat) == severity
+    ]
+    if not rows:
+        return f"No camera-stack {noun} observed."
+    return f"Camera-stack {noun} (facts, not a verdict):\n" + "\n".join(rows)
 
 
 class NullCapture(QtCore.QObject):

@@ -3,21 +3,21 @@
 
 """Status strip - the top bar of live, read-only facts about the capture.
 
-Everything here is a FACT, never a pass/fail verdict (per spec). The left side
+Everything here is a FACT, never a pass/fail verdict (per spec). The centre
 mirrors rpicam-hello's default info-text (#frame (fps fps) exp ag dg) plus the
-sensor temperature. The right side carries the boot-to-viewfinder time and two
-independent counters (errors / warnings) that stay green while clear and turn
-red / orange the moment either climbs. Rendered as flat text (no chip boxes) so
-it reads as read-only, visually distinct from the clickable controls below.
+sensor temperature. The build version anchors the left, next to the board
+stats. Rendered as flat text (no chip boxes) so it reads as read-only,
+visually distinct from the clickable controls below.
 """
 
 from __future__ import annotations
 
 from .. import __version__
-from ..integrity import CATEGORY_LABELS, CATEGORY_SEVERITY, IntegrityStats
-from ..qt import Qt, QtWidgets, Slot
+from ..qt import Qt, QtWidgets
 from .rpi_stats import RpiStatsView
-from .widgets import repolish
+
+# Inter-zone spacing, also the gap _sync_balance accounts for.
+_GAP = 16
 
 
 class StatusStrip(QtWidgets.QFrame):
@@ -26,7 +26,7 @@ class StatusStrip(QtWidgets.QFrame):
         self.setObjectName("statusStrip")
         lay = QtWidgets.QHBoxLayout(self)
         lay.setContentsMargins(12, 5, 12, 5)
-        lay.setSpacing(16)
+        lay.setSpacing(_GAP)
 
         # Live per-frame telemetry, one rpicam-style string refreshed at 10 Hz,
         # with the sensor temperature split off behind a hairline.
@@ -44,39 +44,24 @@ class StatusStrip(QtWidgets.QFrame):
         trow.addWidget(self.telemetry_lbl)
         trow.addWidget(self._temp_sep, 0, Qt.AlignmentFlag.AlignVCenter)
         trow.addWidget(self.temp_lbl)
-        # One-shot boot-to-viewfinder fact, plus the two integrity counters.
-        self.boot_lbl = QtWidgets.QLabel(self)
-        self.boot_lbl.setObjectName("bootInfo")
-        self.errors_lbl = QtWidgets.QLabel(self)
-        self.errors_lbl.setObjectName("errCount")
-        self.warnings_lbl = QtWidgets.QLabel(self)
-        self.warnings_lbl.setObjectName("warnCount")
-
-        # boot + counters anchor right. The telemetry is centred by fixing the
-        # left and right zones to one shared width (the wider one's content),
-        # so the stretches around it always split the leftover space evenly.
-        self._right = QtWidgets.QWidget(self)
-        rrow = QtWidgets.QHBoxLayout(self._right)
-        rrow.setContentsMargins(0, 0, 0, 0)
-        rrow.setSpacing(16)
-        rrow.addStretch(1)  # packs the cluster right when the zone is wider
-        rrow.addWidget(self.boot_lbl)
-        rrow.addWidget(self.errors_lbl)
-        rrow.addWidget(self.warnings_lbl)
 
         # Build version on the left so the operator can read the running build
         # at a glance, followed by board stats (sampled at 1 Hz by MainWindow).
-        # Both live in the balanced left zone, so telemetry stays centred.
         self.version_lbl = QtWidgets.QLabel(f"camlab v{__version__}", self)
         self.version_lbl.setObjectName("version")
         self.rpi = RpiStatsView(parent=self)
         self._left = QtWidgets.QWidget(self)
         lrow = QtWidgets.QHBoxLayout(self._left)
         lrow.setContentsMargins(0, 0, 0, 0)
-        lrow.setSpacing(16)
+        lrow.setSpacing(_GAP)
         lrow.addWidget(self.version_lbl)
         lrow.addWidget(self.rpi)
         lrow.addStretch(1)
+
+        # Empty right zone balances the left one: telemetry is centred by
+        # fixing both zones to one shared width, so the stretches around it
+        # always split the leftover space evenly.
+        self._right = QtWidgets.QWidget(self)
 
         lay.addWidget(self._left)
         lay.addStretch(1)
@@ -92,21 +77,14 @@ class StatusStrip(QtWidgets.QFrame):
         self._temp: float | None = None
 
         self.set_telemetry(None, None)
-        self.set_boot_time(None)
-        self.update_integrity(IntegrityStats())
         self._sync_balance()
 
     def _sync_balance(self) -> None:
         """Give the left and right zones one shared fixed width (the wider
         one's content), so the centred telemetry cannot drift sideways."""
-        left_min = self.version_lbl.sizeHint().width()
+        width = self.version_lbl.sizeHint().width()
         if self.rpi.isVisible():
-            left_min += 16 + self.rpi.sizeHint().width()
-        right_min = sum(
-            w.sizeHint().width() for w in (self.boot_lbl, self.errors_lbl, self.warnings_lbl)
-        )
-        right_min += 2 * 16  # inter-label spacing
-        width = max(left_min, right_min)
+            width += _GAP + self.rpi.sizeHint().width()
         self._left.setFixedWidth(width)
         self._right.setFixedWidth(width)
 
@@ -165,34 +143,3 @@ class StatusStrip(QtWidgets.QFrame):
         self.rpi.set_stats(s)
         self.rpi.setVisible(self.rpi.has_data)
         self._sync_balance()
-
-    def set_boot_time(self, seconds: float | None) -> None:
-        value = f"{seconds:.1f}s" if seconds is not None else "..."
-        self.boot_lbl.setText(f"boot time {value}")
-        self._sync_balance()
-
-    @Slot(object)
-    def update_integrity(self, stats: IntegrityStats) -> None:
-        self._set_counter(self.errors_lbl, stats.errors, "errors")
-        self._set_counter(self.warnings_lbl, stats.warnings, "warnings")
-        self.errors_lbl.setToolTip(self._breakdown(stats, "error"))
-        self.warnings_lbl.setToolTip(self._breakdown(stats, "warning"))
-        self._sync_balance()
-
-    @staticmethod
-    def _set_counter(label: QtWidgets.QLabel, count: int, noun: str) -> None:
-        label.setText(f"{count} {noun}")
-        label.setProperty("sev", "alert" if count > 0 else "ok")
-        repolish(label)
-
-    @staticmethod
-    def _breakdown(stats: IntegrityStats, severity: str) -> str:
-        noun = "errors" if severity == "error" else "warnings"
-        rows = [
-            f"  {CATEGORY_LABELS.get(cat, cat)}: {n}"
-            for cat, n in sorted(stats.by_category.items(), key=lambda kv: -kv[1])
-            if n and CATEGORY_SEVERITY.get(cat) == severity
-        ]
-        if not rows:
-            return f"No camera-stack {noun} observed."
-        return f"Camera-stack {noun} (facts, not a verdict):\n" + "\n".join(rows)
