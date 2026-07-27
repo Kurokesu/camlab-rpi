@@ -20,7 +20,6 @@ import html
 
 from ..integrity import IntegrityStats, LogClassifier, breakdown_text
 from ..qt import Qt, QtCore, QtGui, QtWidgets, Signal, Slot
-from . import icons
 from .widgets import SegmentedSelector, repolish
 
 _MAX_LINES = 2000
@@ -36,7 +35,6 @@ _POINTER_EVENTS = frozenset(
 
 # Log line color per severity
 _SEV_COLOR = {"error": "#e06c75", "warning": "#e5c07b"}
-_HEADER_ICON_PX = 18
 
 
 class LogPanel(QtWidgets.QWidget):
@@ -76,11 +74,9 @@ class LogPanel(QtWidgets.QWidget):
         )
         self.filter.changed.connect(self._on_filter)
 
-        self.follow_btn = QtWidgets.QPushButton()
+        self.follow_btn = QtWidgets.QPushButton("Autoscroll")
         self.follow_btn.setCheckable(True)
         self.follow_btn.setChecked(True)
-        self.follow_btn.setIcon(icons.icon("vertical_align_bottom", _HEADER_ICON_PX))
-        self.follow_btn.setIconSize(QtCore.QSize(_HEADER_ICON_PX, _HEADER_ICON_PX))
         self.follow_btn.setToolTip(
             "Follow new lines. Swipe or scroll up to freeze the view for "
             "inspection, new lines keep buffering and reappear on return."
