@@ -1,15 +1,20 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""ConfigManager - owns a delimited managed block in /boot/firmware/config.txt.
+"""ConfigManager - owns camlab's managed blocks in /boot/firmware/config.txt.
 
-The managed block is the single source of truth for the selected sensor overlay
-and the rig CSI port:
+The camera block is the single source of truth for the selected sensor overlay
+and the rig CSI port, the display block for the DSI touch panel overlay:
 
     # >>> camlab managed (do not edit) >>>
     camera_auto_detect=0
     dtoverlay=ar0822,cam0,4lane
     # <<< camlab managed <<<
+
+    # >>> camlab display (do not edit) >>>
+    display_auto_detect=0
+    dtoverlay=vc4-kms-dsi-7inch
+    # <<< camlab display <<<
 
 Reading is unprivileged (config.txt is world-readable). Writing needs root, so
 the GUI shells out to this module's CLI via sudo (see deploy/camlab-sudoers):
@@ -17,8 +22,8 @@ the GUI shells out to this module's CLI via sudo (see deploy/camlab-sudoers):
     sudo /usr/bin/python3 -m camlab.config_manager set \
         --overlay ar0822 --port cam0 --options 4lane
 
-Port convention (RPi/Kurokesu overlays): base overlay == cam1 (no param),
-cam0 is selected by appending ",cam0".
+Port conventions: camera overlays default to cam1, cam0 is selected by
+appending ",cam0". DSI overlays default to DISP1, ",dsi0" selects DISP0.
 """
 
 from __future__ import annotations
@@ -33,11 +38,21 @@ from .drm import dsi_blocked_ports
 
 CONFIG_PATH = Path(os.environ.get("CAMLAB_CONFIG_TXT", "/boot/firmware/config.txt"))
 OVERLAYS_DIR = Path(os.environ.get("CAMLAB_OVERLAYS_DIR", "/boot/firmware/overlays"))
+MODEL_PATH = Path(os.environ.get("CAMLAB_DT_MODEL", "/proc/device-tree/model"))
 
 BEGIN = "# >>> camlab managed (do not edit) >>>"
 END = "# <<< camlab managed <<<"
+DISPLAY_BEGIN = "# >>> camlab display (do not edit) >>>"
+DISPLAY_END = "# <<< camlab display <<<"
 
 VALID_PORTS = ("cam0", "cam1")
+
+
+def is_compute_module() -> bool:
+    try:
+        return "Compute Module" in MODEL_PATH.read_text()
+    except OSError:
+        return False
 
 
 # Privileged shim installed by scripts/setup/config.sh. The only thing the GUI is
@@ -91,6 +106,39 @@ class ConfigManager:
                 result["options"] = [p for p in params if p not in VALID_PORTS]
         return result
 
+    def get_current_display(self) -> dict:
+        """Parse the display block into dict(overlay, dsi0, port_blocked, present).
+        overlay keeps the raw dtoverlay value, port_blocked names the CSI port
+        the panel claims next boot."""
+        result = {"overlay": None, "dsi0": False, "port_blocked": None, "present": False}
+        if not self.config_path.is_file():
+            return result
+        lines = self.config_path.read_text().splitlines()
+        block = self._extract_block(lines, DISPLAY_BEGIN, DISPLAY_END)
+        if block is None:
+            return result
+        result["present"] = True
+        for line in block:
+            line = line.strip()
+            if line.startswith("dtoverlay="):
+                raw = line.split("=", 1)[1].strip()
+                result["overlay"] = raw
+                result["dsi0"] = "dsi0" in raw.split(",")[1:]
+                result["port_blocked"] = "cam0" if result["dsi0"] else "cam1"
+        return result
+
+    def blocked_ports_next_boot(self) -> set[str]:
+        """CSI ports the display claims next boot (live DRM lags pending
+        changes until reboot). Display block when present, else live DRM on
+        Pi 5 (auto-detect follows wiring) and nothing on CM (firmware never
+        binds panels without a block)."""
+        disp = self.get_current_display()
+        if disp["present"]:
+            return {disp["port_blocked"]} if disp["port_blocked"] else set()
+        if is_compute_module():
+            return set()
+        return dsi_blocked_ports()
+
     # compose
     @staticmethod
     def compose_dtoverlay(token: str, port: str, options: list[str] | None) -> str:
@@ -101,6 +149,14 @@ class ConfigManager:
             parts.append("cam0")
         parts.extend(o for o in (options or []) if o)
         return "dtoverlay=" + ",".join(parts)
+
+    @staticmethod
+    def compose_display_overlay(token: str, cam_port: str) -> str:
+        """Panel rides the connector the camera does not use: camera on cam0
+        puts the panel on DISP1 (overlay default), cam1 pairs with DISP0."""
+        if cam_port not in VALID_PORTS:
+            raise ConfigError(f"invalid port {cam_port!r} (expected cam0/cam1)")
+        return token if cam_port == "cam0" else f"{token},dsi0"
 
     def _render_block(self, token: str, port: str, options: list[str] | None) -> str:
         return "\n".join(
@@ -114,9 +170,9 @@ class ConfigManager:
 
     # write (root)
     def apply(self, token: str, port: str, options: list[str] | None) -> None:
-        """Rewrite the managed block. Runs in-process if root, else via sudo helper."""
+        """Rewrite the camera block. Runs in-process if root, else via sudo helper."""
         # Also checked in _rewrite_in_place, the shim entry point.
-        if port in dsi_blocked_ports():
+        if port in self.blocked_ports_next_boot():
             raise ConfigError(
                 f"{port} is claimed by the display overlay (shared CSI/DSI connector)"
             )
@@ -147,7 +203,7 @@ class ConfigManager:
                 f"overlay '{token}.dtbo' not found in {self.overlays_dir} "
                 f"(is the driver installed?)"
             )
-        if port in dsi_blocked_ports():
+        if port in self.blocked_ports_next_boot():
             raise ConfigError(
                 f"{port} is claimed by the display overlay (shared CSI/DSI connector)"
             )
@@ -160,6 +216,47 @@ class ConfigManager:
         new_text = (body + "\n\n" if body else "") + block + "\n"
         self._atomic_write(new_text)
 
+    def apply_display(self, raw_overlay: str | None) -> None:
+        """Rewrite or remove the display block (None removes). Runs in-process
+        if root, else via sudo helper."""
+        if os.geteuid() == 0:
+            self._rewrite_display_in_place(raw_overlay)
+            return
+        if raw_overlay is None:
+            args = ["display-clear"]
+        else:
+            args = ["display-set", "--overlay", raw_overlay]
+        if os.path.exists(APPLY_BIN):
+            cmd = ["sudo", APPLY_BIN, *args]
+        else:  # dev fallback when the shim is not installed
+            cmd = ["sudo", sys.executable, "-m", "camlab.config_manager", *args]
+        subprocess.run(cmd, check=True)
+
+    def _rewrite_display_in_place(self, raw_overlay: str | None) -> None:
+        if raw_overlay is not None:
+            token = raw_overlay.split(",")[0]
+            if not self.overlay_exists(token):
+                raise ConfigError(
+                    f"overlay '{token}.dtbo' not found in {self.overlays_dir} "
+                    f"(is the OS image complete?)"
+                )
+        text = self.config_path.read_text() if self.config_path.is_file() else ""
+        kept = self._strip_block(text.splitlines(), DISPLAY_BEGIN, DISPLAY_END)
+        body = "\n".join(kept).rstrip("\n")
+        new_text = body + "\n" if body else ""
+        if raw_overlay is not None:
+            block = "\n".join(
+                [
+                    DISPLAY_BEGIN,
+                    # Explicit overlay owns the panel, stop Pi 5 firmware loading it twice.
+                    "display_auto_detect=0",
+                    f"dtoverlay={raw_overlay}",
+                    DISPLAY_END,
+                ]
+            )
+            new_text = (body + "\n\n" if body else "") + block + "\n"
+        self._atomic_write(new_text)
+
     def _atomic_write(self, text: str) -> None:
         tmp = self.config_path.with_suffix(self.config_path.suffix + ".camlab-tmp")
         tmp.write_text(text)
@@ -167,10 +264,10 @@ class ConfigManager:
 
     # helpers
     @staticmethod
-    def _extract_block(lines: list[str]) -> list[str] | None:
+    def _extract_block(lines: list[str], begin: str = BEGIN, end: str = END) -> list[str] | None:
         try:
-            i = lines.index(BEGIN)
-            j = lines.index(END)
+            i = lines.index(begin)
+            j = lines.index(end)
         except ValueError:
             return None
         if j <= i:
@@ -178,13 +275,13 @@ class ConfigManager:
         return lines[i + 1 : j]
 
     @staticmethod
-    def _strip_block(lines: list[str]) -> list[str]:
+    def _strip_block(lines: list[str], begin: str = BEGIN, end: str = END) -> list[str]:
         out, skipping = [], False
         for line in lines:
-            if line.strip() == BEGIN:
+            if line.strip() == begin:
                 skipping = True
                 continue
-            if line.strip() == END:
+            if line.strip() == end:
                 skipping = False
                 continue
             if not skipping:
@@ -197,28 +294,53 @@ def poweroff() -> None:
     subprocess.run(["sudo", "systemctl", "poweroff", "--no-wall"], check=True)
 
 
+def _require_root(cmd: str) -> bool:
+    if os.geteuid() != 0:
+        print(f"error: '{cmd}' must run as root (sudo)", file=sys.stderr)
+        return False
+    return True
+
+
 def _main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="camlab.config_manager")
     sub = ap.add_subparsers(dest="cmd", required=True)
-    p_set = sub.add_parser("set", help="rewrite the managed block (root)")
+    p_set = sub.add_parser("set", help="rewrite the camera block (root)")
     p_set.add_argument("--overlay", required=True)
     p_set.add_argument("--port", default="cam1", choices=VALID_PORTS)
     p_set.add_argument("--options", action="append", default=[])
-    sub.add_parser("get", help="print the current managed block as parsed")
+    sub.add_parser("get", help="print the current camera block as parsed")
+    p_disp = sub.add_parser("display-set", help="write the display block (root)")
+    p_disp.add_argument("--overlay", required=True, help="raw overlay, params allowed (token,dsi0)")
+    sub.add_parser("display-clear", help="remove the display block (root)")
+    sub.add_parser("display-get", help="print the current display block as parsed")
     args = ap.parse_args(argv)
 
     cm = ConfigManager()
     if args.cmd == "get":
         print(cm.get_current())
         return 0
+    if args.cmd == "display-get":
+        print(cm.get_current_display())
+        return 0
     if args.cmd == "set":
-        if os.geteuid() != 0:
-            print("error: 'set' must run as root (sudo)", file=sys.stderr)
+        if not _require_root(args.cmd):
             return 2
         cm._rewrite_in_place(args.overlay, args.port, args.options)
         print(
-            f"managed block updated: {cm.compose_dtoverlay(args.overlay, args.port, args.options)}"
+            f"camera block updated: {cm.compose_dtoverlay(args.overlay, args.port, args.options)}"
         )
+        return 0
+    if args.cmd == "display-set":
+        if not _require_root(args.cmd):
+            return 2
+        cm._rewrite_display_in_place(args.overlay)
+        print(f"display block updated: dtoverlay={args.overlay}")
+        return 0
+    if args.cmd == "display-clear":
+        if not _require_root(args.cmd):
+            return 2
+        cm._rewrite_display_in_place(None)
+        print("display block removed")
         return 0
     return 1
 

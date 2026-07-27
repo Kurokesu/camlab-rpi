@@ -24,7 +24,7 @@ jobs:
       - name: Import hardware-free modules
         run: |
           pip install pyyaml
-          python3 -c "import camlab.modes, camlab.sensors, camlab.settings, camlab.network, camlab.config_manager, camlab.stats"
+          python3 -c "import camlab.modes, camlab.sensors, camlab.settings, camlab.network, camlab.config_manager, camlab.dsi_panels, camlab.drm, camlab.stats"
 
       - name: Ruff
         run: |
@@ -42,3 +42,4 @@ jobs:
         run: |
           pip install pyyaml
           python3 -c "import yaml; yaml.safe_load(open('camlab/data/sensors.yaml'))"
+          python3 -c "import yaml; yaml.safe_load(open('camlab/data/dsi_panels.yaml'))"
