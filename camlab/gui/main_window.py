@@ -703,13 +703,15 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self._open_modal(card)
 
-    def _on_backlight(self, pct: int) -> None:
+    def _on_backlight(self, pct: int) -> bool:
         """Live during the drag: the panel itself is the feedback."""
         if self._backlight is None:
-            return
-        self._backlight.set_percent(pct)
+            return False
+        if not self._backlight.set_percent(pct):
+            return False
         self._backlight_pct = int(pct)
         self._backlight_persist.start()
+        return True
 
     def _persist_backlight(self) -> None:
         if self._backlight_pct is not None:
