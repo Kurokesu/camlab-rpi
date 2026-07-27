@@ -111,13 +111,11 @@ QLabel#version { color: #8a909b; }
 QLabel#rpiStats { color: #8a909b; }
 QLabel#statsCard { background: transparent; color: #c4c9d2; }
 QPushButton { background: #2c303a; border: 1px solid #3a3f4b; border-radius: 5px; }
-QPushButton:hover { background: #353b47; }
 QPushButton:disabled { background: #23262d; border-color: #2f333c; color: #5c6370; }
 QPushButton:checked { background: #3d4858; border-color: #7f8aa0; color: #ffffff; }
 QPushButton:focus { border-color: #7aa2f7; background: #353b47; outline: none; }
 QPushButton#danger { border-color: #803126; }
 QPushButton#danger:disabled { border-color: #4a2620; }
-QPushButton#danger:hover { background: #50211a; }
 QPushButton#danger:focus { border-color: #e06c75; background: #50211a; outline: none; }
 QPushButton#segment { background: #262a33; border: 1px solid #3a3f4b; border-radius: 0;
                       color: #c4c9d2; }
@@ -125,7 +123,6 @@ QPushButton#segment[pos="mid"], QPushButton#segment[pos="last"] { margin-left: -
 QPushButton#segment[pos="first"] { border-top-left-radius: 6px; border-bottom-left-radius: 6px; }
 QPushButton#segment[pos="last"] { border-top-right-radius: 6px; border-bottom-right-radius: 6px; }
 QPushButton#segment[pos="only"] { border-radius: 6px; }
-QPushButton#segment:hover { background: #2f3540; }
 QPushButton#segment:checked { background: #3d4858; border-color: #7f8aa0; color: #ffffff; }
 QPushButton#segment:checked:disabled { background: #2f3540; border-color: #4a505c; color: #aeb4bf; }
 QPushButton#segment:focus { border-color: #7aa2f7; background: #2f3949; outline: none; }
@@ -150,14 +147,11 @@ QFrame#controlSheet QPushButton#segment:focus { background: #2f3949; }
 QFrame#controlSheet QPushButton#segment:checked:focus { background: #45526a; }
 QCheckBox { color: #aeb4bf; spacing: 6px; }
 QCheckBox::indicator { border: 1px solid #4a505c; border-radius: 4px; background: #2c303a; }
-QCheckBox::indicator:hover { border-color: #6a7180; }
 QCheckBox::indicator:checked { border-color: #6a7180; }
-QCheckBox::indicator:checked:hover { border-color: #808998; }
 QPlainTextEdit#logView { background: #15171b; border: none; color: #c4c9d2; }
 QPlainTextEdit#logView QScrollBar:vertical { background: transparent; width: 10px; margin: 0; }
 QPlainTextEdit#logView QScrollBar::handle:vertical { background: #3a3f4b; border-radius: 5px;
                                                     min-height: 28px; }
-QPlainTextEdit#logView QScrollBar::handle:vertical:hover { background: #4a505c; }
 QPlainTextEdit#logView QScrollBar::add-line:vertical,
 QPlainTextEdit#logView QScrollBar::sub-line:vertical { height: 0; }
 QPlainTextEdit#logView QScrollBar::add-page:vertical,
@@ -167,13 +161,10 @@ QLabel#dialogNote { color: #8a909b; }
 QFrame#modalCard QWidget { background: transparent; }
 QFrame#modalCard QFrame#hsep { background: #3a3f4b; }
 QFrame#modalCard QPushButton { background: #2c303a; }
-QFrame#modalCard QPushButton:hover { background: #353b47; }
 QFrame#modalCard QPushButton:focus { background: #353b47; }
 QFrame#modalCard QPushButton:disabled { background: #23262d; }
-QFrame#modalCard QPushButton#danger:hover { background: #50211a; }
 QFrame#modalCard QPushButton#danger:focus { background: #50211a; }
 QFrame#modalCard QPushButton#segment { background: #262a33; }
-QFrame#modalCard QPushButton#segment:hover { background: #2f3540; }
 QFrame#modalCard QPushButton#segment:checked { background: #3d4858; }
 QFrame#modalCard QPushButton#segment:checked:disabled { background: #2f3540; }
 QFrame#modalCard QPushButton#segment:focus { background: #2f3949; }
@@ -181,6 +172,22 @@ QFrame#modalCard QPushButton#segment:checked:focus { background: #45526a; }
 QLabel#modalTitle { font-weight: 600; color: #e8eaed; }
 QLabel#modalText { color: #aeb4bf; }
 QLabel#modalHint { color: #9aa1ac; }
+"""
+
+# Hover is mouse-only feedback: a tap parks Qt's synthesized mouse on the
+# widget, pinning :hover until the next tap. Compact skips these rules.
+# Prepended so checked/focus rules keep winning equal-specificity ties.
+_HOVER = """
+QPushButton:hover { background: #353b47; }
+QPushButton#danger:hover { background: #50211a; }
+QPushButton#segment:hover { background: #2f3540; }
+QCheckBox::indicator:hover { border-color: #6a7180; }
+QCheckBox::indicator:checked:hover { border-color: #808998; }
+QPlainTextEdit#logView QScrollBar::handle:vertical:hover { background: #4a505c; }
+QFrame#modalCard QPushButton:hover { background: #353b47; }
+QFrame#modalCard QPushButton#danger:hover { background: #50211a; }
+QFrame#modalCard QPushButton#segment:hover { background: #2f3540; }
+QSlider::handle:horizontal:hover { background: #e8eaed; }
 """
 
 
@@ -204,7 +211,6 @@ QSlider::handle:horizontal {{ width: {p.slider_dial_px}px;
                              margin: -{margin}px 0;
                              border-radius: {radius}px;
                              background: #c4c9d2; border: 1px solid #7f8aa0; }}
-QSlider::handle:horizontal:hover {{ background: #e8eaed; }}
 QSlider[auto="true"]::handle:horizontal {{ background: #5c6370;
                                           border-color: #4a505c; }}
 QSlider[auto="true"]::sub-page:horizontal {{ background: #353b47; }}
@@ -236,4 +242,5 @@ def build_stylesheet(profile: UiProfile = REGULAR) -> str:
     )
     tick = icons.cached_png("check", profile.checkbox_px - 3, "#cdd3dd")
     tick_rule = f"QCheckBox::indicator:checked {{ image: url({tick}); }}" if tick else ""
-    return _STYLE + _profile_rules(profile) + _slider_rules(profile) + glass + tick_rule
+    hover = "" if profile.compact else _HOVER
+    return hover + _STYLE + _profile_rules(profile) + _slider_rules(profile) + glass + tick_rule

@@ -87,6 +87,7 @@ class LogPanel(QtWidgets.QWidget):
 
         clear_btn = QtWidgets.QPushButton("Clear")
         clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        clear_btn.setFocusPolicy(Qt.FocusPolicy.TabFocus)
         clear_btn.clicked.connect(self.clear)
 
         header.addWidget(title)
