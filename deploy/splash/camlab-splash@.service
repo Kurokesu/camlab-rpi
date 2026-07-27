@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Started by 99-camlab-splash.rules when a DRM fbdev appears. No [Install]:
+# device-activated only.
+
+[Unit]
+Description=Boot splash on %I
+DefaultDependencies=no
+ConditionPathExists=/lib/firmware/logo.tga
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/lib/camlab/fbsplash.py /dev/%I
