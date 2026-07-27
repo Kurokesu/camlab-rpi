@@ -248,17 +248,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self._persist_timer.setInterval(500)
         self._persist_timer.timeout.connect(self._persist_controls)
 
-        # Backlight writes are live during the drag, persistence is debounced.
+        # Backlight writes are live during drag, persistence is debounced.
         self._backlight_pct: int | None = None
         self._backlight_persist = QtCore.QTimer(self)
         self._backlight_persist.setSingleShot(True)
         self._backlight_persist.setInterval(500)
         self._backlight_persist.timeout.connect(self._persist_backlight)
 
-        # Qt commits its first surface at the layout's size hint before the
-        # compositor's fullscreen configure lands, so the window flashes small
-        # on boot. A black screen-sized cover hides that until the window is
-        # laid out fullscreen.
+        # Boot cover: hides pre-fullscreen flash until first
+        # fullscreen configure lands.
         self._boot_cover = QtWidgets.QWidget(central)
         self._boot_cover.setStyleSheet("background: #000;")
         screen = QtWidgets.QApplication.primaryScreen()
@@ -272,11 +270,24 @@ class MainWindow(QtWidgets.QMainWindow):
         self._fallback_tries = 0
         QtCore.QTimer.singleShot(3000, self._reveal_fallback)
 
-        # A late-attached display leaves the window at its size hint: the
-        # boot fullscreen configure arrives 0x0 and is never re-sent.
-        # Re-assert fullscreen when the screen topology changes.
+        # Switch cover: hides layout churn on a display hotplug, shown on
+        # output add/remove and dropped once fullscreen settles.
+        self._switch_cover = QtWidgets.QWidget(central)
+        self._switch_cover.setStyleSheet("background: #000;")
+        self._switch_cover.hide()
+        self._cover_reveal = QtCore.QTimer(self)
+        self._cover_reveal.setSingleShot(True)
+        self._cover_reveal.setInterval(200)
+        self._cover_reveal.timeout.connect(self._hide_switch_cover)
+        self._cover_timeout = QtCore.QTimer(self)
+        self._cover_timeout.setSingleShot(True)
+        self._cover_timeout.setInterval(4000)
+        self._cover_timeout.timeout.connect(self._hide_switch_cover)
+
+        # Re-assert fullscreen whenever screen topology changes.
         app = QtWidgets.QApplication.instance()
         app.screenAdded.connect(self._on_screen_added)
+        app.screenRemoved.connect(self._on_screen_removed)
         app.primaryScreenChanged.connect(lambda _s: self._resync_fullscreen())
         for scr in app.screens():
             scr.geometryChanged.connect(lambda _g: self._resync_fullscreen())
@@ -734,14 +745,17 @@ class MainWindow(QtWidgets.QMainWindow):
     # lifecycle
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
+        if self._switch_cover.isVisible():
+            self._switch_cover.setGeometry(self.centralWidget().rect())
+            scr = self.screen() or QtWidgets.QApplication.primaryScreen()
+            if scr is not None and abs(self.width() - scr.geometry().width()) <= 1:
+                self._cover_reveal.start()
+            else:
+                self._cover_reveal.stop()
         if self._boot_cover is None:
             return
-        # Reaching fullscreen width once is not enough: early Wayland configure
-        # churn can still commit a buffer at the pre-fullscreen size, flashing
-        # chrome mid-screen. Reveal only after the size holds fullscreen for a
-        # settle window (any resize restarts it). The camera starts as soon as
-        # fullscreen is first reached, so its blocking start hides behind the
-        # cover and the reveal shows chrome with video already flowing.
+        # Reveal only once size holds fullscreen for a settle window (any
+        # resize restarts it). Camera's blocking start hides behind the cover.
         screen = self.screen() or QtWidgets.QApplication.primaryScreen()
         if screen is not None and self.width() >= screen.geometry().width() - 1:
             QtCore.QTimer.singleShot(0, self._start_engine)
@@ -750,11 +764,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self._reveal_timer.stop()
 
     def _reveal_fallback(self) -> None:
-        # At cold boot the compositor can hold the first fullscreen configure
-        # past this timer (display modeset in progress), and dropping the cover
-        # then would bare the next pre-fullscreen buffer. Re-arm while the
-        # window is not fullscreen yet, revealing unconditionally only after
-        # ten tries so a non-kiosk session cannot stay covered forever.
+        # Cold boot can hold fullscreen configure past reveal timer.
+        # Re-arm until fullscreen, force-reveal after ten tries.
         if self._boot_cover is None:
             return
         screen = self.screen() or QtWidgets.QApplication.primaryScreen()
@@ -774,8 +785,27 @@ class MainWindow(QtWidgets.QMainWindow):
         QtCore.QTimer.singleShot(0, self._start_engine)
 
     def _on_screen_added(self, screen) -> None:
+        self._show_switch_cover()
         screen.geometryChanged.connect(lambda _g: self._resync_fullscreen())
         self._resync_fullscreen()
+
+    def _on_screen_removed(self, _screen) -> None:
+        self._show_switch_cover()
+        self._resync_fullscreen()
+
+    def _show_switch_cover(self) -> None:
+        if self._boot_cover is not None:  # boot cover already blanks everything
+            return
+        self._cover_reveal.stop()
+        self._switch_cover.setGeometry(self.centralWidget().rect())
+        self._switch_cover.raise_()
+        self._switch_cover.show()
+        self._cover_timeout.start()
+
+    def _hide_switch_cover(self) -> None:
+        self._cover_reveal.stop()
+        self._cover_timeout.stop()
+        self._switch_cover.hide()
 
     def _on_display_changed(self, screen) -> None:
         """DisplayManager settled on an output: swap profile, refit streams."""
@@ -858,10 +888,19 @@ class MainWindow(QtWidgets.QMainWindow):
             self._boot_cover.setGeometry(
                 0, 0, max(g.width(), self.width()), max(g.height(), self.height())
             )
-        if self.width() >= g.width() - 1:
+        if self.isFullScreen() and abs(self.width() - g.width()) <= 1:
+            if self._switch_cover.isVisible():
+                self._cover_reveal.start()
             return
-        # showFullScreen() alone is a no-op while Qt still thinks it is
-        # fullscreen. Drop to normal to force a fresh set_fullscreen.
+        log.info(
+            "fullscreen resync: window=%dx%d screen=%dx%d",
+            self.width(),
+            self.height(),
+            g.width(),
+            g.height(),
+        )
+        # showFullScreen() is a no-op while Qt already believes it is
+        # fullscreen, so drop to normal first to force a fresh request.
         self.showNormal()
         self.showFullScreen()
 

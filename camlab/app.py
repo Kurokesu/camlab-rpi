@@ -88,6 +88,8 @@ def main(argv: list[str] | None = None) -> int:
     # X11 size before fullscreening).
     if os.environ.get("WAYLAND_DISPLAY"):
         os.environ["QT_QPA_PLATFORM"] = "wayland"
+        # Kiosk: no client-side decorations, even if fullscreen state drops.
+        os.environ["QT_WAYLAND_DISABLE_WINDOWDECORATION"] = "1"
 
     # Settle HDMI versus DSI panel before Qt connects to the compositor, so
     # layout profile and lores sizing see the final display.
