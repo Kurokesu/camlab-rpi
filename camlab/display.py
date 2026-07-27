@@ -18,16 +18,17 @@ import logging
 import subprocess
 from pathlib import Path
 
-from .drm import connected_connectors
+from .drm import connected_connectors, has_dsi_connector
 from .qt import QtCore, QtGui, QtWidgets, Signal
 
 log = logging.getLogger(__name__)
 
-_WLR_TIMEOUT_S = 5.0
+_WLR_TIMEOUT_S = 2.0
 
-# Qt screen churn during a hotplug arrives as a burst, so wait it out.
+# _SETTLE_MS debounces Qt's screen-event burst before enforcing. The same
+# beat after enforcing lets Qt pick up new output topology.
 _SETTLE_MS = 300
-# Safety net for hotplugs Qt never reported.
+# Safety net for DRM changes Qt never reported.
 _POLL_MS = 2000
 
 
@@ -65,6 +66,8 @@ def enforce_output_policy() -> bool:
     Needs no Qt event loop, so startup can call it before QApplication exists
     and connect to the compositor with the right output already up.
     """
+    if not has_dsi_connector():  # HDMI-only rig: nothing to switch between
+        return False
     outputs = _wlr_outputs()
     if not outputs:
         return False
@@ -124,7 +127,12 @@ class DisplayManager(QtCore.QObject):
         self._poll.timeout.connect(self._poll_drm)
 
     def start(self) -> None:
-        """Connect hotplug signals and run the initial enforcement pass."""
+        """Connect hotplug signals and run the initial enforcement pass.
+        Without a DSI connector there is nothing to switch between, so
+        only report the boot screen."""
+        if not has_dsi_connector():
+            QtCore.QTimer.singleShot(0, self._emit_changed)
+            return
         self._app.screenAdded.connect(lambda _s: self._settle.start())
         self._app.screenRemoved.connect(lambda _s: self._settle.start())
         self._drm_state = connected_connectors()
