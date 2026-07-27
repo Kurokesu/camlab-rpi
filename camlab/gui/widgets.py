@@ -70,12 +70,14 @@ class SegmentedSelector(QtWidgets.QWidget):
         current: Any = None,
         enabled: bool = True,
         stretch: bool = True,
+        disabled_values: tuple | list | set = (),
     ) -> None:
         """Populate (text, value) options, preselecting `current` if present.
 
-        `stretch` trails the row with an expanding spacer (left-packs the
-        buttons in a wide form). Pass False to keep the row hugging its buttons
-        (e.g. inline in a toolbar header).
+        `stretch` trails the row with an expanding spacer (left-packs buttons
+        in a wide form). Pass False to keep the row hugging its buttons
+        (e.g. inline in a toolbar header). `disabled_values` greys out
+        individual options (e.g. a CSI port occupied by a DSI display).
         """
         for btn in self._group.buttons():
             self._group.removeButton(btn)
@@ -88,7 +90,7 @@ class SegmentedSelector(QtWidgets.QWidget):
 
         self._values = [value for _text, value in options]
         last = len(options) - 1
-        for i, (text, _value) in enumerate(options):
+        for i, (text, value) in enumerate(options):
             btn = QtWidgets.QPushButton(text)
             btn.setObjectName("segment")
             # Position drives which outer corners round. Non-first buttons overlap
@@ -104,13 +106,17 @@ class SegmentedSelector(QtWidgets.QWidget):
             btn.setProperty("pos", pos)
             btn.setCheckable(True)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setEnabled(enabled)
+            btn.setEnabled(enabled and value not in disabled_values)
             self._group.addButton(btn, i)
             self._row.addWidget(btn)
         if stretch:
             self._row.addStretch(1)
 
-        idx = self._values.index(current) if current in self._values else 0
+        selectable = [i for i, v in enumerate(self._values) if self._group.button(i).isEnabled()]
+        if current in self._values and self._values.index(current) in selectable:
+            idx = self._values.index(current)
+        else:
+            idx = selectable[0] if selectable else 0
         if self._values:
             self._group.button(idx).setChecked(True)
 
