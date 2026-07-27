@@ -6,9 +6,10 @@
 One QSS blob plus generated pieces: profile-sized rules, modal-card glass and
 the checkbox tick (a glyph rasterised to PNG, QSS needs an image url).
 
-REGULAR covers HDMI monitors, COMPACT small touch panels (800x480 at
-~220 ppi) where text must stay readable and controls finger-sized. Profile is
-picked from the active screen and re-applied live on display switches.
+REGULAR covers HDMI monitors, COMPACT small high-density touch panels
+(800x480 class) where text must stay readable and controls finger-sized.
+Profile is picked from the active screen and re-applied live on display
+switches.
 """
 
 from __future__ import annotations
