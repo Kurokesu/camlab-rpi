@@ -113,10 +113,10 @@ class SensorCard(QtWidgets.QFrame):
         self.variant_sel.changed.connect(self._refresh_apply)
 
         form.addRow("Sensor:", self.sensor_sel)
+        form.addRow(self.variant_lbl, self.variant_sel)
         form.addRow("CSI port:", self.port_sel)
         form.addRow("Touch display:", self.display_sel)
         form.addRow(self.wiring_note)
-        form.addRow(self.variant_lbl, self.variant_sel)
 
         self._rebuild_variant(current_name, self._init_mono)
         self._update_notes(current_name)
