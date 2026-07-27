@@ -43,7 +43,6 @@ _CODEPOINTS: dict[str, int] = {
     "stroke_partial": 0xF748,
     "bar_chart": 0xE26B,
     "brightness_6": 0xE3AB,
-    "vertical_align_bottom": 0xE258,
 }
 
 _FAMILY: str | None = None
