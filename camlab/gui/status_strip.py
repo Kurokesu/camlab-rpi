@@ -16,16 +16,8 @@ from __future__ import annotations
 from .. import __version__
 from ..integrity import CATEGORY_LABELS, CATEGORY_SEVERITY, IntegrityStats
 from ..qt import Qt, QtWidgets, Slot
+from .rpi_stats import RpiStatsView
 from .widgets import repolish
-
-
-def _pad(text: str, width: int) -> str:
-    """Pad with trailing figure spaces (digit-width) to `width` chars.
-
-    Keeps the field's width constant across digit-count changes while the
-    value itself hugs its label. The slack lands before the next separator
-    where it is invisible."""
-    return text.ljust(width, "\u2007")
 
 
 class StatusStrip(QtWidgets.QFrame):
@@ -72,38 +64,18 @@ class StatusStrip(QtWidgets.QFrame):
         rrow.addWidget(self.errors_lbl)
         rrow.addWidget(self.warnings_lbl)
 
-        # Build version on the left so the operator can read the running build at a
-        # glance, followed by board health facts (sampled at 1 Hz by MainWindow).
+        # Build version on the left so the operator can read the running build
+        # at a glance, followed by board stats (sampled at 1 Hz by MainWindow).
         # Both live in the balanced left zone, so telemetry stays centred.
         self.version_lbl = QtWidgets.QLabel(f"camlab v{__version__}", self)
         self.version_lbl.setObjectName("version")
-        # One label per health fact, split by hairlines. Fields whose source
-        # is missing stay hidden along with their leading hairline.
-        self._rpi_box = QtWidgets.QWidget(self)
-        self._rpi_fields: list[QtWidgets.QLabel] = []
-        self._rpi_seps: list[QtWidgets.QFrame] = []
-        rrpi = QtWidgets.QHBoxLayout(self._rpi_box)
-        rrpi.setContentsMargins(0, 0, 0, 0)
-        rrpi.setSpacing(10)
-        for i in range(5):  # CPU, GPU, RAM, SoC, RP1
-            if i:
-                sep = QtWidgets.QFrame(self._rpi_box)
-                sep.setObjectName("vsep")
-                sep.setFixedSize(1, 11)
-                rrpi.addWidget(sep, 0, Qt.AlignmentFlag.AlignVCenter)
-                self._rpi_seps.append(sep)
-            lbl = QtWidgets.QLabel(self._rpi_box)
-            lbl.setObjectName("rpiStats")
-            rrpi.addWidget(lbl)
-            self._rpi_fields.append(lbl)
-        self._rpi_shown = False
-        self._rpi_box.setVisible(False)
+        self.rpi = RpiStatsView(parent=self)
         self._left = QtWidgets.QWidget(self)
         lrow = QtWidgets.QHBoxLayout(self._left)
         lrow.setContentsMargins(0, 0, 0, 0)
         lrow.setSpacing(16)
         lrow.addWidget(self.version_lbl)
-        lrow.addWidget(self._rpi_box)
+        lrow.addWidget(self.rpi)
         lrow.addStretch(1)
 
         lay.addWidget(self._left)
@@ -128,8 +100,8 @@ class StatusStrip(QtWidgets.QFrame):
         """Give the left and right zones one shared fixed width (the wider
         one's content), so the centred telemetry cannot drift sideways."""
         left_min = self.version_lbl.sizeHint().width()
-        if self._rpi_shown:
-            left_min += 16 + self._rpi_box.sizeHint().width()
+        if self.rpi.isVisible():
+            left_min += 16 + self.rpi.sizeHint().width()
         right_min = sum(
             w.sizeHint().width() for w in (self.boot_lbl, self.errors_lbl, self.warnings_lbl)
         )
@@ -189,33 +161,9 @@ class StatusStrip(QtWidgets.QFrame):
             self.temp_lbl.setText(f"{self._temp:.1f}\u00b0C")
 
     def set_rpi_stats(self, s) -> None:
-        """Board health facts (RpiStatsSample), missing sources drop out.
-
-        Numbers are figure-space padded to their widest realistic form, so a
-        digit-count change cannot shift the fields after it."""
-        ram = None
-        if s.ram_used_mb is not None and s.ram_total_mb is not None:
-            total = f"{s.ram_total_mb / 1024:.1f}"
-            used = _pad(f"{s.ram_used_mb / 1024:.1f}", len(total))
-            ram = f"RAM {used}/{total}GB"
-        texts = [
-            f"CPU {_pad(f'{s.cpu_pct:.0f}%', 4)}" if s.cpu_pct is not None else None,
-            f"GPU {_pad(f'{s.gpu_pct:.0f}%', 4)}" if s.gpu_pct is not None else None,
-            ram,
-            f"SoC {s.soc_temp_c:.0f}\u00b0C" if s.soc_temp_c is not None else None,
-            f"RP1 {s.rp1_temp_c:.0f}\u00b0C" if s.rp1_temp_c is not None else None,
-        ]
-        shown_any = False
-        for i, (lbl, text) in enumerate(zip(self._rpi_fields, texts)):
-            visible = text is not None
-            lbl.setVisible(visible)
-            if visible:
-                lbl.setText(text)
-            if i:
-                self._rpi_seps[i - 1].setVisible(visible and shown_any)
-            shown_any = shown_any or visible
-        self._rpi_shown = shown_any
-        self._rpi_box.setVisible(shown_any)
+        """Board facts (RpiStatsSample), missing sources drop out."""
+        self.rpi.set_stats(s)
+        self.rpi.setVisible(self.rpi.has_data)
         self._sync_balance()
 
     def set_boot_time(self, seconds: float | None) -> None:
