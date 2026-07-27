@@ -11,7 +11,7 @@ from typing import ClassVar
 from .. import network
 from ..camera import CameraEngine
 from ..config_manager import ConfigManager, poweroff
-from ..display import DisplayManager
+from ..display import Backlight, DisplayManager
 from ..integrity import IntegrityMonitor, LogClassifier, StderrCapture
 from ..modes import mode_for
 from ..qt import Qt, QtCore, QtGui, QtWidgets, Signal, Slot
@@ -59,6 +59,7 @@ class MainWindow(QtWidgets.QMainWindow):
         classifier: LogClassifier,
         settings: SettingsStore,
         display_manager: DisplayManager | None = None,
+        backlight: Backlight | None = None,
     ):
         super().__init__()
         self.engine = engine
@@ -70,6 +71,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._overlay: ModalOverlay | None = None
         self._boot_cover: QtWidgets.QWidget | None = None
         self._engine_started = False
+        self._backlight = backlight
         # app.py settles output policy before Qt starts, so the boot-time
         # primary screen is already the one to lay out for.
         self._profile: UiProfile = profile_for_screen(QtWidgets.QApplication.primaryScreen())
@@ -243,6 +245,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self._persist_timer.setSingleShot(True)
         self._persist_timer.setInterval(500)
         self._persist_timer.timeout.connect(self._persist_controls)
+
+        # Backlight writes are live during the drag, persistence is debounced.
+        self._backlight_pct: int | None = None
+        self._backlight_persist = QtCore.QTimer(self)
+        self._backlight_persist.setSingleShot(True)
+        self._backlight_persist.setInterval(500)
+        self._backlight_persist.timeout.connect(self._persist_backlight)
 
         # Qt commits its first surface at the layout's size hint before the
         # compositor's fullscreen configure lands, so the window flashes small
@@ -668,13 +677,30 @@ class MainWindow(QtWidgets.QMainWindow):
         poweroff()
 
     def _open_settings(self) -> None:
+        backlight_pct = None
+        if self._backlight is not None and self._backlight.available:
+            backlight_pct = self._backlight.get_percent()
         card = SettingsCard(
             histogram_on=self._histogram_on,
+            backlight_pct=backlight_pct,
             on_apply_network=self._apply_network,
             on_apply_histogram=self._apply_histogram,
+            on_backlight=self._on_backlight,
             on_cancel=self._close_modal,
         )
         self._open_modal(card)
+
+    def _on_backlight(self, pct: int) -> None:
+        """Live during the drag: the panel itself is the feedback."""
+        if self._backlight is None:
+            return
+        self._backlight.set_percent(pct)
+        self._backlight_pct = int(pct)
+        self._backlight_persist.start()
+
+    def _persist_backlight(self) -> None:
+        if self._backlight_pct is not None:
+            self.settings.set_backlight(self._backlight_pct)
 
     def _apply_histogram(self, enabled: bool) -> None:
         self._histogram_on = bool(enabled)

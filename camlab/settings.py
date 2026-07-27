@@ -156,6 +156,20 @@ class SettingsStore:
         data.setdefault("ui", {})["histogram"] = bool(enabled)
         return self._atomic_write(data)
 
+    def get_backlight(self) -> int | None:
+        """Panel backlight percent, None when never set (keep the panel default)."""
+        value = (self._load().get("ui") or {}).get("backlight")
+        try:
+            return int(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    def set_backlight(self, percent: int) -> bool:
+        data = self._load()
+        data["version"] = _VERSION
+        data.setdefault("ui", {})["backlight"] = int(percent)
+        return self._atomic_write(data)
+
     def _atomic_write(self, data: dict) -> bool:
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)

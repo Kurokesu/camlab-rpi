@@ -3,9 +3,11 @@
 
 """Settings card - app-level system options, one row per setting.
 
-Rendered inside a ModalOverlay like the sensor/mode cards. Rows: the
-networking toggle and the histogram overlay toggle. The card reads live
-state when built. Apply only acts on rows whose selection changed.
+Rendered inside a ModalOverlay like the sensor/mode cards. Rows: networking
+toggle, histogram overlay toggle and (on touch-panel rigs) panel brightness.
+The card reads live state when built. Apply only acts on rows whose selection
+changed. Brightness applies live while dragging: the screen itself is the
+feedback.
 """
 
 from __future__ import annotations
@@ -13,8 +15,10 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from .. import network
+from ..display import BACKLIGHT_FLOOR_PCT
 from ..qt import Qt, QtWidgets
 from . import icons
+from .control_sheet import JumpSlider
 from .widgets import SegmentedSelector, hline
 
 _ICON_PX = 20
@@ -24,8 +28,10 @@ class SettingsCard(QtWidgets.QFrame):
     def __init__(
         self,
         histogram_on: bool,
+        backlight_pct: int | None,
         on_apply_network: Callable[[bool], None],
         on_apply_histogram: Callable[[bool], None],
+        on_backlight: Callable[[int], None],
         on_cancel: Callable[[], None],
     ):
         super().__init__()
@@ -33,6 +39,7 @@ class SettingsCard(QtWidgets.QFrame):
         self.setMinimumWidth(420)
         self._on_apply_network = on_apply_network
         self._on_apply_histogram = on_apply_histogram
+        self._on_backlight = on_backlight
         self._on_cancel = on_cancel
         self._net_initial = network.is_enabled()
         self._hist_initial = bool(histogram_on)
@@ -55,8 +62,7 @@ class SettingsCard(QtWidgets.QFrame):
         form.addRow("Networking:", net_row)
 
         note = QtWidgets.QLabel(
-            "Off makes the device boot faster. Applies immediately, except "
-            "Ethernet stays connected until next boot."
+            '"Off" makes camlab boot faster. Ethernet stays connected until next boot.'
         )
         note.setObjectName("dialogNote")
         note.setWordWrap(True)
@@ -76,6 +82,24 @@ class SettingsCard(QtWidgets.QFrame):
         hist_row.addWidget(hist_label)
         hist_row.addWidget(self.hist_sel, 1)
         form.addRow("Histogram:", hist_row)
+
+        # Brightness only when a backlight device exists (DSI panel rigs).
+        if backlight_pct is not None:
+            bl_label = QtWidgets.QLabel()
+            bl_label.setPixmap(icons.pixmap("brightness_6", _ICON_PX, "#8a909b"))
+            bl_row = QtWidgets.QHBoxLayout()
+            bl_row.setSpacing(8)
+            self.backlight_slider = JumpSlider(Qt.Orientation.Horizontal)
+            self.backlight_slider.setRange(BACKLIGHT_FLOOR_PCT, 100)
+            self.backlight_slider.setValue(int(backlight_pct))
+            self.backlight_slider.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+            self.backlight_slider.valueChanged.connect(self._on_backlight_moved)
+            self.backlight_lbl = QtWidgets.QLabel(f"{int(backlight_pct)}%")
+            self.backlight_lbl.setMinimumWidth(44)
+            bl_row.addWidget(bl_label)
+            bl_row.addWidget(self.backlight_slider, 1)
+            bl_row.addWidget(self.backlight_lbl)
+            form.addRow("Brightness:", bl_row)
 
         buttons = QtWidgets.QHBoxLayout()
         cancel_btn = QtWidgets.QPushButton("Cancel")
@@ -100,6 +124,10 @@ class SettingsCard(QtWidgets.QFrame):
         lay.addLayout(buttons)
 
         self._refresh_apply()
+
+    def _on_backlight_moved(self, value: int) -> None:
+        self.backlight_lbl.setText(f"{value}%")
+        self._on_backlight(int(value))
 
     def _refresh_apply(self) -> None:
         """Apply is live only when a selection changed."""
