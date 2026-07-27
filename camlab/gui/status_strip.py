@@ -5,9 +5,8 @@
 
 Everything here is a FACT, never a pass/fail verdict (per spec). The centre
 mirrors rpicam-hello's default info-text (#frame (fps fps) exp ag dg) plus the
-sensor temperature. The build version anchors the left, next to the board
-stats on a monitor. The touch panel drops the frame counter for width and pins
-SoC and RP1 on the right, so throttling is visible without opening any panel.
+sensor temperature. The build version anchors the left, board stats anchor the
+right. The touch panel drops the frame counter and trims stats to CPU and GPU.
 Rendered as flat text (no chip boxes) so it reads as read-only, visually
 distinct from the clickable controls below.
 """
@@ -48,29 +47,28 @@ class StatusStrip(QtWidgets.QFrame):
         trow.addWidget(self.temp_lbl)
 
         # Build version on the left so the operator can read the running build
-        # at a glance, followed by board stats (sampled at 1 Hz by MainWindow).
+        # at a glance.
         self.version_lbl = QtWidgets.QLabel(f"camlab v{__version__}", self)
         self.version_lbl.setObjectName("version")
-        self.rpi = RpiStatsView(parent=self)
         self._left = QtWidgets.QWidget(self)
         lrow = QtWidgets.QHBoxLayout(self._left)
         lrow.setContentsMargins(0, 0, 0, 0)
         lrow.setSpacing(_GAP)
         lrow.addWidget(self.version_lbl)
-        lrow.addWidget(self.rpi)
         lrow.addStretch(1)
 
-        # Temperatures anchor right on the panel, where the full cluster does
-        # not fit. Telemetry is centred by fixing left and right zones to one
-        # shared width (the wider one's content), so the stretches around it
-        # always split the leftover space evenly.
-        self.temps = RpiStatsView(fields=("soc", "rp1"), parent=self)
+        # Board stats (sampled at 1 Hz by MainWindow) anchor the right. Two
+        # renders of one sample: a monitor fits all five fields, the panel
+        # keeps CPU and GPU.
+        self.stats = RpiStatsView(parent=self)
+        self.stats_compact = RpiStatsView(fields=("cpu", "gpu"), parent=self)
         self._right = QtWidgets.QWidget(self)
         rrow = QtWidgets.QHBoxLayout(self._right)
         rrow.setContentsMargins(0, 0, 0, 0)
         rrow.setSpacing(_GAP)
         rrow.addStretch(1)
-        rrow.addWidget(self.temps)
+        rrow.addWidget(self.stats)
+        rrow.addWidget(self.stats_compact)
 
         lay.addWidget(self._left)
         lay.addStretch(1)
@@ -90,29 +88,38 @@ class StatusStrip(QtWidgets.QFrame):
         self._sync_balance()
 
     def set_compact(self, compact: bool) -> None:
-        """Compact shortens the version and splits board stats: temperatures
-        move right, load and RAM go to the log panel. The build stays on
-        screen, RELEASING.md and the bug report template both point here."""
+        """Compact shortens the version, drops the frame counter and trims
+        stats. The build stays on screen, RELEASING.md and the bug report
+        template both point here."""
         self._compact = bool(compact)
         self.version_lbl.setText(f"v{__version__}" if self._compact else f"camlab v{__version__}")
-        self._sync_rpi()
+        self._sync_stats()
         self._render_telemetry()
         self._sync_balance()
 
-    def _sync_rpi(self) -> None:
-        self.rpi.setVisible(self.rpi.has_data and not self._compact)
-        self.temps.setVisible(self.temps.has_data and self._compact)
+    def _active_stats(self) -> RpiStatsView:
+        return self.stats_compact if self._compact else self.stats
+
+    def _sync_stats(self) -> None:
+        active = self._active_stats()
+        for view in (self.stats, self.stats_compact):
+            view.setVisible(view is active and view.has_data)
 
     def _sync_balance(self) -> None:
-        """Give the left and right zones one shared fixed width (the wider
-        one's content), so the centred telemetry cannot drift sideways."""
+        """Regular pins both zones to one shared fixed width (the wider one's
+        content) so the centred telemetry cannot drift sideways. Compact has
+        no width to spare, so zones hug their content and telemetry floats in
+        the leftover space instead."""
         left_min = self.version_lbl.sizeHint().width()
-        if self.rpi.isVisible():
-            left_min += _GAP + self.rpi.sizeHint().width()
-        right_min = self.temps.sizeHint().width() if self.temps.isVisible() else 0
-        width = max(left_min, right_min)
-        self._left.setFixedWidth(width)
-        self._right.setFixedWidth(width)
+        active = self._active_stats()
+        right_min = active.sizeHint().width() if active.has_data else 0
+        if self._compact:
+            self._left.setFixedWidth(left_min)
+            self._right.setFixedWidth(right_min)
+        else:
+            width = max(left_min, right_min)
+            self._left.setFixedWidth(width)
+            self._right.setFixedWidth(width)
 
     def set_telemetry(
         self,
@@ -169,7 +176,7 @@ class StatusStrip(QtWidgets.QFrame):
 
     def set_rpi_stats(self, s) -> None:
         """Board facts (RpiStatsSample), missing sources drop out."""
-        self.rpi.set_stats(s)
-        self.temps.set_stats(s)
-        self._sync_rpi()
+        self.stats.set_stats(s)
+        self.stats_compact.set_stats(s)
+        self._sync_stats()
         self._sync_balance()

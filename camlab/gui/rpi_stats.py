@@ -3,9 +3,8 @@
 
 """View for an RpiStatsSample (CPU, GPU, RAM, SoC and RP1 temperatures).
 
-One instance renders whichever fields it is given, so the cluster can be
-split: a monitor shows all five in the status strip, the touch panel pins the
-two temperatures there and keeps load and RAM in the log panel.
+RpiStatsView renders whichever fields it is given as a row: the status strip
+shows all five on a monitor and CPU/GPU on the touch panel.
 """
 
 from __future__ import annotations

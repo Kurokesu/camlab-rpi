@@ -10,8 +10,7 @@ buried when errors flood the stream. The panel keeps a bounded ring buffer so
 the filter re-renders without re-tailing.
 
 It is also the session-diagnostics home: boot-to-viewfinder time sits in the
-header, and on the touch panel so do the load and RAM facts the status strip
-has no room for.
+header.
 """
 
 from __future__ import annotations
@@ -22,7 +21,7 @@ import html
 from ..integrity import IntegrityStats, LogClassifier, breakdown_text
 from ..qt import Qt, QtCore, QtGui, QtWidgets, Signal, Slot
 from . import icons
-from .rpi_stats import RpiStatsView, pad
+from .rpi_stats import pad
 from .widgets import SegmentedSelector
 
 _MAX_LINES = 2000
@@ -106,16 +105,6 @@ class LogPanel(QtWidgets.QWidget):
         header.addWidget(self.follow_btn)
         header.addWidget(clear_btn)
 
-        # Load and RAM on their own row, compact only: the status strip keeps
-        # temperatures and has no width left for these.
-        self.rpi = RpiStatsView(fields=("cpu", "gpu", "ram"), parent=self)
-        self._rpi_row = QtWidgets.QWidget(self)
-        hrow = QtWidgets.QHBoxLayout(self._rpi_row)
-        hrow.setContentsMargins(12, 0, 12, 4)
-        hrow.addWidget(self.rpi)
-        hrow.addStretch(1)
-        self._rpi_row.setVisible(False)
-
         self.view = QtWidgets.QPlainTextEdit()
         self.view.setReadOnly(True)
         self.view.setObjectName("logView")
@@ -142,7 +131,6 @@ class LogPanel(QtWidgets.QWidget):
         self.view.verticalScrollBar().valueChanged.connect(self._on_scrolled)
 
         lay.addLayout(header)
-        lay.addWidget(self._rpi_row)
         lay.addWidget(self.view)
 
         self.set_boot_time(None)
@@ -166,18 +154,9 @@ class LogPanel(QtWidgets.QWidget):
         value = f"{seconds:.1f}s" if seconds is not None else "..."
         self.boot_lbl.setText(f"boot time {value}")
 
-    def set_rpi_stats(self, s) -> None:
-        self.rpi.set_stats(s)
-        self.rpi.setVisible(self.rpi.has_data)
-        self._sync_rpi_row()
-
     def set_compact(self, compact: bool) -> None:
         self._compact = bool(compact)
-        self._sync_rpi_row()
         self.update_integrity(self._last_stats)  # re-render labels for the profile
-
-    def _sync_rpi_row(self) -> None:
-        self._rpi_row.setVisible(self._compact and self.rpi.has_data)
 
     @Slot(object)
     def update_integrity(self, stats: IntegrityStats) -> None:
