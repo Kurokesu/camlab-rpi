@@ -21,8 +21,7 @@ import html
 from ..integrity import IntegrityStats, LogClassifier, breakdown_text
 from ..qt import Qt, QtCore, QtGui, QtWidgets, Signal, Slot
 from . import icons
-from .rpi_stats import pad
-from .widgets import SegmentedSelector
+from .widgets import SegmentedSelector, repolish
 
 _MAX_LINES = 2000
 
@@ -35,10 +34,8 @@ _POINTER_EVENTS = frozenset(
     }
 )
 
-# Log line colour per severity, shared with the filter glyphs.
+# Log line color per severity
 _SEV_COLOR = {"error": "#e06c75", "warning": "#e5c07b"}
-# A zero count is not an all-clear verdict, so it reads muted rather than green.
-_SEV_IDLE = "#8a909b"
 _HEADER_ICON_PX = 18
 
 
@@ -54,8 +51,6 @@ class LogPanel(QtWidgets.QWidget):
             maxlen=_MAX_LINES
         )
         self._filter = "all"
-        self._compact = False
-        self._last_stats = IntegrityStats()
         self._pending = False  # lines arrived while frozen
         self._syncing = False  # our own scrolling, not the operator's
 
@@ -75,7 +70,7 @@ class LogPanel(QtWidgets.QWidget):
 
         self.filter = SegmentedSelector()
         self.filter.set_options(
-            [("All", "all"), (pad("0", 3), "warning"), (pad("0", 3), "error")],
+            [("All", "all"), ("Warnings", "warning"), ("Errors", "error")],
             current="all",
             stretch=False,
         )
@@ -154,27 +149,21 @@ class LogPanel(QtWidgets.QWidget):
         value = f"{seconds:.1f}s" if seconds is not None else "..."
         self.boot_lbl.setText(f"boot time {value}")
 
-    def set_compact(self, compact: bool) -> None:
-        self._compact = bool(compact)
-        self.update_integrity(self._last_stats)  # re-render labels for the profile
-
     @Slot(object)
     def update_integrity(self, stats: IntegrityStats) -> None:
-        """Counts ride the filter segments they select for. Compact drops the
-        words to fit, the tinted glyph and count still carry the meaning."""
-        self._last_stats = stats
+        """Counts ride filter segments they select for, text tinted by
+        severity when count is non-zero."""
         for value, word, count in (
             ("warning", "Warnings", stats.warnings),
             ("error", "Errors", stats.errors),
         ):
-            color = _SEV_COLOR[value] if count else _SEV_IDLE
-            text = pad(str(count), 3) if self._compact else f"{word} {pad(str(count), 3)}"
-            self.filter.set_option_label(
-                value,
-                text=text,
-                icon=icons.icon(value, _HEADER_ICON_PX, color),
-                tooltip=breakdown_text(stats, value),
-            )
+            btn = self.filter.button(value)
+            if btn is None:
+                continue
+            btn.setText(f"{word} {count}")
+            btn.setToolTip(breakdown_text(stats, value))
+            btn.setProperty("sev", value if count else None)
+            repolish(btn)
 
     # log stream
     def append_line(self, line: str) -> None:

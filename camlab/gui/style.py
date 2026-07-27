@@ -130,6 +130,8 @@ QPushButton#segment:checked { background: #3d4858; border-color: #7f8aa0; color:
 QPushButton#segment:checked:disabled { background: #2f3540; border-color: #4a505c; color: #aeb4bf; }
 QPushButton#segment:focus { border-color: #7aa2f7; background: #2f3949; outline: none; }
 QPushButton#segment:checked:focus { border-color: #9db8ff; background: #45526a; color: #ffffff; }
+QPushButton#segment[sev="warning"], QPushButton#segment[sev="warning"]:checked { color: #e5c07b; }
+QPushButton#segment[sev="error"], QPushButton#segment[sev="error"]:checked { color: #e06c75; }
 QPushButton#chip { text-align: left; }
 QPushButton[manual="true"] { border-color: #7f6a3d; color: #e5c07b; }
 QPushButton[manual="true"]:checked { background: #4a4231; border-color: #b08d3f; color: #f0d493; }

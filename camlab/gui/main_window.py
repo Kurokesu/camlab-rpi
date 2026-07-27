@@ -210,7 +210,6 @@ class MainWindow(QtWidgets.QMainWindow):
         # Log panel (collapsed by default) sits below the controls. Both stretch
         # 1, so opening the log shrinks the viewfinder to fit.
         self.log_panel = LogPanel(classifier)
-        self.log_panel.set_compact(self._profile.compact)
         self.log_panel.setVisible(False)
         root.addWidget(self.log_panel, 1)
 
@@ -908,7 +907,6 @@ class MainWindow(QtWidgets.QMainWindow):
         if self._open_sheet is not None:
             self._position_sheet(self._open_sheet)
         self.status.set_compact(profile.compact)
-        self.log_panel.set_compact(profile.compact)
         # A monitor already shows the full cluster in the strip.
         if not profile.compact:
             self.viewfinder_area.set_stats_overlay(False)
