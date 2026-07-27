@@ -11,7 +11,7 @@ import sys
 
 from .camera import CameraEngine
 from .config_manager import ConfigManager
-from .display import CursorPolicy, DisplayManager, enforce_output_policy
+from .display import Backlight, CursorPolicy, DisplayManager, enforce_output_policy
 from .gl_viewfinder import install_gles_format
 from .gui.main_window import MainWindow
 from .gui.style import profile_for_screen
@@ -93,6 +93,12 @@ def main(argv: list[str] | None = None) -> int:
     # layout profile and lores sizing see the final display.
     enforce_output_policy()
 
+    # Restore persisted panel brightness before anything renders.
+    backlight = Backlight()
+    saved_backlight = settings.get_backlight()
+    if backlight.available and saved_backlight is not None:
+        backlight.set_percent(saved_backlight)
+
     # Viewfinder needs a GLES context (samplerExternalOES), set before QApplication.
     install_gles_format()
     app = QtWidgets.QApplication(argv if argv is not None else sys.argv)
@@ -125,6 +131,7 @@ def main(argv: list[str] | None = None) -> int:
         classifier,
         settings,
         display_manager=display_manager,
+        backlight=backlight,
     )
     win.showFullScreen()
     display_manager.start()
