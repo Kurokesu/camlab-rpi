@@ -2,14 +2,16 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# DSI touch panel overlay: owns a managed block in /boot/firmware/config.txt.
-# Needed on CM5, where firmware never auto-detects DSI panels. Pi 5 detects
-# supported panels on its own and needs none of this.
+# DSI touch panel overlay: writes the camlab display block in
+# /boot/firmware/config.txt via camlab.config_manager, the same code path
+# the GUI uses. Needed on CM5, where firmware never auto-detects DSI panels.
+# Pi 5 detects supported panels on its own and needs none of this.
 # Safe to re-run. Requires sudo. Changes take hold after a reboot.
 #
 # Usage:
-#   sudo scripts/setup/display.sh --overlay vc4-kms-dsi-7inch   # enable panel
-#   sudo scripts/setup/display.sh --revert                      # drop the block
+#   sudo scripts/setup/display.sh --overlay vc4-kms-dsi-7inch        # panel on DISP1
+#   sudo scripts/setup/display.sh --overlay vc4-kms-dsi-7inch,dsi0   # panel on DISP0
+#   sudo scripts/setup/display.sh --revert                           # drop the block
 #   sudo scripts/setup/display.sh --help
 
 set -euo pipefail
@@ -32,25 +34,28 @@ while [ "$#" -gt 0 ]; do
 done
 
 require_root
+REPO_DIR="$(resolve_repo_dir)"
 
+# Honor the test override used by the other config.txt scripts.
 FW_DIR="${CAMLAB_FW_DIR:-/boot/firmware}"
-CONFIG_TXT="$FW_DIR/config.txt"
-
-BEGIN="# >>> camlab display (do not edit) >>>"
-END="# <<< camlab display <<<"
-
-[ -f "$CONFIG_TXT" ] || die "$CONFIG_TXT missing"
+export CAMLAB_CONFIG_TXT="$FW_DIR/config.txt"
+export CAMLAB_OVERLAYS_DIR="$FW_DIR/overlays"
 
 if [ "$REVERT" -eq 1 ]; then
-    block_strip "$CONFIG_TXT" "$BEGIN" "$END"
+    ( cd "$REPO_DIR" && python3 -m camlab.config_manager display-clear )
     log "config.txt: removed camlab display block"
     exit 0
 fi
 
 [ -n "$OVERLAY" ] || die "--overlay is required (or --revert to remove)"
 
-# display_auto_detect=0: the explicit overlay owns the panel, keep Pi 5
-# firmware from loading it a second time.
-block_write "$CONFIG_TXT" "$BEGIN" "$END" \
-    $'display_auto_detect=0\n'"dtoverlay=${OVERLAY}"
+# Our block sets display_auto_detect=0, costing Pi 5 its panel auto-detect,
+# so flag likely misuse.
+MODEL="$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || true)"
+case "$MODEL" in
+    *"Compute Module"*|"") ;;
+    *) warn "$MODEL auto-detects DSI panels, --overlay is normally CM5-only" ;;
+esac
+
+( cd "$REPO_DIR" && python3 -m camlab.config_manager display-set --overlay "$OVERLAY" )
 log "config.txt: wrote display block ($OVERLAY)"
