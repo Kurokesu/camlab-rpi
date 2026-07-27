@@ -115,8 +115,11 @@ class ConfigManager:
     # write (root)
     def apply(self, token: str, port: str, options: list[str] | None) -> None:
         """Rewrite the managed block. Runs in-process if root, else via sudo helper."""
+        # Also checked in _rewrite_in_place, the shim entry point.
         if port in dsi_blocked_ports():
-            raise ConfigError(f"{port} connector is in use by the DSI display")
+            raise ConfigError(
+                f"{port} is claimed by the display overlay (shared CSI/DSI connector)"
+            )
         if os.geteuid() == 0:
             self._rewrite_in_place(token, port, options)
             return
@@ -145,7 +148,9 @@ class ConfigManager:
                 f"(is the driver installed?)"
             )
         if port in dsi_blocked_ports():
-            raise ConfigError(f"{port} connector is in use by the DSI display")
+            raise ConfigError(
+                f"{port} is claimed by the display overlay (shared CSI/DSI connector)"
+            )
         text = self.config_path.read_text() if self.config_path.is_file() else ""
         lines = text.splitlines()
         kept = self._strip_block(lines)
