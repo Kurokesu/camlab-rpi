@@ -18,29 +18,17 @@ import logging
 import subprocess
 from pathlib import Path
 
+from .drm import connected_connectors
 from .qt import QtCore, QtGui, QtWidgets, Signal
 
 log = logging.getLogger(__name__)
 
-_DRM_ROOT = Path("/sys/class/drm")
 _WLR_TIMEOUT_S = 5.0
 
 # Qt screen churn during a hotplug arrives as a burst, so wait it out.
 _SETTLE_MS = 300
 # Safety net for hotplugs Qt never reported.
 _POLL_MS = 2000
-
-
-def _connected_connectors() -> set[str]:
-    """DRM connector names (HDMI-A-1, DSI-2, ...) currently connected."""
-    names = set()
-    for status in _DRM_ROOT.glob("card*-*/status"):
-        try:
-            if status.read_text().strip() == "connected":
-                names.add(status.parent.name.split("-", 1)[1])
-        except OSError:
-            continue
-    return names
 
 
 def _is_hdmi(name: str) -> bool:
@@ -82,7 +70,7 @@ def enforce_output_policy() -> bool:
         return False
     # Require HDMI in both views before dropping the panel, so a race cannot
     # leave zero outputs enabled.
-    hdmi = any(_is_hdmi(n) for n in _connected_connectors()) and any(_is_hdmi(n) for n in outputs)
+    hdmi = any(_is_hdmi(n) for n in connected_connectors()) and any(_is_hdmi(n) for n in outputs)
     targets = [n for n in outputs if _is_hdmi(n) == hdmi]
     if not targets:
         return False
@@ -139,12 +127,12 @@ class DisplayManager(QtCore.QObject):
         """Connect hotplug signals and run the initial enforcement pass."""
         self._app.screenAdded.connect(lambda _s: self._settle.start())
         self._app.screenRemoved.connect(lambda _s: self._settle.start())
-        self._drm_state = _connected_connectors()
+        self._drm_state = connected_connectors()
         self._poll.start()
         self._settle.start()
 
     def _poll_drm(self) -> None:
-        state = _connected_connectors()
+        state = connected_connectors()
         if state != self._drm_state:
             self._drm_state = state
             self._settle.start()
