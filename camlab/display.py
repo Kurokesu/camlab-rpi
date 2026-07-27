@@ -15,6 +15,7 @@ permanent mouse, so presence would pin an arrow over the picture forever.
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 from pathlib import Path
 
@@ -217,7 +218,11 @@ class Backlight:
 
     @property
     def available(self) -> bool:
-        return self._dir is not None and self._max > 0
+        """Present and writable (needs video group), so the GUI never offers
+        a dead slider."""
+        return (
+            self._dir is not None and self._max > 0 and os.access(self._dir / "brightness", os.W_OK)
+        )
 
     def get_percent(self) -> int | None:
         if not self.available:

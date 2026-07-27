@@ -31,7 +31,7 @@ class SettingsCard(QtWidgets.QFrame):
         backlight_pct: int | None,
         on_apply_network: Callable[[bool], None],
         on_apply_histogram: Callable[[bool], None],
-        on_backlight: Callable[[int], None],
+        on_backlight: Callable[[int], bool],
         on_cancel: Callable[[], None],
     ):
         super().__init__()
@@ -126,8 +126,11 @@ class SettingsCard(QtWidgets.QFrame):
         self._refresh_apply()
 
     def _on_backlight_moved(self, value: int) -> None:
-        self.backlight_lbl.setText(f"{value}%")
-        self._on_backlight(int(value))
+        if self._on_backlight(int(value)):
+            self.backlight_lbl.setText(f"{value}%")
+        else:  # write failed, stop pretending the slider works
+            self.backlight_slider.setEnabled(False)
+            self.backlight_lbl.setText("n/a")
 
     def _refresh_apply(self) -> None:
         """Apply is live only when a selection changed."""

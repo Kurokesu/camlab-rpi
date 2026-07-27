@@ -38,6 +38,13 @@ log "repo=$REPO_DIR user=$CAMLAB_USER uid=$CAMLAB_UID enable-at-boot=$ENABLE_AT_
 
 systemctl stop camlab.service 2>/dev/null || true
 
+# Backlight sysfs writes need video group. Default Pi OS users have it,
+# custom service users may not.
+if ! id -nG "$CAMLAB_USER" | tr ' ' '\n' | grep -qx video; then
+    usermod -aG video "$CAMLAB_USER"
+    log "Added $CAMLAB_USER to video group (panel backlight control)"
+fi
+
 sed \
     -e "s|CAMLAB_USER|$CAMLAB_USER|g" \
     -e "s|CAMLAB_REPO_DIR|$REPO_DIR|g" \
