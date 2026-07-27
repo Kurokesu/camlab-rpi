@@ -12,7 +12,12 @@ from __future__ import annotations
 
 from ..qt import QtGui
 from . import icons
-from .control_sheet import GLASS_BG, GLASS_BORDER
+
+# Glass background/border, shared by sheets (painted directly) and modal
+# cards (via QSS). Alpha tuned so live picture reads through while labels
+# keep contrast against bright scenes.
+GLASS_BG = QtGui.QColor(24, 26, 32, 175)
+GLASS_BORDER = QtGui.QColor(70, 76, 90, 200)
 
 # Hit box follows dial. Groove remains independent.
 _SLIDER_DIAL_PX = 18
