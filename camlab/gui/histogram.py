@@ -14,7 +14,7 @@ from __future__ import annotations
 import numpy as np
 
 from ..qt import Qt, QtCore, QtGui, QtWidgets
-from .control_sheet import GLASS_BG
+from .style import GLASS_BG
 
 MARGIN = 12  # from the viewfinder area's top-left corner
 _SIZE = (256, 96)  # card size, plot fills it minus padding

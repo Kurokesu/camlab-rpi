@@ -23,13 +23,8 @@ from collections.abc import Callable
 
 from ..qt import Qt, QtCore, QtGui, QtWidgets, Signal
 from . import icons
+from .style import GLASS_BG, GLASS_BORDER
 from .widgets import SegmentedSelector, repolish
-
-# Glass background/border, shared by sheets and modal cards (main_window
-# derives the modal QSS from these). Alpha tuned so the live picture clearly
-# reads through while labels keep enough contrast against bright scenes.
-GLASS_BG = QtGui.QColor(24, 26, 32, 175)
-GLASS_BORDER = QtGui.QColor(70, 76, 90, 200)
 
 # Slider resolution. 1000 steps is finer than any bench display is wide.
 _STEPS = 1000
