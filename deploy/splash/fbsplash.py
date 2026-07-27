@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""Paint boot logo onto a framebuffer device.
+
+kernel fullscreen logo only reaches the firmware framebuffer. DRM
+fbdevs (DSI panel, HDMI) register after boot logo data is freed, so fbcon
+leaves them black. A udev rule starts camlab-splash@fbN.service when a DRM
+fbdev appears and this script repaints the logo there, kernel-style:
+image centered, border filled with its top-left pixel.
+
+Usage: fbsplash.py /dev/fbN [logo.tga]
+"""
+
+import sys
+from pathlib import Path
+
+import numpy as np
+
+LOGO = "/lib/firmware/logo.tga"
+
+
+def load_tga(path: str) -> np.ndarray:
+    """Uncompressed 24-bit TGA to HxWx3 RGB array."""
+    raw = Path(path).read_bytes()
+    if raw[2] != 2 or raw[16] != 24:
+        sys.exit(f"{path}: need uncompressed 24-bit TGA (type 2)")
+    width = raw[12] | raw[13] << 8
+    height = raw[14] | raw[15] << 8
+    pixels = np.frombuffer(raw, np.uint8, width * height * 3, 18 + raw[0])
+    pixels = pixels.reshape(height, width, 3)
+    if not raw[17] & 0x20:  # TGA default is bottom-up row order
+        pixels = pixels[::-1]
+    return pixels[:, :, ::-1]  # BGR to RGB
+
+
+def compose(logo: np.ndarray, width: int, height: int) -> np.ndarray:
+    """Center logo on a canvas filled with its corner color, clip overflow."""
+    canvas = np.empty((height, width, 3), np.uint8)
+    canvas[:] = logo[0, 0]
+    lh, lw = logo.shape[:2]
+    ch, cw = min(lh, height), min(lw, width)
+    src = logo[(lh - ch) // 2 : (lh - ch) // 2 + ch, (lw - cw) // 2 : (lw - cw) // 2 + cw]
+    y, x = (height - ch) // 2, (width - cw) // 2
+    canvas[y : y + ch, x : x + cw] = src
+    return canvas
+
+
+def pack(canvas: np.ndarray, bpp: int) -> bytes:
+    """RGB canvas to fbdev pixel bytes (XRGB8888 or RGB565)."""
+    if bpp == 32:
+        frame = np.zeros((*canvas.shape[:2], 4), np.uint8)
+        frame[..., 0] = canvas[..., 2]
+        frame[..., 1] = canvas[..., 1]
+        frame[..., 2] = canvas[..., 0]
+        return frame.tobytes()
+    if bpp == 16:
+        r, g, b = (canvas[..., i].astype(np.uint16) for i in range(3))
+        return ((r >> 3) << 11 | (g >> 2) << 5 | (b >> 3)).astype("<u2").tobytes()
+    sys.exit(f"unsupported bits_per_pixel: {bpp}")
+
+
+def main() -> None:
+    fbdev = sys.argv[1]
+    logo = load_tga(sys.argv[2] if len(sys.argv) > 2 else LOGO)
+
+    sys_dir = Path("/sys/class/graphics") / Path(fbdev).name
+    width, height = map(int, (sys_dir / "virtual_size").read_text().split(","))
+    bpp = int((sys_dir / "bits_per_pixel").read_text())
+    stride = int((sys_dir / "stride").read_text())
+
+    data = pack(compose(logo, width, height), bpp)
+    row_len = width * bpp // 8
+    with open(fbdev, "wb") as fb:
+        if stride == row_len:
+            fb.write(data)
+        else:
+            for row in range(height):
+                fb.seek(row * stride)
+                fb.write(data[row * row_len : (row + 1) * row_len])
+
+
+if __name__ == "__main__":
+    main()
