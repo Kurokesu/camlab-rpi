@@ -33,6 +33,7 @@ class SensorCard(QtWidgets.QFrame):
         current_display: str | None,
         display_locked: bool,
         locked_ports: set[str],
+        offcat_port: str | None,
         on_apply: Callable[[str, str, bool, str | None], None],
         on_cancel: Callable[[], None],
     ):
@@ -43,6 +44,15 @@ class SensorCard(QtWidgets.QFrame):
         self._on_apply = on_apply
         self._display_locked = bool(display_locked)
         self._locked_ports = set(locked_ports)
+        # Off-catalogue display blocks are kept as-is on apply (unknown overlay
+        # syntax, never recomposed), so the port they claim locks while that
+        # display stays selected.
+        self._offcat_name = (
+            current_display
+            if current_display is not None and panels.by_name(current_display) is None
+            else None
+        )
+        self._offcat_port = offcat_port
         # Remember the initially-selected sensor + its variant so re-selecting it
         # restores the choice (other sensors default to color).
         self._init_name = current_name
@@ -67,16 +77,6 @@ class SensorCard(QtWidgets.QFrame):
         self.sensor_sel.set_options([(name, name) for name in registry.names], current=current_name)
         self.sensor_sel.changed.connect(self._on_sensor_changed)
 
-        self.port_sel = SegmentedSelector()
-        port = current_port if current_port in ("cam0", "cam1") else "cam1"
-        self.port_sel.set_options(
-            [("cam0", "cam0"), ("cam1", "cam1")], current=port, disabled_values=self._locked_ports
-        )
-        self.port_sel.changed.connect(self._on_wiring_changed)
-        # Persisted port, not selector state: a forced shift off a locked port
-        # must register as a pending change so Apply stays live.
-        self._init_port = port
-
         self.display_sel = SegmentedSelector()
         if self._display_locked:
             # Pi 5 firmware owns the panel, nothing to choose here.
@@ -84,12 +84,25 @@ class SensorCard(QtWidgets.QFrame):
         else:
             options: list[tuple[str, str | None]] = [("None", None)]
             options += [(name, name) for name in panels.names]
-            if current_display is not None and panels.by_name(current_display) is None:
+            if self._offcat_name is not None:
                 # Keep off-catalogue overlays selectable so Apply does not clobber them.
-                options.append((current_display, current_display))
+                options.append((self._offcat_name, self._offcat_name))
             self.display_sel.set_options(options, current=current_display)
         self.display_sel.changed.connect(self._on_wiring_changed)
         self._init_display = current_display
+
+        self.port_sel = SegmentedSelector()
+        port = current_port if current_port in ("cam0", "cam1") else "cam1"
+        self._port_locks_applied = self._port_locks()
+        self.port_sel.set_options(
+            [("cam0", "cam0"), ("cam1", "cam1")],
+            current=port,
+            disabled_values=self._port_locks_applied,
+        )
+        self.port_sel.changed.connect(self._on_wiring_changed)
+        # Persisted port, not selector state: a forced shift off a locked port
+        # must register as a pending change so Apply stays live.
+        self._init_port = port
 
         self.wiring_note = QtWidgets.QLabel()
         self.wiring_note.setObjectName("dialogNote")
@@ -148,7 +161,22 @@ class SensorCard(QtWidgets.QFrame):
         self._update_notes(name)
         self._refresh_apply()
 
+    def _port_locks(self) -> set[str]:
+        """Ports the camera cannot take under the current display selection."""
+        locks = set(self._locked_ports)
+        if self._offcat_port is not None and self.display_sel.current_value() == self._offcat_name:
+            locks.add(self._offcat_port)
+        return locks
+
     def _on_wiring_changed(self) -> None:
+        locks = self._port_locks()
+        if locks != self._port_locks_applied:
+            self._port_locks_applied = locks
+            self.port_sel.set_options(
+                [("cam0", "cam0"), ("cam1", "cam1")],
+                current=self.port_sel.current_value(),
+                disabled_values=locks,
+            )
         self._sync_wiring_note()
         self._refresh_apply()
 
