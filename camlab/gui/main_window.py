@@ -188,6 +188,8 @@ class MainWindow(QtWidgets.QMainWindow):
             crow.addWidget(btn)
         crow.addWidget(self.monitor_btn)
         crow.addStretch(1)
+        crow.addWidget(vline())
+        crow.addSpacing(6)
         crow.addWidget(self.settings_btn)
         crow.addWidget(self.log_btn)
         crow.addSpacing(6)
