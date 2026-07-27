@@ -1,17 +1,21 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""View for an RpiStatsSample (CPU, GPU, RAM, SoC and RP1 temperatures).
+"""Views for an RpiStatsSample (CPU, GPU, RAM, SoC and RP1 temperatures).
 
 RpiStatsView renders whichever fields it is given as a row: the status strip
-shows all five on a monitor and CPU/GPU on the touch panel.
+shows all five on a monitor and CPU/GPU on the touch panel. RpiStatsCard is
+the vertical glass overlay the panel opens for the remaining fields.
 """
 
 from __future__ import annotations
 
-from ..qt import Qt, QtWidgets
+from ..qt import Qt, QtCore, QtGui, QtWidgets
+from .style import GLASS_BG
 
 FIELDS = ("cpu", "gpu", "ram", "soc", "rp1")
+# Complement of the CPU/GPU pair the compact strip keeps on screen.
+CARD_FIELDS = ("ram", "soc", "rp1")
 
 
 def pad(text: str, width: int) -> str:
@@ -94,3 +98,41 @@ class RpiStatsView(QtWidgets.QWidget):
             shown_any = shown_any or visible
         self._has_data = shown_any
         return shown_any
+
+
+class RpiStatsCard(QtWidgets.QWidget):
+    """Fields the compact strip has no room for, one per line on glass.
+
+    Overlays viewfinder on touch panel, where strip only fits
+    CPU and GPU. Same glass as histogram overlay card."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        # Purely informational: never steal taps from the viewfinder.
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        col = QtWidgets.QVBoxLayout(self)
+        col.setContentsMargins(14, 10, 14, 10)
+        col.setSpacing(4)
+        self._labels: dict[str, QtWidgets.QLabel] = {}
+        for field in CARD_FIELDS:
+            lbl = QtWidgets.QLabel(self)
+            lbl.setObjectName("statsCard")
+            col.addWidget(lbl)
+            self._labels[field] = lbl
+
+    def set_stats(self, s) -> None:
+        """Render an RpiStatsSample, fields with no source drop out."""
+        texts = _texts(s)
+        for field, lbl in self._labels.items():
+            text = texts[field]
+            lbl.setVisible(text is not None)
+            if text is not None:
+                lbl.setText(text)
+
+    def paintEvent(self, _event) -> None:
+        p = QtGui.QPainter(self)
+        p.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(GLASS_BG)
+        p.drawRoundedRect(QtCore.QRectF(self.rect()), 8, 8)
+        p.end()

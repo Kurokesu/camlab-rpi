@@ -109,6 +109,7 @@ QLabel#telemetry { color: #c4c9d2; }
 QLabel#bootInfo { color: #8a909b; }
 QLabel#version { color: #8a909b; }
 QLabel#rpiStats { color: #8a909b; }
+QLabel#statsCard { background: transparent; color: #c4c9d2; }
 QPushButton { background: #2c303a; border: 1px solid #3a3f4b; border-radius: 5px; }
 QPushButton:hover { background: #353b47; }
 QPushButton:disabled { background: #23262d; border-color: #2f333c; color: #5c6370; }
