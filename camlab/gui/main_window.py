@@ -413,10 +413,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # slots
     def _sample_rpi(self) -> None:
-        """One sample feeds both stats views, each renders its own fields."""
-        s = self._rpi_stats.sample()
-        self.status.set_rpi_stats(s)
-        self.log_panel.set_rpi_stats(s)
+        self.status.set_rpi_stats(self._rpi_stats.sample())
 
     @Slot(float)
     def _on_first_frame(self, boot_time: float) -> None:
