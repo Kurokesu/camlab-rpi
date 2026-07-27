@@ -133,7 +133,6 @@ class MainWindow(QtWidgets.QMainWindow):
         controls.setObjectName("controls")
         crow = QtWidgets.QHBoxLayout(controls)
         self._crow = crow
-        self._apply_row_metrics()
         self.sensor_btn = QtWidgets.QPushButton()
         self.sensor_btn.clicked.connect(self._choose_sensor)
         self.mode_btn = QtWidgets.QPushButton()
@@ -191,15 +190,21 @@ class MainWindow(QtWidgets.QMainWindow):
         for btn in self._ctrl_buttons.values():
             crow.addWidget(btn)
         crow.addWidget(self.monitor_btn)
+        # Slack splits evenly around the divider, keeping it centred in the gap.
+        # Compact-only (see _apply_row_metrics)
+        self._mid_divider = vline()
         crow.addStretch(1)
-        crow.addWidget(vline())
         crow.addSpacing(6)
+        crow.addWidget(self._mid_divider)
+        crow.addSpacing(6)
+        crow.addStretch(1)
         crow.addWidget(self.settings_btn)
         crow.addWidget(self.log_btn)
         crow.addSpacing(6)
         crow.addWidget(vline())
         crow.addSpacing(6)
         crow.addWidget(self.shutdown_btn)
+        self._apply_row_metrics()
         root.addWidget(controls)
 
         # Log panel (collapsed by default) sits below the controls. Both stretch
@@ -341,6 +346,7 @@ class MainWindow(QtWidgets.QMainWindow):
         m = self._profile.row_margin
         self._crow.setContentsMargins(m, 6, m, 6)
         self._crow.setSpacing(self._profile.row_spacing)
+        self._mid_divider.setVisible(self._profile.compact)
 
     def _refresh_sensor_status(self) -> None:
         """Update the merged Sensor chip: selection text plus a detection glyph
