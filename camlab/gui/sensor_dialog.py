@@ -153,13 +153,13 @@ class SensorCard(QtWidgets.QFrame):
         self._refresh_apply()
 
     def _sync_wiring_note(self) -> None:
-        """State where the panel lands, derived from the camera port."""
+        """State the wiring map, derived from the camera port."""
         if self._display_locked:
             ports = ", ".join(sorted(self._locked_ports))
-            text = f"{ports} is used by the auto-detected panel" if ports else ""
+            text = f"{ports} is used by the auto-detected touch display" if ports else ""
         elif self.display_sel.current_value() is not None:
-            free = "DISP1" if self.port_sel.current_value() == "cam0" else "DISP0"
-            text = f"Panel connects to CAM/{free}, the connector the camera leaves free"
+            cam, disp = ("0", "1") if self.port_sel.current_value() == "cam0" else ("1", "0")
+            text = f"Camera on CAM/DISP{cam}, touch display on CAM/DISP{disp}"
         else:
             text = ""
         self.wiring_note.setText(text)
