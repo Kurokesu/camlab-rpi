@@ -56,6 +56,7 @@ class LogPanel(QtWidgets.QWidget):
         )
         self._filter = "all"
         self._compact = False
+        self._last_stats = IntegrityStats()
         self._pending = False  # lines arrived while frozen
         self._syncing = False  # our own scrolling, not the operator's
 
@@ -173,18 +174,25 @@ class LogPanel(QtWidgets.QWidget):
     def set_compact(self, compact: bool) -> None:
         self._compact = bool(compact)
         self._sync_rpi_row()
+        self.update_integrity(self._last_stats)  # re-render labels for the profile
 
     def _sync_rpi_row(self) -> None:
         self._rpi_row.setVisible(self._compact and self.rpi.has_data)
 
     @Slot(object)
     def update_integrity(self, stats: IntegrityStats) -> None:
-        """Counts ride the filter segments they select for."""
-        for value, count in (("warning", stats.warnings), ("error", stats.errors)):
+        """Counts ride the filter segments they select for. Compact drops the
+        words to fit, the tinted glyph and count still carry the meaning."""
+        self._last_stats = stats
+        for value, word, count in (
+            ("warning", "Warnings", stats.warnings),
+            ("error", "Errors", stats.errors),
+        ):
             color = _SEV_COLOR[value] if count else _SEV_IDLE
+            text = pad(str(count), 3) if self._compact else f"{word} {pad(str(count), 3)}"
             self.filter.set_option_label(
                 value,
-                text=pad(str(count), 3),
+                text=text,
                 icon=icons.icon(value, _HEADER_ICON_PX, color),
                 tooltip=breakdown_text(stats, value),
             )
