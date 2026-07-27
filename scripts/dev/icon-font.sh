@@ -28,8 +28,10 @@ python3 -c "import fontTools" 2>/dev/null || { echo "fontTools missing: sudo apt
 mapfile -t CPS < <(python3 - "$REPO" <<'PY'
 import re, sys, pathlib
 src = (pathlib.Path(sys.argv[1]) / "camlab/gui/icons.py").read_text()
-block = re.search(r"_CODEPOINTS[^{]*\{(.*?)\}", src, re.S).group(1)
-for cp in re.findall(r"0[xX]([0-9A-Fa-f]+)", block):
+m = re.search(r"_CODEPOINTS[^{]*\{(.*?)\}", src, re.S)
+if not m:
+    sys.exit("_CODEPOINTS block not found in icons.py")
+for cp in re.findall(r"0[xX]([0-9A-Fa-f]+)", m.group(1)):
     print(f"U+{cp.upper()}")
 PY
 )
