@@ -31,11 +31,33 @@ from pathlib import Path
 
 CONFIG_PATH = Path(os.environ.get("CAMLAB_CONFIG_TXT", "/boot/firmware/config.txt"))
 OVERLAYS_DIR = Path(os.environ.get("CAMLAB_OVERLAYS_DIR", "/boot/firmware/overlays"))
+DRM_ROOT = Path(os.environ.get("CAMLAB_DRM_ROOT", "/sys/class/drm"))
 
 BEGIN = "# >>> camlab managed (do not edit) >>>"
 END = "# <<< camlab managed <<<"
 
 VALID_PORTS = ("cam0", "cam1")
+
+
+def dsi_blocked_ports() -> set[str]:
+    """CSI ports unusable because a DSI display occupies the shared connector.
+
+    Pi 5 and the CM5 IO board route CSI and DSI through the same physical
+    connectors: DSI-1 shares with cam0 (DISP0), DSI-2 with cam1 (DISP1).
+    """
+    blocked = set()
+    for status in DRM_ROOT.glob("card*-DSI-*/status"):
+        try:
+            if status.read_text().strip() != "connected":
+                continue
+            idx = int(status.parent.name.rsplit("-", 1)[1])
+        except (OSError, ValueError):
+            continue
+        port = f"cam{idx - 1}"
+        if port in VALID_PORTS:
+            blocked.add(port)
+    return blocked
+
 
 # Privileged shim installed by scripts/setup/config.sh. The only thing the GUI is
 # allowed to sudo for the config write (see deploy/camlab-sudoers).
@@ -112,6 +134,8 @@ class ConfigManager:
     # write (root)
     def apply(self, token: str, port: str, options: list[str] | None) -> None:
         """Rewrite the managed block. Runs in-process if root, else via sudo helper."""
+        if port in dsi_blocked_ports():
+            raise ConfigError(f"{port} connector is in use by the DSI display")
         if os.geteuid() == 0:
             self._rewrite_in_place(token, port, options)
             return
@@ -139,6 +163,8 @@ class ConfigManager:
                 f"overlay '{token}.dtbo' not found in {self.overlays_dir} "
                 f"(is the driver installed?)"
             )
+        if port in dsi_blocked_ports():
+            raise ConfigError(f"{port} connector is in use by the DSI display")
         text = self.config_path.read_text() if self.config_path.is_file() else ""
         lines = text.splitlines()
         kept = self._strip_block(lines)
