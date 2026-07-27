@@ -1,24 +1,22 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Sensor selection card - pick sensor + CSI port (+ color/mono), then shut down.
+"""Sensor selection card - pick sensor, CSI port and touch display, then shut down.
 
-Rendered inside a ModalDialog (not a separate window, which a Cage kiosk renders
-unreliably). Changing the sensor overlay requires a reboot (dtoverlay is read at
-boot), but a swap means physically changing the sensor, which needs the box
-powered off anyway. So apply writes config.txt and shuts down: the operator
-swaps the sensor while it is off, then powers back on to the new overlay. Port
-(cam0/cam1) is a per-rig setting. The Color/Mono variant is a per-rig choice too,
-shown only for sensors that ship in both and cannot auto-detect
-(Sensor.mono_capable). The selected sensor's free-form note (Sensor.notes) is
-shown to the right of the title.
+Rendered inside a ModalDialog (a Cage kiosk renders separate windows
+unreliably). Every choice here rewires hardware, so one Apply writes all
+config.txt blocks and powers off for the rewire.
+
+The panel rides whichever CAM/DISP connector the camera leaves free (pairing
+is derived, never asked). On Pi 5 firmware auto-detects panels, so the
+display row locks to "Auto-detected" and the claimed port greys out.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 
-from ..config_manager import dsi_blocked_ports
+from ..dsi_panels import PanelRegistry
 from ..qt import Qt, QtWidgets
 from ..sensors import SensorRegistry
 from .widgets import SegmentedSelector, hline
@@ -28,10 +26,14 @@ class SensorCard(QtWidgets.QFrame):
     def __init__(
         self,
         registry: SensorRegistry,
+        panels: PanelRegistry,
         current_name: str | None,
         current_port: str,
         current_mono: bool,
-        on_apply: Callable[[str, str, bool], None],
+        current_display: str | None,
+        display_locked: bool,
+        locked_ports: set[str],
+        on_apply: Callable[[str, str, bool, str | None], None],
         on_cancel: Callable[[], None],
     ):
         super().__init__()
@@ -39,6 +41,8 @@ class SensorCard(QtWidgets.QFrame):
         self.setMinimumWidth(420)
         self._registry = registry
         self._on_apply = on_apply
+        self._display_locked = bool(display_locked)
+        self._locked_ports = set(locked_ports)
         # Remember the initially-selected sensor + its variant so re-selecting it
         # restores the choice (other sensors default to color).
         self._init_name = current_name
@@ -65,16 +69,31 @@ class SensorCard(QtWidgets.QFrame):
 
         self.port_sel = SegmentedSelector()
         port = current_port if current_port in ("cam0", "cam1") else "cam1"
-        # A DSI touch panel occupies one of the shared CSI/DSI connectors,
-        # so that port cannot host a camera while the panel is wired.
-        blocked = dsi_blocked_ports()
         self.port_sel.set_options(
-            [("cam0", "cam0"), ("cam1", "cam1")], current=port, disabled_values=blocked
+            [("cam0", "cam0"), ("cam1", "cam1")], current=port, disabled_values=self._locked_ports
         )
-        self.port_sel.changed.connect(self._refresh_apply)
-        # Persisted port, not selector state: a DSI-forced shift must register
-        # as a pending change so Apply stays live.
+        self.port_sel.changed.connect(self._on_wiring_changed)
+        # Persisted port, not selector state: a forced shift off a locked port
+        # must register as a pending change so Apply stays live.
         self._init_port = port
+
+        self.display_sel = SegmentedSelector()
+        if self._display_locked:
+            # Pi 5 firmware owns the panel, nothing to choose here.
+            self.display_sel.set_options([("Auto-detected", None)], current=None, enabled=False)
+        else:
+            options: list[tuple[str, str | None]] = [("None", None)]
+            options += [(name, name) for name in panels.names]
+            if current_display is not None and panels.by_name(current_display) is None:
+                # Keep off-catalogue overlays selectable so Apply does not clobber them.
+                options.append((current_display, current_display))
+            self.display_sel.set_options(options, current=current_display)
+        self.display_sel.changed.connect(self._on_wiring_changed)
+        self._init_display = current_display
+
+        self.wiring_note = QtWidgets.QLabel()
+        self.wiring_note.setObjectName("dialogNote")
+        self.wiring_note.setWordWrap(True)
 
         self.variant_lbl = QtWidgets.QLabel("Variant:")
         self.variant_sel = SegmentedSelector()
@@ -82,18 +101,17 @@ class SensorCard(QtWidgets.QFrame):
 
         form.addRow("Sensor:", self.sensor_sel)
         form.addRow("CSI port:", self.port_sel)
-        if blocked:
-            note = QtWidgets.QLabel(f"{', '.join(sorted(blocked))} is in use by touch display")
-            note.setObjectName("dialogNote")
-            form.addRow(note)
+        form.addRow("Touch display:", self.display_sel)
+        form.addRow(self.wiring_note)
         form.addRow(self.variant_lbl, self.variant_sel)
 
         self._rebuild_variant(current_name, self._init_mono)
         self._update_notes(current_name)
+        self._sync_wiring_note()
 
         # Daily-workflow reminder of the README hot-plug warning, kept as a
         # quiet hint next to the actions.
-        hint = QtWidgets.QLabel("Power off and unplug RPi before swapping sensors")
+        hint = QtWidgets.QLabel("Power off and unplug RPi before rewiring")
         hint.setObjectName("modalHint")
 
         buttons = QtWidgets.QHBoxLayout()
@@ -130,14 +148,32 @@ class SensorCard(QtWidgets.QFrame):
         self._update_notes(name)
         self._refresh_apply()
 
+    def _on_wiring_changed(self) -> None:
+        self._sync_wiring_note()
+        self._refresh_apply()
+
+    def _sync_wiring_note(self) -> None:
+        """State where the panel lands, derived from the camera port."""
+        if self._display_locked:
+            ports = ", ".join(sorted(self._locked_ports))
+            text = f"{ports} is used by the auto-detected panel" if ports else ""
+        elif self.display_sel.current_value() is not None:
+            free = "DISP1" if self.port_sel.current_value() == "cam0" else "DISP0"
+            text = f"Panel connects to CAM/{free}, the connector the camera leaves free"
+        else:
+            text = ""
+        self.wiring_note.setText(text)
+        self.wiring_note.setVisible(bool(text))
+
     def _refresh_apply(self) -> None:
         """Apply is live only when a selection changed."""
         selected = (
             self.sensor_sel.current_value(),
             self.port_sel.current_value(),
             bool(self.variant_sel.current_value()),
+            self.display_sel.current_value(),
         )
-        initial = (self._init_name, self._init_port, self._init_mono)
+        initial = (self._init_name, self._init_port, self._init_mono, self._init_display)
         self.apply_btn.setEnabled(selected != initial)
 
     def _update_notes(self, sensor_name: str | None) -> None:
@@ -162,4 +198,5 @@ class SensorCard(QtWidgets.QFrame):
             self.sensor_sel.current_value(),
             self.port_sel.current_value(),
             bool(self.variant_sel.current_value()),
+            self.display_sel.current_value(),
         )

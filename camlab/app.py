@@ -12,6 +12,7 @@ import sys
 from .camera import CameraEngine
 from .config_manager import ConfigManager
 from .display import Backlight, CursorPolicy, DisplayManager, enforce_output_policy
+from .dsi_panels import PanelRegistry
 from .gl_viewfinder import install_gles_format
 from .gui.main_window import MainWindow
 from .gui.style import profile_for_screen
@@ -70,6 +71,7 @@ def main(argv: list[str] | None = None) -> int:
     classifier = LogClassifier()
 
     registry = SensorRegistry.load()
+    panels = PanelRegistry.load()
     config = ConfigManager()
     settings = SettingsStore()
 
@@ -128,6 +130,7 @@ def main(argv: list[str] | None = None) -> int:
     win = MainWindow(
         engine,
         registry,
+        panels,
         config,
         capture,
         classifier,

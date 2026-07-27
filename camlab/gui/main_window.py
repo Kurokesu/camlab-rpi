@@ -13,6 +13,7 @@ from ..camera import CameraEngine
 from ..config_manager import ConfigManager, poweroff
 from ..display import Backlight, DisplayManager
 from ..drm import dsi_blocked_ports
+from ..dsi_panels import PanelRegistry
 from ..integrity import IntegrityMonitor, LogClassifier, StderrCapture
 from ..modes import mode_for
 from ..qt import Qt, QtCore, QtGui, QtWidgets, Signal, Slot
@@ -55,6 +56,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self,
         engine: CameraEngine,
         registry: SensorRegistry,
+        panels: PanelRegistry,
         config: ConfigManager,
         capture: StderrCapture,
         classifier: LogClassifier,
@@ -65,6 +67,7 @@ class MainWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.engine = engine
         self.registry = registry
+        self.panels = panels
         self.config = config
         self.capture = capture
         self.settings = settings
@@ -667,21 +670,38 @@ class MainWindow(QtWidgets.QMainWindow):
         # duration), so persist the possibly adjusted state.
         self._persist_timer.start()
 
+    def _display_name_current(self, disp: dict) -> str | None:
+        """Catalogue name for the current display block, raw overlay as a
+        fallback so off-catalogue blocks stay representable."""
+        if not disp["present"] or not disp["overlay"]:
+            return None
+        panel = self.panels.by_overlay(disp["overlay"].split(",")[0])
+        return panel.name if panel else disp["overlay"]
+
     def _choose_sensor(self) -> None:
         cur = self.config.get_current()
         sensor = self.registry.by_overlay(cur["overlay"]) if cur["overlay"] else None
         mono = self._is_mono(sensor, cur["options"])
+        disp = self.config.get_current_display()
+        # No block but a live DSI connector: firmware-detected panel, not ours to manage.
+        locked_ports = dsi_blocked_ports() if not disp["present"] else set()
         card = SensorCard(
             self.registry,
+            self.panels,
             sensor.name if sensor else None,
             cur["port"],
             mono,
+            self._display_name_current(disp),
+            display_locked=bool(locked_ports),
+            locked_ports=locked_ports,
             on_apply=self._apply_sensor,
             on_cancel=self._close_modal,
         )
         self._open_modal(card)
 
-    def _apply_sensor(self, sensor_name: str, port: str, mono: bool) -> None:
+    def _apply_sensor(
+        self, sensor_name: str, port: str, mono: bool, display_name: str | None
+    ) -> None:
         self._close_modal()
         chosen = self.registry.by_name(sensor_name)
         if chosen is None:
@@ -692,13 +712,23 @@ class MainWindow(QtWidgets.QMainWindow):
         # Flush before the config rewrite: _persist_controls keys by the
         # current overlay, which apply() is about to change.
         self._flush_pending_persist()
+        disp = self.config.get_current_display()
+        panel = self.panels.by_name(display_name)
+        if panel is not None:
+            target_raw = ConfigManager.compose_display_overlay(panel.overlay, port)
+        elif display_name is not None:  # off-catalogue block kept as-is
+            target_raw = disp["overlay"]
+        else:
+            target_raw = None
         try:
+            # Display first, the camera write validates its port against the display block.
+            if target_raw != disp["overlay"]:
+                self.config.apply_display(target_raw)
             self.config.apply(chosen.overlay, port, options)
         except Exception as exc:  # noqa: BLE001 surface the failure, do not power off
             self._show_message("Apply failed", str(exc))
             return
-        # A sensor swap needs the box off, so power down rather than reboot: the
-        # operator swaps while it is off, then powers on to the new overlay.
+        # Power down rather than reboot, rewiring needs the box off.
         poweroff()
 
     def _open_settings(self) -> None:
