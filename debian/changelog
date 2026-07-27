@@ -1,0 +1,8 @@
+camlab (1.0.0~beta.3-1) unstable; urgency=medium
+
+  * Initial release as a Debian package.
+  * Payload matches the v1.0.0-beta.3 source release. Service wiring,
+    boot tuning and the read-only overlay stay with install.sh until
+    the update engine owns them.
+
+ -- Danius Kalvaitis <danius@kurokesu.com>  Mon, 27 Jul 2026 18:15:00 +0300

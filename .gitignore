@@ -1,0 +1,19 @@
+# Debian packaging build artifacts
+debian/.debhelper/
+debian/camlab/
+debian/files
+debian/debhelper-build-stamp
+debian/*.debhelper
+debian/*.debhelper.log
+debian/*.substvars
+
+# Build products
+*.deb
+*.dsc
+*.changes
+*.buildinfo
+*.orig.tar.*
+*.debian.tar.*
+
+# Stray bytecode from main-branch checkouts sharing this working tree
+__pycache__/

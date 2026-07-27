@@ -1,0 +1,43 @@
+#!/bin/sh
+set -e
+
+APP_DIR=/opt/camlab
+STAMP_DIR=/var/lib/camlab-setup
+
+case "$1" in
+    configure)
+        # dpkg leaves unowned files in place. A tarball install
+        # (install.sh) or stale bytecode would shadow modules removed
+        # upstream, so drop anything under /opt/camlab the package does
+        # not own. User data lives in /var/lib/camlab, never here.
+        owned=$(mktemp)
+        present=$(mktemp)
+        dpkg-query -L camlab | sort -u > "$owned"
+        find "$APP_DIR" \( -type f -o -type l \) | sort -u > "$present"
+        comm -13 "$owned" "$present" | while IFS= read -r f; do
+            rm -f "$f"
+        done
+        rm -f "$owned" "$present"
+        find "$APP_DIR" -mindepth 1 -depth -type d -empty -delete
+
+        # Service user cannot write bytecode into the root-owned tree.
+        python3 -m compileall -q -j 0 "$APP_DIR/camlab"
+
+        # Root-fs stamp for convergence checks. Deliberately not in the
+        # /var/lib/camlab data mount, which outlives a reflash and would
+        # fake convergence on a fresh root.
+        mkdir -p "$STAMP_DIR"
+        dpkg-query -W -f '${Version}\n' camlab > "$STAMP_DIR/version"
+
+        # Pick up the new tree if the app is running. Never fails the
+        # install: a broken app is the service's problem (it restarts
+        # on failure), not dpkg's. No-ops in chroots and offline boots.
+        if [ -d /run/systemd/system ]; then
+            deb-systemd-invoke try-restart camlab.service >/dev/null 2>&1 || true
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

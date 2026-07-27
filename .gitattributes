@@ -1,0 +1,2 @@
+# Recipe and workflows are consumed on Linux, keep LF everywhere.
+* text=auto eol=lf

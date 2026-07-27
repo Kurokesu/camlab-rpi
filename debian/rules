@@ -1,0 +1,34 @@
+#!/usr/bin/make -f
+
+include /usr/share/dpkg/pkg-info.mk
+
+%:
+	dh $@
+
+# Interpreted Python tree, nothing to compile at packaging time.
+# Bytecode is generated on target by postinst.
+override_dh_auto_build:
+
+# Payload is the whole source tree, mirroring what install.sh copies
+# to /opt/camlab (export-ignore already trimmed the orig tarball).
+# Copying everything keeps deb and install.sh trees identical by
+# construction, no file list to drift.
+#
+# Source __version__ and changelog upstream version must agree in
+# Debian form ('-' pre-release separator becomes '~'). '-dev' trees
+# are exempt so branch CI can build the recipe against moving main.
+override_dh_auto_install:
+	@v="$$(sed -n 's/^__version__ = "\(.*\)"$$/\1/p' camlab/__init__.py)"; \
+	case "$$v" in \
+	*-dev) \
+		echo "Version guard skipped: dev source tree ($$v)" ;; \
+	*) \
+		test "$$(printf '%s' "$$v" | sed 's/-/~/g')" = "$(DEB_VERSION_UPSTREAM)" || { \
+			echo "ERROR: source __version__ ($$v) does not map to changelog upstream ($(DEB_VERSION_UPSTREAM))." >&2; \
+			echo "Build against the paired v tag or fix debian/changelog." >&2; \
+			exit 1; \
+		} ;; \
+	esac
+	mkdir -p debian/camlab/opt/camlab
+	tar -cf - --exclude=./debian --exclude=./.pc . \
+		| tar -xf - -C debian/camlab/opt/camlab

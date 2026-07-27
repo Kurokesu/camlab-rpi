@@ -1,0 +1,35 @@
+Source: camlab
+Section: video
+Priority: optional
+Maintainer: Kurokesu <info@kurokesu.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.0
+Homepage: https://github.com/Kurokesu/camlab-rpi
+Rules-Requires-Root: no
+
+Package: camlab
+Architecture: all
+# Mirrors what scripts/setup/deps.sh and drivers.sh install on main.
+# Sync on every release. Version floors (>=) go on Kurokesu stack
+# packages only when camlab starts requiring a newer piece, noted in
+# the changelog entry adding them.
+Depends: ${misc:Depends},
+ python3,
+ python3-picamera2,
+ python3-pyqt6,
+ python3-opengl,
+ python3-yaml,
+ cage,
+ qt6-wayland,
+ awb-nn,
+ ar0234-rpi-dkms,
+ ar0822-rpi-dkms,
+ imx585-rpi-dkms
+Description: Kurokesu camera test bench tool for Raspberry Pi
+ Single-operator bench GUI for validating Kurokesu Raspberry Pi camera
+ modules: live viewfinder, sensor selection (writes the dtoverlay) and
+ signal-integrity surfacing. Runs fullscreen under a Cage kiosk.
+ .
+ Installs the application tree to /opt/camlab and restarts a running
+ camlab.service. Service wiring, boot tuning and the read-only overlay
+ stay with the repo install script for now.

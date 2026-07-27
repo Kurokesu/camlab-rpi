@@ -1,0 +1,79 @@
+Packaging layout and release procedure
+=======================================
+
+Packaging branch for camlab, kept separate from app source under a
+DEP-14 layout:
+
+ * main - app source (camlab/, scripts/, deploy/, install.sh).
+   Tagged v<semver> per release.
+ * debian/latest - this branch: debian/ recipe only, no source. Tagged
+   debian/<version>-<rev> per packaging release.
+
+The two branches never share files. A release build fetches source from
+the v tag and lays this debian/ recipe over it. The payload is the
+whole source tree copied to /opt/camlab, mirroring install.sh, so both
+install paths produce identical trees.
+
+Branch layout
+-------------
+
+ * debian/             - recipe (debhelper, arch:all).
+ * .github/workflows/  - build.yml (shared build, workflow_call),
+                         ci.yml (branch validation) and release.yml
+                         (tagged publish).
+
+Unlike the driver repos, this branch is deliberately detached from
+Kurokesu/ci while app packaging stabilizes: build, sign and publish
+logic lives here and calls nothing remote. The sign step mirrors
+deb-sign.yml conventions exactly (bundle naming, tilde rename, signed
+SHA256SUMS), so apt archive ingest cannot tell the difference. Once
+proven, the flow gets upstreamed into Kurokesu/ci as an app-family
+reusable workflow.
+
+Publish semantics also differ from the driver repos: deb assets land
+on the existing v-tag source release, next to the README-pinned
+camlab-rpi-<version>.tar.gz. The publish step deletes only assets it
+owns (SHA256SUMS* and camlab_*.tar.gz bundles), never the source
+tarball, and touches no release flags or notes. The Kurokesu/apt
+manifest PR is what gates the archive.
+
+Releasing
+---------
+
+A release is a pair of tags:
+
+ * main is tagged v<semver>, revision-less, e.g. v1.0.0. Cut per
+   RELEASING.md on main, which also creates the GitHub release deb
+   assets land on.
+ * debian/latest is tagged debian/<version>-<rev>, carrying a Debian
+   revision, e.g. debian/1.0.0-1. Pre-release '~' becomes '_' in the
+   tag (illegal in git refs), e.g. debian/1.0.0_beta.3-1.
+
+To release, after the source release exists:
+
+ 1. Open a debian/changelog entry whose upstream version matches the
+    source release in Debian form ('-' pre-release separator becomes
+    '~'). Commit, push, wait for green CI.
+ 2. Tag this branch with debian/<version>-<rev> and push the tag. That
+    triggers release.yml: paired-tag preflight, build against the
+    v tag, sign, upload onto the v-tag release.
+
+A packaging-only rebuild (1.0.0-1 to 1.0.0-2) is a new changelog entry
+and a new packaging tag. The source tag is reused, not retagged, and
+the publish step replaces the previous revision's bundle.
+
+Release assets: a tarball camlab_<version>.tar.gz carrying the .deb
+plus the build's .changes and .buildinfo, alongside SHA256SUMS and a
+detached SHA256SUMS.asc signed with the archive key. A source package
+stays in workflow-run artifacts only.
+
+Migrating from an install.sh install
+------------------------------------
+
+install.sh copies the repo to /opt/camlab unowned by dpkg. postinst
+removes files under /opt/camlab the package does not own, so a first
+dpkg -i over a tarball install converts the tree cleanly and stale
+modules cannot shadow packaged ones.
+
+The /usr/local/bin/camlabctl symlink stays install.sh-owned. Debian
+policy keeps packages out of /usr/local.

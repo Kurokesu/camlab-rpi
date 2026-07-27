@@ -1,0 +1,163 @@
+name: Build deb
+
+# Builds camlab's arch:all .deb in a clean container: orig tarball
+# from the requested source ref, this branch's debian/ recipe laid
+# over it. Called by ci.yml (against main) and release.yml (against
+# the paired v tag). Detached port of Kurokesu/ci dkms-build.yml,
+# kept contract-identical for later upstreaming.
+
+on:
+  workflow_call:
+    inputs:
+      upstream-ref:
+        description: Git ref for app source checkout (branch or tag)
+        type: string
+        required: true
+      container-image:
+        description: Image the package is built in
+        type: string
+        required: false
+        default: debian:trixie
+    outputs:
+      package:
+        description: Source package name from the recipe changelog
+        value: ${{ jobs.build.outputs.package }}
+      packaging-version:
+        description: Full Debian version from the recipe changelog
+        value: ${{ jobs.build.outputs.packaging }}
+      artifact:
+        description: Name of the uploaded build artifact
+        value: ${{ jobs.build.outputs.package }}_${{ jobs.build.outputs.packaging }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Source package
+    runs-on: ubuntu-latest
+    outputs:
+      package: ${{ steps.version.outputs.package }}
+      packaging: ${{ steps.version.outputs.packaging }}
+    steps:
+      - name: Checkout packaging recipe (debian/)
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          path: recipe
+
+      - name: Checkout app source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.upstream-ref }}
+          path: upstream
+
+      - name: Compute package name and versions from changelog
+        id: version
+        run: |
+          set -euo pipefail
+          command -v dpkg-parsechangelog >/dev/null \
+            || sudo apt-get install -y --no-install-recommends dpkg-dev
+          PKG=$(dpkg-parsechangelog -l recipe/debian/changelog -SSource)
+          PACKAGING=$(dpkg-parsechangelog -l recipe/debian/changelog -SVersion)
+          UPSTREAM=${PACKAGING%-*}
+          echo "package=${PKG}" >> "$GITHUB_OUTPUT"
+          echo "packaging=${PACKAGING}" >> "$GITHUB_OUTPUT"
+          echo "upstream=${UPSTREAM}" >> "$GITHUB_OUTPUT"
+          echo "Package: ${PKG}"
+          echo "Packaging version: ${PACKAGING}"
+          echo "Upstream version: ${UPSTREAM}"
+
+      - name: Build source + binary package in a clean container
+        id: build
+        env:
+          IMAGE: ${{ inputs.container-image }}
+          PKG: ${{ steps.version.outputs.package }}
+          UPSTREAM: ${{ steps.version.outputs.upstream }}
+        run: |
+          set -euo pipefail
+          docker run --rm -e PKG -e UPSTREAM \
+            -v "$PWD":/w -w /w \
+            "$IMAGE" bash -euo pipefail -c '
+              apt-get update -qq
+              apt-get install -y --no-install-recommends \
+                build-essential dpkg-dev git ca-certificates
+              git config --global --add safe.directory /w/upstream
+
+              # A pristine orig tarball straight from the source ref, so
+              # the source package matches the checked-out commit exactly.
+              cd upstream
+              git archive --format=tar --prefix="${PKG}-${UPSTREAM}/" HEAD \
+                | gzip -n > "/w/${PKG}_${UPSTREAM}.orig.tar.gz"
+
+              # Lay the debian/ recipe over the extracted source, install
+              # what its control file declares and build the full source
+              # package plus the arch:all .deb.
+              cd /w
+              tar xf "${PKG}_${UPSTREAM}.orig.tar.gz"
+              cp -r recipe/debian "${PKG}-${UPSTREAM}/"
+              cd "${PKG}-${UPSTREAM}"
+              apt-get build-dep -y --no-install-recommends ./
+              dpkg-buildpackage -us -uc
+            ' 2>&1 | tee build.log
+          echo "=== build products ==="
+          ls -la ./*.deb ./*.dsc ./*.changes ./*.buildinfo \
+            ./*.orig.tar.* ./*.debian.tar.*
+
+      # A failed build buries its cause in a long log. Repeat the error
+      # lines and the log tail on the run summary page.
+      - name: Summarize build failure
+        if: failure() && steps.build.conclusion == 'failure'
+        run: |
+          set -euo pipefail
+          # Indented matches are make echoing recipe lines, not errors.
+          ERRORS=$(grep -E 'ERROR:|error:' build.log | grep -v '^[[:space:]]' | tail -n 15) || true
+          {
+            echo "### Build failed"
+            echo '```'
+            echo "${ERRORS:-(no error lines matched, see log tail)}"
+            echo '```'
+            echo '<details><summary>Log tail</summary>'
+            echo
+            echo '```'
+            tail -n 40 build.log
+            echo '```'
+            echo '</details>'
+          } >> "$GITHUB_STEP_SUMMARY"
+          [ -z "$ERRORS" ] || echo "::error::${ERRORS%%$'\n'*}"
+
+      - name: Sanity-check payload
+        run: |
+          set -euo pipefail
+          debs=( ./*_all.deb )
+          [ "${#debs[@]}" -eq 1 ] \
+            || { echo "::error::Expected exactly one .deb, found: ${debs[*]}."; exit 1; }
+          dpkg-deb --info "${debs[0]}"
+          dpkg-deb --contents "${debs[0]}" > contents.txt
+          for path in \
+            ./opt/camlab/camlab/__main__.py \
+            ./opt/camlab/camlab/__init__.py \
+            ./opt/camlab/camlab/sensors.yaml \
+            ./opt/camlab/scripts/camlabctl.sh \
+            ./opt/camlab/deploy/camlab.service \
+            ./opt/camlab/install.sh; do
+            grep -q " ${path}$" contents.txt \
+              || { echo "::error::Missing ${path} in payload."; exit 1; }
+          done
+          ! grep -q ' \./opt/camlab/debian' contents.txt \
+            || { echo "::error::debian/ leaked into the payload."; exit 1; }
+
+      - name: Upload .deb set + source package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ steps.version.outputs.package }}_${{ steps.version.outputs.packaging }}
+          path: |
+            ./*.deb
+            ./*.dsc
+            ./*.changes
+            ./*.buildinfo
+            ./*.orig.tar.*
+            ./*.debian.tar.*
+          if-no-files-found: error
+          retention-days: 30
