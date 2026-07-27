@@ -24,16 +24,22 @@ def pad(text: str, width: int) -> str:
     return text.ljust(width, "\u2007")
 
 
+def _pct(value: float | None) -> str | None:
+    """Percentage capped at 99, so field never widens to three digits."""
+    return None if value is None else pad(f"{min(value, 99):.0f}%", 3)
+
+
 def _texts(s) -> dict[str, str | None]:
-    """Rendered text per field (None when the source is missing)."""
+    """Rendered text per field (None when source is missing)."""
     ram = None
     if s.ram_used_mb is not None and s.ram_total_mb is not None:
         total = f"{s.ram_total_mb / 1024:.1f}"
         used = pad(f"{s.ram_used_mb / 1024:.1f}", len(total))
         ram = f"RAM {used}/{total}GB"
+    cpu, gpu = _pct(s.cpu_pct), _pct(s.gpu_pct)
     return {
-        "cpu": f"CPU {pad(f'{s.cpu_pct:.0f}%', 4)}" if s.cpu_pct is not None else None,
-        "gpu": f"GPU {pad(f'{s.gpu_pct:.0f}%', 4)}" if s.gpu_pct is not None else None,
+        "cpu": f"CPU {cpu}" if cpu is not None else None,
+        "gpu": f"GPU {gpu}" if gpu is not None else None,
         "ram": ram,
         "soc": f"SoC {s.soc_temp_c:.0f}\u00b0C" if s.soc_temp_c is not None else None,
         "rp1": f"RP1 {s.rp1_temp_c:.0f}\u00b0C" if s.rp1_temp_c is not None else None,
