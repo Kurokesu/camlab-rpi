@@ -222,8 +222,7 @@ class CameraEngine:
         if self.picam2 is None or self.current_mode is None:
             return False
         planned = plan_lores_size(tuple(self.current_mode.size), tuple(avail_size))
-        current = tuple(self.picam2.camera_config["lores"]["size"])
-        if planned == current:
+        if planned == tuple(self.size):
             return False
         self.apply_mode(self.current_mode, self.fps_current, avail_size, self.fps_fixed)
         return True
