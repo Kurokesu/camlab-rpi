@@ -6,7 +6,8 @@
 Everything here is a FACT, never a pass/fail verdict (per spec). The centre
 mirrors rpicam-hello's default info-text (#frame (fps fps) exp ag dg) plus the
 sensor temperature. The build version anchors the left, board stats anchor the
-right. The touch panel drops the frame counter and trims stats to CPU and GPU.
+right. The touch panel drops the frame counter and trims stats to CPU and GPU,
+a tap on them toggles a card with the rest over the viewfinder (stats_tapped).
 Rendered as flat text (no chip boxes) so it reads as read-only, visually
 distinct from the clickable controls below.
 """
@@ -14,7 +15,7 @@ distinct from the clickable controls below.
 from __future__ import annotations
 
 from .. import __version__
-from ..qt import Qt, QtWidgets
+from ..qt import Qt, QtCore, QtWidgets, Signal
 from .rpi_stats import RpiStatsView
 
 # Inter-zone spacing, also the gap _sync_balance accounts for.
@@ -22,6 +23,8 @@ _GAP = 16
 
 
 class StatusStrip(QtWidgets.QFrame):
+    stats_tapped = Signal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("statusStrip")
@@ -59,7 +62,7 @@ class StatusStrip(QtWidgets.QFrame):
 
         # Board stats (sampled at 1 Hz by MainWindow) anchor the right. Two
         # renders of one sample: a monitor fits all five fields, the panel
-        # keeps CPU and GPU.
+        # keeps CPU and GPU with the rest a tap away (eventFilter).
         self.stats = RpiStatsView(parent=self)
         self.stats_compact = RpiStatsView(fields=("cpu", "gpu"), parent=self)
         self._right = QtWidgets.QWidget(self)
@@ -69,6 +72,7 @@ class StatusStrip(QtWidgets.QFrame):
         rrow.addStretch(1)
         rrow.addWidget(self.stats)
         rrow.addWidget(self.stats_compact)
+        self._right.installEventFilter(self)
 
         lay.addWidget(self._left)
         lay.addStretch(1)
@@ -93,9 +97,26 @@ class StatusStrip(QtWidgets.QFrame):
         template both point here."""
         self._compact = bool(compact)
         self.version_lbl.setText(f"v{__version__}" if self._compact else f"camlab v{__version__}")
+        self._right.setCursor(
+            Qt.CursorShape.PointingHandCursor if self._compact else Qt.CursorShape.ArrowCursor
+        )
+        self._right.setToolTip("Toggles the remaining board stats." if self._compact else "")
         self._sync_stats()
         self._render_telemetry()
         self._sync_balance()
+
+    def eventFilter(self, obj, ev) -> bool:
+        # A tap on the stats zone toggles the stats card (compact only). On
+        # press, not release: Qt folds a quick second tap into DblClick.
+        if (
+            obj is self._right
+            and self._compact
+            and ev.type()
+            in (QtCore.QEvent.Type.MouseButtonPress, QtCore.QEvent.Type.MouseButtonDblClick)
+        ):
+            self.stats_tapped.emit()
+            return True
+        return super().eventFilter(obj, ev)
 
     def _active_stats(self) -> RpiStatsView:
         return self.stats_compact if self._compact else self.stats

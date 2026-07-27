@@ -317,6 +317,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.capture.line_received.connect(self.monitor.feed)
         self.monitor.stats_changed.connect(self.log_panel.update_integrity)
         self.monitor.stats_changed.connect(self._on_integrity)
+        self.status.stats_tapped.connect(self.viewfinder_area.toggle_stats_overlay)
         # Clearing the view resets the counts, so the two never disagree.
         self.log_panel.cleared.connect(self.monitor.reset)
         self.first_frame.connect(self._on_first_frame)
@@ -413,7 +414,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # slots
     def _sample_rpi(self) -> None:
-        self.status.set_rpi_stats(self._rpi_stats.sample())
+        """One sample feeds the strip cluster and the overlay card."""
+        s = self._rpi_stats.sample()
+        self.status.set_rpi_stats(s)
+        self.viewfinder_area.update_stats(s)
 
     @Slot(float)
     def _on_first_frame(self, boot_time: float) -> None:
@@ -905,6 +909,9 @@ class MainWindow(QtWidgets.QMainWindow):
             self._position_sheet(self._open_sheet)
         self.status.set_compact(profile.compact)
         self.log_panel.set_compact(profile.compact)
+        # A monitor already shows the full cluster in the strip.
+        if not profile.compact:
+            self.viewfinder_area.set_stats_overlay(False)
         self._populate_static()
         monitor = self._sheets["monitor"]
         self._set_chip_accent(self.monitor_btn, "stroke_partial", monitor.peaking or monitor.zebra)
