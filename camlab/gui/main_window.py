@@ -738,8 +738,10 @@ class MainWindow(QtWidgets.QMainWindow):
         poweroff()
 
     def _open_settings(self) -> None:
+        # Brightness only while touch panel is active display. On HDMI the
+        # slider would dim a panel that is off.
         backlight_pct = None
-        if self._backlight is not None and self._backlight.available:
+        if self._profile.compact and self._backlight is not None and self._backlight.available:
             backlight_pct = self._backlight.get_percent()
         card = SettingsCard(
             histogram_on=self._histogram_on,

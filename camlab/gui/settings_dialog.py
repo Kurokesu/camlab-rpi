@@ -4,7 +4,8 @@
 """Settings card - app-level system options, one row per setting.
 
 Rendered inside a ModalOverlay like the sensor/mode cards. Rows: networking
-toggle, histogram overlay toggle and (on touch-panel rigs) panel brightness.
+toggle, histogram overlay toggle and, while touch panel is active display,
+panel brightness.
 The card reads live state when built. Apply only acts on rows whose selection
 changed. Brightness applies live while dragging: the screen itself is the
 feedback.
@@ -83,7 +84,8 @@ class SettingsCard(QtWidgets.QFrame):
         hist_row.addWidget(self.hist_sel, 1)
         form.addRow("Histogram:", hist_row)
 
-        # Brightness only when a backlight device exists (DSI panel rigs).
+        # None hides the row: no backlight device or the panel is not the
+        # active display.
         if backlight_pct is not None:
             bl_label = QtWidgets.QLabel()
             bl_label.setPixmap(icons.pixmap("brightness_6", _ICON_PX, "#8a909b"))
