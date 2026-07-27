@@ -11,6 +11,7 @@ from typing import ClassVar
 from .. import network
 from ..camera import CameraEngine
 from ..config_manager import ConfigManager, poweroff
+from ..display import DisplayManager
 from ..integrity import IntegrityMonitor, LogClassifier, StderrCapture
 from ..modes import mode_for
 from ..qt import Qt, QtCore, QtGui, QtWidgets, Signal, Slot
@@ -25,14 +26,11 @@ from .overlay import ModalOverlay, message_card
 from .sensor_dialog import SensorCard
 from .settings_dialog import SettingsCard
 from .status_strip import StatusStrip
-from .style import build_stylesheet
+from .style import UiProfile, build_stylesheet, profile_for_screen
 from .viewfinder_area import ViewfinderArea
 from .widgets import repolish, vline
 
 log = logging.getLogger(__name__)
-
-# On-screen icon size for the control-bar buttons.
-_ICON_PX = 21
 
 # Amber = "not showing the plain picture" (manual control, assist overlay).
 _ACCENT_ON = "#e5c07b"
@@ -60,6 +58,7 @@ class MainWindow(QtWidgets.QMainWindow):
         capture: StderrCapture,
         classifier: LogClassifier,
         settings: SettingsStore,
+        display_manager: DisplayManager | None = None,
     ):
         super().__init__()
         self.engine = engine
@@ -71,10 +70,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self._overlay: ModalOverlay | None = None
         self._boot_cover: QtWidgets.QWidget | None = None
         self._engine_started = False
+        # app.py settles output policy before Qt starts, so the boot-time
+        # primary screen is already the one to lay out for.
+        self._profile: UiProfile = profile_for_screen(QtWidgets.QApplication.primaryScreen())
+        self._display_key: tuple | None = None
         self._sev = ""  # worst integrity severity seen, tints the log button
+        px = self._profile.icon_px
 
         self.setWindowTitle("camlab")
-        self.setStyleSheet(build_stylesheet())
+        self.setStyleSheet(build_stylesheet(self._profile))
 
         central = QtWidgets.QWidget()
         self.setCentralWidget(central)
@@ -87,6 +91,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Split bars: live facts on top, controls on the bottom, viewfinder between.
         self.status = StatusStrip()
+        self.status.set_compact(self._profile.compact)
         root.addWidget(self.status)
 
         # viewfinder (live GL, frosted in-shader while a modal is up)
@@ -108,6 +113,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._open_sheet: str | None = None
         for sheet in self._sheets.values():
             sheet.setVisible(False)
+            sheet.apply_profile(self._profile)
         for key in self._CTRL_SPEC:
             self._sheets[key].changed.connect(lambda v, k=key: self._on_control_changed(k, v))
         self._sheets["monitor"].changed.connect(self._on_monitor_changed)
@@ -120,8 +126,8 @@ class MainWindow(QtWidgets.QMainWindow):
         controls = QtWidgets.QFrame()
         controls.setObjectName("controls")
         crow = QtWidgets.QHBoxLayout(controls)
-        crow.setContentsMargins(10, 6, 10, 6)
-        crow.setSpacing(8)
+        self._crow = crow
+        self._apply_row_metrics()
         self.sensor_btn = QtWidgets.QPushButton()
         self.sensor_btn.clicked.connect(self._choose_sensor)
         self.mode_btn = QtWidgets.QPushButton()
@@ -133,7 +139,7 @@ class MainWindow(QtWidgets.QMainWindow):
             key: QtWidgets.QPushButton(f" {label}")
             for key, (label, _glyph, _md, _fmt) in self._CTRL_SPEC.items()
         }
-        self.monitor_btn = QtWidgets.QPushButton(icons.icon("stroke_partial", _ICON_PX), " Monitor")
+        self.monitor_btn = QtWidgets.QPushButton(icons.icon("stroke_partial", px), " Monitor")
         # Sheet-opening chips: camera controls plus the monitor-assist toggle.
         self._sheet_buttons = dict(self._ctrl_buttons, monitor=self.monitor_btn)
         for key, btn in self._sheet_buttons.items():
@@ -142,21 +148,18 @@ class MainWindow(QtWidgets.QMainWindow):
             # width while the value's tail grows and shrinks.
             btn.setObjectName("chip")
             btn.clicked.connect(lambda _=False, k=key: self._toggle_sheet(k))
-        self.settings_btn = QtWidgets.QPushButton(icons.icon("settings", _ICON_PX), " Settings")
+        self.settings_btn = QtWidgets.QPushButton(icons.icon("settings", px), " Settings")
         self.settings_btn.clicked.connect(self._open_settings)
-        self.log_btn = QtWidgets.QPushButton(icons.icon("terminal", _ICON_PX), " Log")
+        self.log_btn = QtWidgets.QPushButton(icons.icon("terminal", px), " Log")
         self.log_btn.setCheckable(True)
         self.log_btn.toggled.connect(self._toggle_log)
         self.shutdown_btn = QtWidgets.QPushButton(
-            icons.icon("power_settings_new", _ICON_PX, "#d98b80"), " Shutdown"
+            icons.icon("power_settings_new", px, "#d98b80"), " Shutdown"
         )
         self.shutdown_btn.setObjectName("danger")
         self.shutdown_btn.clicked.connect(self._shutdown)
 
-        # QPushButton clamps the icon to a small default, so set the size explicitly.
-        # TabFocus (not the default StrongFocus): these are reachable by Tab but a
-        # mouse click does not leave a lingering focus ring on them.
-        for btn in (
+        self._chrome_btns = (
             self.sensor_btn,
             self.mode_btn,
             *self._ctrl_buttons.values(),
@@ -164,8 +167,12 @@ class MainWindow(QtWidgets.QMainWindow):
             self.settings_btn,
             self.log_btn,
             self.shutdown_btn,
-        ):
-            btn.setIconSize(QtCore.QSize(_ICON_PX, _ICON_PX))
+        )
+        # QPushButton clamps the icon to a small default, so set the size explicitly.
+        # TabFocus (not the default StrongFocus): these are reachable by Tab but a
+        # mouse click does not leave a lingering focus ring on them.
+        for btn in self._chrome_btns:
+            btn.setIconSize(QtCore.QSize(px, px))
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setFocusPolicy(Qt.FocusPolicy.TabFocus)
 
@@ -190,6 +197,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Log panel (collapsed by default) sits below the controls. Both stretch
         # 1, so opening the log shrinks the viewfinder to fit.
         self.log_panel = LogPanel(classifier)
+        self.log_panel.set_compact(self._profile.compact)
         self.log_panel.setVisible(False)
         root.addWidget(self.log_panel, 1)
 
@@ -262,6 +270,9 @@ class MainWindow(QtWidgets.QMainWindow):
         for scr in app.screens():
             scr.geometryChanged.connect(lambda _g: self._resync_fullscreen())
 
+        if display_manager is not None:
+            display_manager.display_changed.connect(self._on_display_changed)
+
     # wiring
     def _wire(self) -> None:
         self.capture.line_received.connect(self.log_panel.append_line)
@@ -279,9 +290,24 @@ class MainWindow(QtWidgets.QMainWindow):
         return bool(sensor and sensor.mono_option and sensor.mono_option in options)
 
     def _populate_static(self) -> None:
+        self._apply_chrome_texts()
         self._refresh_sensor_status()
         self._refresh_mode_status()
         self._refresh_control_buttons()
+
+    def _apply_chrome_texts(self) -> None:
+        """Static button labels: full words on a monitor, icon-only compact."""
+        compact = self._profile.compact
+        self.monitor_btn.setText("" if compact else " Monitor")
+        self.settings_btn.setText("" if compact else " Settings")
+        self.shutdown_btn.setText("" if compact else " Shutdown")
+        self._sync_log_button(self.log_btn.isChecked())
+
+    def _apply_row_metrics(self) -> None:
+        """Controls-row density: compact packs tighter so 800 px fits."""
+        m = self._profile.row_margin
+        self._crow.setContentsMargins(m, 6, m, 6)
+        self._crow.setSpacing(self._profile.row_spacing)
 
     def _refresh_sensor_status(self) -> None:
         """Update the merged Sensor chip: selection text plus a detection glyph
@@ -291,7 +317,11 @@ class MainWindow(QtWidgets.QMainWindow):
         sensor = self.registry.by_overlay(cur["overlay"]) if cur["overlay"] else None
         name = sensor.name if sensor else (cur["overlay"] or "unknown")
         variant = ", mono" if self._is_mono(sensor, cur["options"]) else ""
-        self.sensor_btn.setText(f" Sensor: {name} ({cur['port']}{variant})")
+        if self._profile.compact:
+            # Compact keeps just the name, port and variant live in the dialog.
+            self.sensor_btn.setText(f" {name}")
+        else:
+            self.sensor_btn.setText(f" Sensor: {name} ({cur['port']}{variant})")
 
         detected = self.engine.info.model if self.engine.info is not None else None
         overlay = cur["overlay"]
@@ -311,18 +341,23 @@ class MainWindow(QtWidgets.QMainWindow):
             )
         else:
             glyph, color, tip = "photo_camera", "#aeb4bf", f"Detected {detected}."
-        self.sensor_btn.setIcon(icons.icon(glyph, _ICON_PX, color))
+        self.sensor_btn.setIcon(icons.icon(glyph, self._profile.icon_px, color))
         self.sensor_btn.setToolTip(tip)
 
     def _refresh_mode_status(self) -> None:
-        """Update the merged Mode chip with the active rpicam-style mode string."""
+        """Update the merged Mode chip with the active rpicam-style mode string.
+
+        Compact drops the format token, which lives in the mode dialog."""
         m = self.engine.sensor_mode
         if m and m.get("format") and m.get("size"):
             w, h = m["size"]
-            self.mode_btn.setText(f" Mode: {m['format']} {w}x{h}")
+            if self._profile.compact:
+                self.mode_btn.setText(f" {w}x{h}")
+            else:
+                self.mode_btn.setText(f" Mode: {m['format']} {w}x{h}")
         else:
-            self.mode_btn.setText(" Mode: --")
-        self.mode_btn.setIcon(icons.icon("tune", _ICON_PX))
+            self.mode_btn.setText(" --" if self._profile.compact else " Mode: --")
+        self.mode_btn.setIcon(icons.icon("tune", self._profile.icon_px))
 
     def _refresh_control_buttons(self) -> None:
         """Show a control chip only when the camera offers that control (mono
@@ -371,11 +406,14 @@ class MainWindow(QtWidgets.QMainWindow):
         if self._histogram_on and self.engine.latest_histogram is not None:
             self.viewfinder_area.update_histogram(self.engine.latest_histogram)
         # Control chips carry live values too, and the open sheet tracks its
-        # value while in auto.
+        # value while in auto. Compact drops the label: the icon carries it.
         st = self.engine.control_state
         for key, (label, glyph, md_key, fmt) in self._CTRL_SPEC.items():
             value = md.get(md_key)
-            text = f" {label} {fmt(value)}" if value is not None else f" {label} --"
+            if self._profile.compact:
+                text = f" {fmt(value)}" if value is not None else " --"
+            else:
+                text = f" {label} {fmt(value)}" if value is not None else f" {label} --"
             btn = self._ctrl_buttons[key]
             if btn.text() != text:
                 btn.setText(text)
@@ -386,13 +424,12 @@ class MainWindow(QtWidgets.QMainWindow):
             if key == self._open_sheet:
                 self._sheets[key].set_live(value)
 
-    @staticmethod
-    def _set_chip_accent(btn: QtWidgets.QPushButton, glyph: str, active: bool) -> None:
+    def _set_chip_accent(self, btn: QtWidgets.QPushButton, glyph: str, active: bool) -> None:
         """Amber accent on/off. Re-polish (and tint the icon) only on a flip."""
         if btn.property("manual") == active:
             return
         btn.setProperty("manual", active)
-        btn.setIcon(icons.icon(glyph, _ICON_PX, _ACCENT_ON if active else _ACCENT_OFF))
+        btn.setIcon(icons.icon(glyph, self._profile.icon_px, _ACCENT_ON if active else _ACCENT_OFF))
         repolish(btn)
 
     def _toggle_log(self, checked: bool) -> None:
@@ -403,13 +440,14 @@ class MainWindow(QtWidgets.QMainWindow):
         # The button is how you close it again, so make the open state read as a
         # pressed toggle (QSS :checked) and relabel it accordingly. Closed, it
         # carries the severity tint so trouble shows without opening the panel.
+        compact = self._profile.compact
         color = _SEV_ACCENT.get(self._sev, _ACCENT_OFF)
         if checked:
-            self.log_btn.setIcon(icons.icon("close", _ICON_PX))
-            self.log_btn.setText(" Close log")
+            self.log_btn.setIcon(icons.icon("close", self._profile.icon_px))
+            self.log_btn.setText("" if compact else " Close log")
         else:
-            self.log_btn.setIcon(icons.icon("terminal", _ICON_PX, color))
-            self.log_btn.setText(" Log")
+            self.log_btn.setIcon(icons.icon("terminal", self._profile.icon_px, color))
+            self.log_btn.setText("" if compact else " Log")
         self.log_btn.setProperty("sev", self._sev or None)
         repolish(self.log_btn)
 
@@ -538,7 +576,8 @@ class MainWindow(QtWidgets.QMainWindow):
             clear = self.viewfinder_area.geometry()
         # The overlay traps Tab and swallows backdrop clicks. Enter/Escape come
         # from MainWindow's window shortcuts (they fire regardless of focus).
-        self._overlay = ModalOverlay(self.centralWidget(), card, clear_rect=clear)
+        margin = 16 if self._profile.compact else 40
+        self._overlay = ModalOverlay(self.centralWidget(), card, clear_rect=clear, margin=margin)
 
     def _close_modal(self) -> None:
         if self._overlay is not None:
@@ -565,6 +604,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.engine.fps_fixed,
             on_apply=self._apply_mode,
             on_cancel=self._close_modal,
+            compact=self._profile.compact,
         )
         self._open_modal(card)
 
@@ -708,6 +748,74 @@ class MainWindow(QtWidgets.QMainWindow):
     def _on_screen_added(self, screen) -> None:
         screen.geometryChanged.connect(lambda _g: self._resync_fullscreen())
         self._resync_fullscreen()
+
+    def _on_display_changed(self, screen) -> None:
+        """DisplayManager settled on an output: swap profile, refit streams."""
+        g = screen.geometry()
+        key = (screen.name(), g.width(), g.height())
+        if key == self._display_key:
+            return
+        first = self._display_key is None
+        self._display_key = key
+        log.info("display: %s %dx%d", screen.name(), g.width(), g.height())
+        profile = profile_for_screen(screen)
+        if profile != self._profile:
+            self._apply_profile(profile)
+        self._resync_fullscreen()
+        QtCore.QTimer.singleShot(0, self._check_chrome_fit)
+        # The boot pass reports the screen the lores stream was already sized
+        # for, so only real switches pay the reconfigure.
+        if not first:
+            QtCore.QTimer.singleShot(600, self._refit_lores)
+
+    def _check_chrome_fit(self) -> None:
+        """Chrome wider than the screen clips silently, so say so loudly."""
+        screen = self.screen()
+        if screen is None:
+            return
+        hint = self.minimumSizeHint().width()
+        if hint > screen.geometry().width():
+            log.warning(
+                "chrome minimum width %d px exceeds the %d px screen, right edge will clip",
+                hint,
+                screen.geometry().width(),
+            )
+
+    def _apply_profile(self, profile: UiProfile) -> None:
+        """Re-skin live for a new display class (monitor or touch panel)."""
+        self._profile = profile
+        self.setStyleSheet(build_stylesheet(profile))
+        px = profile.icon_px
+        for btn in self._chrome_btns:
+            btn.setIconSize(QtCore.QSize(px, px))
+        # Chip widths ratchet and accents re-tint only on flips, so clear both
+        # to force a re-apply at the new font size.
+        for btn in self._ctrl_buttons.values():
+            btn.setMinimumWidth(0)
+        for btn in self._sheet_buttons.values():
+            btn.setProperty("manual", None)
+        self.settings_btn.setIcon(icons.icon("settings", px))
+        self.shutdown_btn.setIcon(icons.icon("power_settings_new", px, "#d98b80"))
+        self._apply_row_metrics()
+        for sheet in self._sheets.values():
+            sheet.apply_profile(profile)
+        if self._open_sheet is not None:
+            self._position_sheet(self._open_sheet)
+        self.status.set_compact(profile.compact)
+        self.log_panel.set_compact(profile.compact)
+        self._populate_static()
+        monitor = self._sheets["monitor"]
+        self._set_chip_accent(self.monitor_btn, "stroke_partial", monitor.peaking or monitor.zebra)
+        self._update_status()
+
+    def _refit_lores(self) -> None:
+        if not self._engine_started:
+            return
+        try:
+            if self.engine.refit_lores(self.viewfinder_area.lores_size()):
+                log.info("lores stream refit for the new display")
+        except Exception as exc:  # noqa: BLE001
+            log.error("lores refit failed: %s", exc)
 
     def _resync_fullscreen(self) -> None:
         # Deferred so Qt finishes updating its QScreen state first.

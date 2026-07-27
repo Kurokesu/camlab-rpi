@@ -28,9 +28,9 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=camlab
 
-Environment=XCURSOR_SIZE=1
 # Deliberately do NOT raise LIBCAMERA_LOG_LEVELS: ERROR lines (e.g. AR0822
 # embedded-data parse failures) are the integrity signal we surface.
+# Cursor visibility is handled in-app (camlab.display.CursorPolicy).
 Environment=PYTHONUNBUFFERED=1
 
 ExecStart=/usr/bin/cage -- /usr/bin/python3 -m camlab
