@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from ..config_manager import dsi_blocked_ports
 from ..qt import Qt, QtWidgets
 from ..sensors import SensorRegistry
 from .widgets import SegmentedSelector, hline
@@ -64,9 +65,14 @@ class SensorCard(QtWidgets.QFrame):
 
         self.port_sel = SegmentedSelector()
         port = current_port if current_port in ("cam0", "cam1") else "cam1"
-        self.port_sel.set_options([("cam0", "cam0"), ("cam1", "cam1")], current=port)
+        # A DSI touch panel occupies one of the shared CSI/DSI connectors,
+        # so that port cannot host a camera while the panel is wired.
+        blocked = dsi_blocked_ports()
+        self.port_sel.set_options(
+            [("cam0", "cam0"), ("cam1", "cam1")], current=port, disabled_values=blocked
+        )
         self.port_sel.changed.connect(self._refresh_apply)
-        self._init_port = port
+        self._init_port = self.port_sel.current_value()
 
         self.variant_lbl = QtWidgets.QLabel("Variant:")
         self.variant_sel = SegmentedSelector()
@@ -74,6 +80,10 @@ class SensorCard(QtWidgets.QFrame):
 
         form.addRow("Sensor:", self.sensor_sel)
         form.addRow("CSI port:", self.port_sel)
+        if blocked:
+            note = QtWidgets.QLabel(f"{', '.join(sorted(blocked))} is in use by touch display")
+            note.setObjectName("dialogNote")
+            form.addRow(note)
         form.addRow(self.variant_lbl, self.variant_sel)
 
         self._rebuild_variant(current_name, self._init_mono)
