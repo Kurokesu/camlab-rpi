@@ -691,15 +691,21 @@ class MainWindow(QtWidgets.QMainWindow):
         disp = self.config.get_current_display()
         # No block but a live DSI connector: firmware-detected panel, not ours to manage.
         locked_ports = dsi_blocked_ports() if not disp["present"] else set()
+        current_display = self._display_name_current(disp)
+        # Off-catalogue block: its claimed port is fixed, the card locks it out.
+        offcat_port = None
+        if current_display is not None and self.panels.by_name(current_display) is None:
+            offcat_port = disp["port_blocked"]
         card = SensorCard(
             self.registry,
             self.panels,
             sensor.name if sensor else None,
             cur["port"],
             mono,
-            self._display_name_current(disp),
+            current_display,
             display_locked=bool(locked_ports),
             locked_ports=locked_ports,
+            offcat_port=offcat_port,
             on_apply=self._apply_sensor,
             on_cancel=self._close_modal,
         )
