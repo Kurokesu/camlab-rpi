@@ -20,11 +20,15 @@ Network toggle (GUI Settings or `camlabctl net`) persists across reboots. Turnin
 
 ## Running the app
 
-Run directly under a Cage session with `python3 -m camlab`. Sensors live in `camlab/data/sensors.yaml`. CSI port lives in a managed block in `/boot/firmware/config.txt`. Boot is tuned by `scripts/setup/boot.sh` (run during install, `--revert` undoes it). Each script under `scripts/setup/` is self-documenting (`--help`) and safe to re-run.
+Run directly under a Cage session with `python3 -m camlab`. Sensors are defined in `camlab/data/sensors.yaml`. CSI port is set in a managed block in `/boot/firmware/config.txt`. Boot is tuned by `scripts/setup/boot.sh` (run during install, `--revert` undoes it). Each script under `scripts/setup/` is self-documenting (`--help`) and safe to re-run.
 
 ## Read-only root
 
 Root is read-only (overlayfs, RAM upper) so a yanked power cable can't corrupt it. `scripts/setup/readonly.sh` sets it up during install and arms a one-shot that locks down on the first reboot after first-boot tasks settle, so the operator does nothing extra. Sensor selections persist on a small loopback data partition at `/var/lib/camlab`, outside the overlay. For edits: `camlabctl rw`, reboot, change, `camlabctl ro`, reboot.
+
+## Debian packaging
+
+The deb recipe and its CI/release workflows are maintained on the `debian/latest` branch, separate from app source (DEP-14). `debian/source/README.source` there documents the layout, RELEASING.md here documents cutting a deb release.
 
 ## Boot storage
 

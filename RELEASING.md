@@ -20,3 +20,19 @@ git push origin v1.0.0-beta.1
 
 3. Release workflow builds `camlab-rpi-<version>.tar.gz` (versioned root directory inside) and publishes a GitHub release with generated notes. Tags with a hyphen publish as pre-releases.
 4. Bump `__version__` to the next expected version with `-dev` in a follow-up commit.
+
+## Debian package
+
+The deb ships from `debian/latest`, a packaging-only branch (DEP-14, recipe and workflows, never merged with `main`). After the source release exists:
+
+1. On `debian/latest`, open a `debian/changelog` entry for the release version in Debian form (`-` pre-release separator becomes `~`, for example `1.0.0~beta.3-1`). Sync `debian/control` Depends with `scripts/setup/deps.sh` and `drivers.sh`. Commit, push, wait for green CI.
+2. Tag that commit and push (`~` becomes `_` in tags):
+
+```bash
+git tag -a debian/1.0.0_beta.3-1 -m "debian/1.0.0_beta.3-1"
+git push origin debian/1.0.0_beta.3-1
+```
+
+3. Release workflow verifies the paired `v` tag, builds against it and uploads `camlab_<version>.tar.gz` plus signed `SHA256SUMS` onto that release, next to the source tarball. A packaging-only rebuild is a new changelog entry and a `-2` tag.
+
+See `debian/source/README.source` on that branch for layout and details.
