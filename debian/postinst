@@ -9,7 +9,7 @@ case "$1" in
         # dpkg leaves unowned files in place. A tarball install
         # (install.sh) or stale bytecode would shadow modules removed
         # upstream, so drop anything under /opt/camlab the package does
-        # not own. User data lives in /var/lib/camlab, never here.
+        # not own. User data is kept in /var/lib/camlab, never here.
         owned=$(mktemp)
         present=$(mktemp)
         dpkg-query -L camlab | sort -u > "$owned"

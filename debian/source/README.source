@@ -23,8 +23,8 @@ Branch layout
                          (tagged publish).
 
 Unlike the driver repos, this branch is deliberately detached from
-Kurokesu/ci while app packaging stabilizes: build, sign and publish
-logic lives here and calls nothing remote. The sign step mirrors
+Kurokesu/ci while app packaging stabilizes: workflows carry their own
+build, sign and publish logic and call nothing remote. The sign step mirrors
 deb-sign.yml conventions exactly (bundle naming, tilde rename, signed
 SHA256SUMS), so apt archive ingest cannot tell the difference. Once
 proven, the flow gets upstreamed into Kurokesu/ci as an app-family
