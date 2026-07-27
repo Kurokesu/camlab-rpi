@@ -72,7 +72,9 @@ class SensorCard(QtWidgets.QFrame):
             [("cam0", "cam0"), ("cam1", "cam1")], current=port, disabled_values=blocked
         )
         self.port_sel.changed.connect(self._refresh_apply)
-        self._init_port = self.port_sel.current_value()
+        # Persisted port, not selector state: a DSI-forced shift must register
+        # as a pending change so Apply stays live.
+        self._init_port = port
 
         self.variant_lbl = QtWidgets.QLabel("Variant:")
         self.variant_sel = SegmentedSelector()
