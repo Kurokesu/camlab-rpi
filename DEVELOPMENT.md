@@ -30,6 +30,10 @@ Root is read-only (overlayfs, RAM upper) so a yanked power cable can't corrupt i
 
 README walkthrough targets SD on a Pi 5, any boot storage works. CM5 eMMC boots fastest, ~15 s power-on to viewfinder vs ~21 s from SD on the bench. NVMe was tested and brings no benefit: it boots ~1 s slower than eMMC (from the NVMe controller init the eMMC fast-path skips) and the app needs neither the capacity nor the bandwidth.
 
+## Icon font
+
+`camlab/assets/MaterialSymbolsOutlined.ttf` is a subset of Google's Material Symbols with only glyphs specified in `camlab/gui/icons.py`. After adding a codepoint there, regenerate with `scripts/dev/icon-font.sh`.
+
 ## Environment variables
 
 - `CAMLAB_CAMERA_NUM` (default `0`)
