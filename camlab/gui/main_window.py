@@ -12,6 +12,7 @@ from .. import network
 from ..camera import CameraEngine
 from ..config_manager import ConfigManager, poweroff
 from ..display import Backlight, DisplayManager
+from ..drm import dsi_blocked_ports
 from ..integrity import IntegrityMonitor, LogClassifier, StderrCapture
 from ..modes import mode_for
 from ..qt import Qt, QtCore, QtGui, QtWidgets, Signal, Slot
@@ -356,6 +357,10 @@ class MainWindow(QtWidgets.QMainWindow):
         overlay = cur["overlay"]
         if not detected:
             glyph, color, tip = "error", "#e06c75", "No camera detected by libcamera."
+            # On panel rigs the usual cause: the display took the configured port.
+            blocked = dsi_blocked_ports()
+            if cur["port"] in blocked:
+                tip += f" {cur['port']} is claimed by the display overlay, move the camera."
         elif overlay and detected.lower() == overlay.lower():
             glyph, color, tip = (
                 "check_circle",
