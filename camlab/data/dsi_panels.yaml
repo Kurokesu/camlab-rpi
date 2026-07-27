@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# Supported DSI touch panels (GUI catalogue). overlay is the dtoverlay token
+# written to config.txt (dsi0 param selects DISP0, default is DISP1).
+panels:
+  - name: Waveshare 43H
+    overlay: vc4-kms-dsi-7inch  # panel reuses official 7" timings
+    notes: 4.3" 800x480 IPS
