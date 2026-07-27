@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Sensor registry loader (reads sensors.yaml)."""
+"""Sensor registry loader (reads data/sensors.yaml)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pathlib import Path
 
 import yaml
 
-DEFAULT_REGISTRY = Path(__file__).with_name("sensors.yaml")
+DEFAULT_REGISTRY = Path(__file__).parent / "data" / "sensors.yaml"
 
 
 @dataclass(frozen=True)

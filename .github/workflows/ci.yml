@@ -38,7 +38,7 @@ jobs:
       - name: REUSE lint
         uses: fsfe/reuse-action@v6
 
-      - name: Parse sensors.yaml
+      - name: Parse registry yaml
         run: |
           pip install pyyaml
-          python3 -c "import yaml; yaml.safe_load(open('camlab/sensors.yaml'))"
+          python3 -c "import yaml; yaml.safe_load(open('camlab/data/sensors.yaml'))"

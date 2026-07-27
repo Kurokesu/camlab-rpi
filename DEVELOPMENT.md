@@ -20,7 +20,7 @@ Network toggle (GUI Settings or `camlabctl net`) persists across reboots. Turnin
 
 ## Running the app
 
-Run directly under a Cage session with `python3 -m camlab`. Sensors live in `camlab/sensors.yaml`. CSI port lives in a managed block in `/boot/firmware/config.txt`. Boot is tuned by `scripts/setup/boot.sh` (run during install, `--revert` undoes it). Each script under `scripts/setup/` is self-documenting (`--help`) and safe to re-run.
+Run directly under a Cage session with `python3 -m camlab`. Sensors live in `camlab/data/sensors.yaml`. CSI port lives in a managed block in `/boot/firmware/config.txt`. Boot is tuned by `scripts/setup/boot.sh` (run during install, `--revert` undoes it). Each script under `scripts/setup/` is self-documenting (`--help`) and safe to re-run.
 
 ## Read-only root
 
