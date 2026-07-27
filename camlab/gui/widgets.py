@@ -120,23 +120,12 @@ class SegmentedSelector(QtWidgets.QWidget):
         if self._values:
             self._group.button(idx).setChecked(True)
 
-    def set_option_label(
-        self, value: Any, text: str | None = None, icon=None, tooltip: str | None = None
-    ) -> None:
-        """Restyle one segment in place, keeping the selection.
-
-        For labels that change while the row is live (a running count, say),
-        where set_options would rebuild every button.
-        """
+    def button(self, value: Any) -> QtWidgets.QPushButton | None:
+        """The segment button for `value`, to restyle in place (a running
+        count, say) where set_options would rebuild every button."""
         if value not in self._values:
-            return
-        btn = self._group.button(self._values.index(value))
-        if text is not None:
-            btn.setText(text)
-        if icon is not None:
-            btn.setIcon(icon)
-        if tooltip is not None:
-            btn.setToolTip(tooltip)
+            return None
+        return self._group.button(self._values.index(value))
 
     def set_value(self, value: Any) -> None:
         """Silently select `value` if present (no `changed` emission)."""
