@@ -3,16 +3,12 @@
 
 """Application stylesheet and layout profiles.
 
-Everything is styled from one QSS blob plus generated pieces: profile-sized
-rules (fonts, paddings, slider geometry), modal-card glass (sheet glass
-colors) and the checkbox tick (a glyph rasterised to a PNG, since QSS needs
-an image url).
+One QSS blob plus generated pieces: profile-sized rules, modal-card glass and
+the checkbox tick (a glyph rasterised to PNG, QSS needs an image url).
 
-Two UiProfiles cover the two display classes the kiosk runs on: REGULAR for
-HDMI monitors and COMPACT for small touch panels (800x480 at ~220 ppi), where
-text must be physically readable and controls finger-sized. The profile is
-picked from the active screen (profile_for_screen) and re-applied live when
-DisplayManager switches outputs.
+REGULAR covers HDMI monitors, COMPACT small touch panels (800x480 at
+~220 ppi) where text must stay readable and controls finger-sized. Profile is
+picked from the active screen and re-applied live on display switches.
 """
 
 from __future__ import annotations
