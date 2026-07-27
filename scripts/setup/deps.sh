@@ -44,13 +44,14 @@ apt-get install -y eatmydata
 # QML) away. Hard deps stay unlisted: picamera2 pulls the +krks libcamera
 # fork. Recommends the kiosk does need are pinned: python3-opengl
 # (GlViewfinder imports it), qt6-wayland (Qt under Cage), awb-nn
-# (libcamera-ipa AWB models).
+# (libcamera-ipa AWB models). wlr-randr drives display switching
+# (camlab/display.py) on rigs with both HDMI and a DSI touch panel.
 log "Installing packages..."
 apt_get install -y --no-install-recommends \
     python3-picamera2 \
     python3-pyqt6 python3-opengl \
     python3-yaml \
-    cage \
+    cage wlr-randr \
     qt6-wayland awb-nn
 
 # camlab never runs rpicam-* CLI. Drop preinstalled rpicam-apps stack

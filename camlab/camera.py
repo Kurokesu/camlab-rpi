@@ -213,6 +213,21 @@ class CameraEngine:
         if was_started:
             self.start()
 
+    def refit_lores(self, avail_size) -> bool:
+        """Refit lores (display) stream to a new screen size.
+
+        No-op when planned size matches the running stream, so a display
+        switch only pays the brief reconfigure when size actually changes.
+        """
+        if self.picam2 is None or self.current_mode is None:
+            return False
+        planned = plan_lores_size(tuple(self.current_mode.size), tuple(avail_size))
+        current = tuple(self.picam2.camera_config["lores"]["size"])
+        if planned == current:
+            return False
+        self.apply_mode(self.current_mode, self.fps_current, avail_size, self.fps_fixed)
+        return True
+
     def _sensor_max_frame_us(self) -> int | None:
         """Sensor's advertised max frame duration, None if missing or malformed."""
         limits = self._camera_controls.get("FrameDurationLimits")

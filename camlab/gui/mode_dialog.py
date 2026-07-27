@@ -44,12 +44,16 @@ class ModeCard(QtWidgets.QFrame):
         fps_fixed: bool,
         on_apply: Callable[[tuple[int, int], int, float, bool], None],
         on_cancel: Callable[[], None],
+        compact: bool = False,
     ):
         super().__init__()
         self.setObjectName("modalCard")
         self.setMinimumWidth(420)
         self._modes = modes
         self._on_apply = on_apply
+        # Compact (800 px panel) shortens option labels so the widest rows
+        # (resolutions, fps) still fit as one segment row.
+        self._compact = bool(compact)
 
         title = QtWidgets.QLabel("Sensor mode")
         title.setObjectName("modalTitle")
@@ -60,8 +64,9 @@ class ModeCard(QtWidgets.QFrame):
         self.fps_lock_sel = SegmentedSelector()
 
         init_size = tuple(current_mode.size) if current_mode else None
+        sep = "x" if self._compact else " x "
         self.res_sel.set_options(
-            [(f"{w} x {h}", (w, h)) for (w, h) in resolutions(modes)], current=init_size
+            [(f"{w}{sep}{h}", (w, h)) for (w, h) in resolutions(modes)], current=init_size
         )
         self._rebuild_depths(current_mode.bit_depth if current_mode else None)
         self._rebuild_fps(fps_current)
@@ -136,9 +141,10 @@ class ModeCard(QtWidgets.QFrame):
     def _rebuild_fps(self, prefer_fps: float | None) -> None:
         m = mode_for(self._modes, self.res_sel.current_value(), self.depth_sel.current_value())
         opts = fps_options(m.max_fps) if m else [30.0]
+        unit = "" if self._compact else " fps"
         # Carry the chosen rate over: keep it when still offered, else the nearest.
         self.fps_sel.set_options(
-            [(f"{format_fps(o)} fps", o) for o in opts],
+            [(f"{format_fps(o)}{unit}", o) for o in opts],
             current=nearest_fps_option(opts, prefer_fps),
             enabled=len(opts) > 1,
         )

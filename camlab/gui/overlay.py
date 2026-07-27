@@ -41,6 +41,7 @@ class ModalOverlay(QtWidgets.QWidget):
         host: QtWidgets.QWidget,
         card: QtWidgets.QWidget,
         clear_rect: QtCore.QRect | None = None,
+        margin: int = 40,
     ):
         super().__init__(host)
         self._host = host
@@ -56,7 +57,7 @@ class ModalOverlay(QtWidgets.QWidget):
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
 
         outer = QtWidgets.QVBoxLayout(self)
-        outer.setContentsMargins(40, 40, 40, 40)
+        outer.setContentsMargins(margin, margin, margin, margin)
         outer.addStretch(1)
         row = QtWidgets.QHBoxLayout()
         row.addStretch(1)

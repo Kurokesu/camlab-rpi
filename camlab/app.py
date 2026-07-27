@@ -11,8 +11,10 @@ import sys
 
 from .camera import CameraEngine
 from .config_manager import ConfigManager
+from .display import CursorPolicy, DisplayManager, enforce_output_policy
 from .gl_viewfinder import install_gles_format
 from .gui.main_window import MainWindow
+from .gui.style import profile_for_screen
 from .integrity import LogClassifier, NullCapture, StderrCapture
 from .modes import resolve_initial_mode
 from .qt import QtWidgets
@@ -23,15 +25,19 @@ log = logging.getLogger("camlab")
 
 # Estimated non-viewfinder chrome height (status strip + controls row) used to size
 # lores stream before the window is laid out. Runtime mode changes use the
-# viewfinder widget's real size instead.
+# viewfinder widget's real size instead. Compact measures 85 px (29 + 56).
 _CHROME_PX = 90
+_CHROME_COMPACT_PX = 95
 
 
 def _avail_size(app) -> tuple[int, int]:
     """Viewfinder area estimate (screen minus chrome), for the boot lores size."""
     screen = app.primaryScreen()
     geo = screen.geometry() if screen else None
-    return (geo.width(), max(1, geo.height() - _CHROME_PX)) if geo else (1280, 720)
+    if geo is None:
+        return (1280, 720)
+    chrome = _CHROME_COMPACT_PX if profile_for_screen(screen).compact else _CHROME_PX
+    return (geo.width(), max(1, geo.height() - chrome))
 
 
 _LEVELS = {
@@ -83,6 +89,10 @@ def main(argv: list[str] | None = None) -> int:
     if os.environ.get("WAYLAND_DISPLAY"):
         os.environ["QT_QPA_PLATFORM"] = "wayland"
 
+    # Settle HDMI versus DSI panel before Qt connects to the compositor, so
+    # layout profile and lores sizing see the final display.
+    enforce_output_policy()
+
     # Viewfinder needs a GLES context (samplerExternalOES), set before QApplication.
     install_gles_format()
     app = QtWidgets.QApplication(argv if argv is not None else sys.argv)
@@ -103,8 +113,21 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as exc:  # noqa: BLE001
             log.error("camera configure failed: %s", exc)
 
-    win = MainWindow(engine, registry, config, capture, classifier, settings)
+    # Both run for the whole app, kept alive by QApplication parentage.
+    display_manager = DisplayManager(app)
+    CursorPolicy(app)
+
+    win = MainWindow(
+        engine,
+        registry,
+        config,
+        capture,
+        classifier,
+        settings,
+        display_manager=display_manager,
+    )
     win.showFullScreen()
+    display_manager.start()
 
     # The camera is started by the window once it reaches fullscreen (see
     # MainWindow). Starting it here, before the event loop runs, would block with

@@ -23,7 +23,7 @@ from collections.abc import Callable
 
 from ..qt import Qt, QtCore, QtGui, QtWidgets, Signal
 from . import icons
-from .style import GLASS_BG, GLASS_BORDER
+from .style import GLASS_BG, GLASS_BORDER, UiProfile
 from .widgets import SegmentedSelector, repolish
 
 # Slider resolution. 1000 steps is finer than any bench display is wide.
@@ -153,7 +153,7 @@ class ControlSheet(SheetCard):
         self._hi = 2.0
         self._tracking = False  # programmatic slider move, not a user action
 
-        name = _sheet_title(title)
+        self.title_lbl = _sheet_title(title)
 
         self.mode_sel = SegmentedSelector()
         self.mode_sel.set_options(
@@ -175,10 +175,14 @@ class ControlSheet(SheetCard):
         row = QtWidgets.QHBoxLayout(self)
         row.setContentsMargins(16, 10, 16, 10)
         row.setSpacing(14)
-        row.addWidget(name)
+        row.addWidget(self.title_lbl)
         row.addWidget(self.mode_sel)
         row.addWidget(self.slider, 1)
         row.addWidget(self.value_lbl)
+
+    def apply_profile(self, profile: UiProfile) -> None:
+        self.title_lbl.setMinimumWidth(profile.sheet_title_w)
+        self.value_lbl.setMinimumWidth(profile.sheet_value_w)
 
     @property
     def is_auto(self) -> bool:
@@ -275,7 +279,7 @@ class MonitorSheet(SheetCard):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        name = _sheet_title("Monitor")
+        self.title_lbl = _sheet_title("Monitor")
 
         self.peak_btn = QtWidgets.QPushButton(
             icons.icon("center_focus_weak", _MONITOR_ICON_PX), " Focus Peaking"
@@ -309,7 +313,7 @@ class MonitorSheet(SheetCard):
         row = QtWidgets.QHBoxLayout(self)
         row.setContentsMargins(16, 10, 16, 10)
         row.setSpacing(14)
-        row.addWidget(name)
+        row.addWidget(self.title_lbl)
         row.addWidget(self.peak_btn)
         # Threshold cluster hugs the Zebra button (tighter spacing than the
         # row) and dims with it, so it reads as that button's parameter.
@@ -323,6 +327,13 @@ class MonitorSheet(SheetCard):
         row.addLayout(cluster)
         row.addStretch(1)
         self._style_slider()
+
+    def apply_profile(self, profile: UiProfile) -> None:
+        self.title_lbl.setMinimumWidth(profile.sheet_title_w)
+        self.slider.setFixedWidth(profile.zebra_slider_w)
+        icon_px = profile.icon_px - 2
+        for btn in (self.peak_btn, self.zebra_btn):
+            btn.setIconSize(QtCore.QSize(icon_px, icon_px))
 
     @property
     def peaking(self) -> bool:
