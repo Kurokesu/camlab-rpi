@@ -10,9 +10,10 @@
 # under scripts/setup/.
 #
 # Usage:
-#   sudo ./install.sh                     # full install
-#   sudo ./install.sh --no-readonly       # keep root fs writable (dev install)
-#   ./install.sh --help                   # this message
+#   sudo ./install.sh                                # full install
+#   sudo ./install.sh --no-readonly                  # keep root fs writable (dev install)
+#   sudo ./install.sh --display vc4-kms-dsi-7inch    # DSI touch panel (CM5, Pi 5 auto-detects)
+#   ./install.sh --help                              # this message
 #
 # Requirements:
 #   - Raspberry Pi CM5 + IO board, or a Pi 5
@@ -35,11 +36,13 @@ DEV_CLUTTER+=(.git .venv)
 source "$REPO_DIR/scripts/common.sh"
 
 DO_READONLY=1
-for arg in "$@"; do
-    case "$arg" in
-        --no-readonly) DO_READONLY=0 ;;
+DISPLAY_OVERLAY=""
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --no-readonly) DO_READONLY=0; shift ;;
+        --display) DISPLAY_OVERLAY="${2:?--display needs an overlay name}"; shift 2 ;;
         -h|--help) help_text; exit 0 ;;
-        *) die "Unknown argument: $arg" ;;
+        *) die "Unknown argument: $1" ;;
     esac
 done
 
@@ -105,6 +108,9 @@ python3 -m compileall -q -j 0 "$APP_DIR/camlab"
 "$APP_DIR/scripts/setup/config.sh"
 "$APP_DIR/scripts/setup/journald.sh"
 "$APP_DIR/scripts/setup/boot.sh"
+if [ -n "$DISPLAY_OVERLAY" ]; then
+    "$APP_DIR/scripts/setup/display.sh" --overlay "$DISPLAY_OVERLAY"
+fi
 "$APP_DIR/scripts/setup/splash.sh"
 "$APP_DIR/scripts/setup/service.sh" --enable
 
