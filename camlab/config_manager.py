@@ -29,34 +29,15 @@ import subprocess
 import sys
 from pathlib import Path
 
+from .drm import dsi_blocked_ports
+
 CONFIG_PATH = Path(os.environ.get("CAMLAB_CONFIG_TXT", "/boot/firmware/config.txt"))
 OVERLAYS_DIR = Path(os.environ.get("CAMLAB_OVERLAYS_DIR", "/boot/firmware/overlays"))
-DRM_ROOT = Path(os.environ.get("CAMLAB_DRM_ROOT", "/sys/class/drm"))
 
 BEGIN = "# >>> camlab managed (do not edit) >>>"
 END = "# <<< camlab managed <<<"
 
 VALID_PORTS = ("cam0", "cam1")
-
-
-def dsi_blocked_ports() -> set[str]:
-    """CSI ports unusable because a DSI display occupies the shared connector.
-
-    Pi 5 and the CM5 IO board route CSI and DSI through the same physical
-    connectors: DSI-1 shares with cam0 (DISP0), DSI-2 with cam1 (DISP1).
-    """
-    blocked = set()
-    for status in DRM_ROOT.glob("card*-DSI-*/status"):
-        try:
-            if status.read_text().strip() != "connected":
-                continue
-            idx = int(status.parent.name.rsplit("-", 1)[1])
-        except (OSError, ValueError):
-            continue
-        port = f"cam{idx - 1}"
-        if port in VALID_PORTS:
-            blocked.add(port)
-    return blocked
 
 
 # Privileged shim installed by scripts/setup/config.sh. The only thing the GUI is
