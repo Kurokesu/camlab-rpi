@@ -23,11 +23,11 @@ from .settings import SettingsStore
 
 log = logging.getLogger("camlab")
 
-# Estimated non-viewfinder chrome height (status strip + controls row) used to size
-# lores stream before the window is laid out. Runtime mode changes use the
-# viewfinder widget's real size instead. Compact measures 85 px (29 + 56).
+# Estimated chrome height (status strip + controls row) sizing the boot lores
+# stream. Compact measures 85 px (29 + 56). Errors are free, the stream refits
+# to the real viewfinder before camera start (MainWindow._start_engine).
 _CHROME_PX = 90
-_CHROME_COMPACT_PX = 95
+_CHROME_COMPACT_PX = 85
 
 
 def _avail_size(app) -> tuple[int, int]:

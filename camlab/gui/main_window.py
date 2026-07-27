@@ -255,6 +255,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self._backlight_persist.setInterval(500)
         self._backlight_persist.timeout.connect(self._persist_backlight)
 
+        # Refit lores once window geometry stops moving (display switches
+        # arrive as a resize burst). No-ops when planned size is unchanged.
+        self._refit_timer = QtCore.QTimer(self)
+        self._refit_timer.setSingleShot(True)
+        self._refit_timer.setInterval(500)
+        self._refit_timer.timeout.connect(self._refit_lores)
+
         # Boot cover: hides pre-fullscreen flash until first
         # fullscreen configure lands.
         self._boot_cover = QtWidgets.QWidget(central)
@@ -747,6 +754,7 @@ class MainWindow(QtWidgets.QMainWindow):
     # lifecycle
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
+        self._refit_timer.start()
         if self._switch_cover.isVisible():
             self._switch_cover.setGeometry(self.centralWidget().rect())
             scr = self.screen() or QtWidgets.QApplication.primaryScreen()
@@ -810,12 +818,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self._switch_cover.hide()
 
     def _on_display_changed(self, screen) -> None:
-        """DisplayManager settled on an output: swap profile, refit streams."""
+        """DisplayManager settled on an output: swap profile and fullscreen.
+        Lores refit follows the resize this triggers, not this signal."""
         g = screen.geometry()
         key = (screen.name(), g.width(), g.height())
         if key == self._display_key:
             return
-        first = self._display_key is None
         self._display_key = key
         log.info("display: %s %dx%d", screen.name(), g.width(), g.height())
         profile = profile_for_screen(screen)
@@ -823,10 +831,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self._apply_profile(profile)
         self._resync_fullscreen()
         QtCore.QTimer.singleShot(0, self._check_chrome_fit)
-        # The boot pass reports the screen the lores stream was already sized
-        # for, so only real switches pay the reconfigure.
-        if not first:
-            QtCore.QTimer.singleShot(600, self._refit_lores)
 
     def _check_chrome_fit(self) -> None:
         """Chrome wider than the screen clips silently, so say so loudly."""
@@ -873,7 +877,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         try:
             if self.engine.refit_lores(self.viewfinder_area.lores_size()):
-                log.info("lores stream refit for the new display")
+                log.info("lores stream refit to %dx%d", *self.engine.size)
         except Exception as exc:  # noqa: BLE001
             log.error("lores refit failed: %s", exc)
 
@@ -912,6 +916,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self._engine_started = True
         if self.engine.picam2 is None or self.engine.current_mode is None:
             return
+        # Boot lores size was a chrome estimate. Camera has not started yet,
+        # so refitting to the settled layout is free, no stream to interrupt.
+        self._refit_lores()
         try:
             self.engine.start()
         except Exception as exc:  # noqa: BLE001
