@@ -10,7 +10,7 @@
 # Safe to re-run. Requires sudo. Reboot needed for overlay changes.
 #
 # Usage:
-#   sudo scripts/setup/config.sh           # default ar0234/cam1
+#   sudo scripts/setup/config.sh           # default ar0234 on a free CSI port
 #   sudo scripts/setup/config.sh --sensor ar0822 --options 4lane
 
 set -euo pipefail
@@ -38,13 +38,28 @@ done
 require_root
 REPO_DIR="$(resolve_repo_dir)"
 
-header "Configuring overlay: $SENSOR (options: ${OPTIONS[*]:-none})"
+# Prefer cam1 (overlay default). Fall back to cam0 when a DSI panel claims it
+# (Pi 5 auto-detect via live DRM, or a display block written earlier).
+PORT="$(
+    cd "$REPO_DIR" && python3 - <<'PY'
+from camlab.config_manager import ConfigManager
 
-# Write the managed block in config.txt for the default sensor/port.
+blocked = ConfigManager().blocked_ports_next_boot()
+for port in ("cam1", "cam0"):
+    if port not in blocked:
+        print(port)
+        break
+else:
+    raise SystemExit("no free CSI port: display claims both connectors")
+PY
+)"
+
+header "Configuring overlay: $SENSOR on $PORT (options: ${OPTIONS[*]:-none})"
+
 opt_args=()
 for o in "${OPTIONS[@]:-}"; do [ -n "$o" ] && opt_args+=(--options "$o"); done
 ( cd "$REPO_DIR" && python3 -m camlab.config_manager set \
-    --overlay "$SENSOR" "${opt_args[@]}" )
+    --overlay "$SENSOR" --port "$PORT" "${opt_args[@]}" )
 
 # Install the scoped privilege shim + sudoers rule.
 log "Installing /usr/local/bin/camlab-apply"

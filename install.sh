@@ -105,12 +105,13 @@ python3 -m compileall -q -j 0 "$APP_DIR/camlab"
 "$APP_DIR/scripts/setup/deps.sh"
 "$APP_DIR/scripts/setup/kernel.sh"
 "$APP_DIR/scripts/setup/drivers.sh"
-"$APP_DIR/scripts/setup/config.sh"
-"$APP_DIR/scripts/setup/journald.sh"
-"$APP_DIR/scripts/setup/boot.sh"
+# Display before camera: config.sh picks a CSI port the panel does not claim.
 if [ -n "$DISPLAY_OVERLAY" ]; then
     "$APP_DIR/scripts/setup/display.sh" --overlay "$DISPLAY_OVERLAY"
 fi
+"$APP_DIR/scripts/setup/config.sh"
+"$APP_DIR/scripts/setup/journald.sh"
+"$APP_DIR/scripts/setup/boot.sh"
 "$APP_DIR/scripts/setup/splash.sh"
 "$APP_DIR/scripts/setup/service.sh" --enable
 
