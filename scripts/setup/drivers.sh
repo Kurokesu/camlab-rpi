@@ -20,10 +20,10 @@ CAMLAB_TAG="drivers"
 # shellcheck source=../common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../common.sh"
 
-# Driver packages come from the sensor registry (camlab/sensors.yaml), adding
-# a sensor is a single edit there.
+# Driver packages come from the sensor registry (camlab/data/sensors.yaml),
+# adding a sensor is a single edit there.
 REPO_DIR="$(resolve_repo_dir)"
-SENSORS_YAML="$REPO_DIR/camlab/sensors.yaml"
+SENSORS_YAML="$REPO_DIR/camlab/data/sensors.yaml"
 
 python3 -c 'import yaml' 2>/dev/null \
     || die "python3-yaml not installed (run scripts/setup/deps.sh first)"
