@@ -28,7 +28,7 @@ Kiosk app for previewing and testing MIPI CSI camera modules on Raspberry Pi.
 
 ### Prepare Raspberry Pi
 
-Flash Raspberry Pi OS $\color{#CA2031}{\mathtt{Lite}}$ (Trixie 64-bit) to an SD card using [Raspberry Pi Imager](https://www.raspberrypi.com/software/):
+Flash Raspberry Pi OS $\color{#CA2031}{\textsf{Lite}}$ (Trixie 64-bit) to an SD card using [Raspberry Pi Imager](https://www.raspberrypi.com/software/):
 
 - Select your Raspberry Pi device: **Raspberry Pi 5**
 - Choose operating system: **Raspberry Pi OS (other)** --> **Raspberry Pi OS Lite (64-bit)**
