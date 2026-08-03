@@ -489,8 +489,8 @@ class CameraEngine:
             return f"{depth}-bit {size[0]}x{size[1]}"
         return "?"
 
-    def make_viewfinder(self):
-        return GlViewfinder(self.picam2)
+    def make_viewfinder(self, transform: int = 0):
+        return GlViewfinder(self.picam2, transform=transform)
 
     def on_first_frame(self, callback) -> None:
         """Register a one-shot callback(boot_time_s) fired on the first captured frame."""
