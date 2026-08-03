@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import ctypes
 import logging
+import math
 import os
 import time
 from typing import ClassVar
@@ -105,6 +106,7 @@ from OpenGL.GLES2.VERSION.GLES2_2_0 import (
     glUniform1f,
     glUniform1i,
     glUniform2f,
+    glUniformMatrix2fv,
     glUseProgram,
     glViewport,
 )
@@ -124,15 +126,19 @@ log = logging.getLogger(__name__)
 # equivalent), two together read as the intended frost strength.
 _BLUR_PASSES = 2
 
+# uRotate turns the sampled texcoord about the centre, so a portrait panel can
+# display a landscape sensor upright without re-plumbing the streams. Identity
+# for 0 degrees, so an unrotated viewfinder samples exactly as before.
 _VERT = """
     attribute vec2 aPosition;
     varying vec2 texcoord;
+    uniform mat2 uRotate;
 
     void main()
     {
         gl_Position = vec4(aPosition * 2.0 - 1.0, 0.0, 1.0);
-        texcoord.x = aPosition.x;
-        texcoord.y = 1.0 - aPosition.y;
+        vec2 tc = vec2(aPosition.x, 1.0 - aPosition.y);
+        texcoord = uRotate * (tc - 0.5) + 0.5;
     }
 """
 
@@ -352,9 +358,14 @@ class _Buffer:
 class GlViewfinder(QOpenGLWidget):
     """In-scene zero-copy viewfinder widget driving the picamera2 event loop."""
 
-    def __init__(self, picam2, parent=None):
+    def __init__(self, picam2, parent=None, transform: int = 0):
         super().__init__(parent)
         self.picamera2 = picam2
+        # Display rotation in degrees (0/90/180/270). The panel may be mounted
+        # turned, so the picture rotates in the shader rather than in a stream.
+        if transform not in (0, 90, 180, 270):
+            raise ValueError(f"transform must be 0, 90, 180 or 270 (got {transform})")
+        self._transform = transform
         # Pure black pillarboxes: the picture reads as the natural focus
         # target against them, and they blend into a dark bench.
         self._bg = (0.0, 0.0, 0.0, 1.0)
@@ -462,7 +473,22 @@ class GlViewfinder(QOpenGLWidget):
         self._attr_locs[prog] = glGetAttribLocation(prog, "aPosition")
         glUseProgram(prog)
         glUniform1i(glGetUniformLocation(prog, "tex"), 0)
+        # uRotate exists only in _VERT programs. Seed it so a program left at
+        # its default (0 matrix) never samples a collapsed texcoord.
+        loc = glGetUniformLocation(prog, "uRotate")
+        if loc != -1:
+            glUniformMatrix2fv(loc, 1, GL_FALSE, self._rotate_matrix())
         return prog
+
+    def _rotate_matrix(self):
+        """Column-major mat2 that turns a centred texcoord by -transform, so the
+        displayed picture turns by +transform. Identity at 0 degrees."""
+        # Rotating the sampled coordinate by the negative of the display angle
+        # is what makes the image appear rotated the positive way.
+        angle = math.radians(-self._transform)
+        c, s = math.cos(angle), math.sin(angle)
+        # glUniformMatrix2fv with transpose=FALSE reads column-major: [m00, m10, m01, m11].
+        return (ctypes.c_float * 4)(c, s, -s, c)
 
     def _use(self, prog) -> None:
         """Activate a program with its aPosition attribute fed from the quad.
@@ -566,6 +592,10 @@ class GlViewfinder(QOpenGLWidget):
             iw, ih = self._display_size()
         except Exception:  # noqa: BLE001 no stream size yet, fill the widget
             return 0, 0, ww, wh
+        # A quarter turn presents the camera's height as the picture's width, so
+        # fit against the displayed aspect, not the stored one.
+        if self._transform in (90, 270):
+            iw, ih = ih, iw
         if iw * wh > ww * ih:
             w = ww
             h = w * ih // iw
@@ -577,6 +607,10 @@ class GlViewfinder(QOpenGLWidget):
     # frost chain (camera -> 1/4 -> 1/8 -> Gaussian ping-pong -> screen)
     def _draw_frosted(self, camera_texture: int, viewport) -> None:
         iw, ih = self._display_size()
+        # The camera -> A pass rotates while sampling, so A onward holds the
+        # displayed orientation. Size the FBOs to match or the frost squashes.
+        if self._transform in (90, 270):
+            iw, ih = ih, iw
         self._ensure_targets(iw, ih)
         (aw, ah), (bw, bh) = self._sizes[0], self._sizes[1]
         a_fbo, b_fbo, c_fbo = self._fbos
