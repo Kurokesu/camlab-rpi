@@ -149,25 +149,40 @@ class CameraEngine:
         return 8 if fps > 60.5 else 4
 
     def configure_mode(
-        self, mode: SensorMode, fps: float, avail_size, fps_fixed: bool = True
+        self,
+        mode: SensorMode,
+        fps: float,
+        avail_size,
+        fps_fixed: bool = True,
+        main_size=None,
+        raw: bool = False,
     ) -> None:
         """Configure mode streams and fit lores within avail_size.
 
         Selected FPS is fixed or the exposure-driven ceiling.
+
+        main_size shrinks the processed main stream below the sensor readout,
+        for an idle preview that does not pay for a full-size buffer nobody
+        reads. Default keeps main at the mode size. raw adds a raw stream at the
+        mode size, which save_dng needs, off by default so nothing else carries
+        the extra buffer.
         """
         if self.picam2 is None:
             raise RuntimeError("camera not opened")
         self.fps_fixed = bool(fps_fixed)
-        main_size = tuple(mode.size)
+        sensor_size = tuple(mode.size)
+        main_size = sensor_size if main_size is None else tuple(main_size)
         lores_size = plan_lores_size(main_size, tuple(avail_size))
         dur = fps_to_frame_duration(fps)
+        extra = {"raw": {"size": sensor_size}} if raw else {}
         cfg = self.picam2.create_preview_configuration(
             main={"size": main_size, "format": self.pixel_format},
             lores={"size": lores_size, "format": "YUV420"},
-            sensor={"output_size": main_size, "bit_depth": int(mode.bit_depth)},
+            sensor={"output_size": sensor_size, "bit_depth": int(mode.bit_depth)},
             display="lores",
             buffer_count=self._buffer_count(fps),
             controls={"FrameDurationLimits": (dur, dur)},
+            **extra,
         )
         self.picam2.configure(cfg)
         self._flush_pending = False  # reconfigure restarts the pipeline anyway
@@ -204,12 +219,20 @@ class CameraEngine:
             self.size,
         )
 
-    def apply_mode(self, mode: SensorMode, fps: float, avail_size, fps_fixed: bool = True) -> None:
+    def apply_mode(
+        self,
+        mode: SensorMode,
+        fps: float,
+        avail_size,
+        fps_fixed: bool = True,
+        main_size=None,
+        raw: bool = False,
+    ) -> None:
         """Reconfigure to a new mode/fps while running (stop, configure, start)."""
         was_started = self._started
         if was_started:
             self.stop()
-        self.configure_mode(mode, fps, avail_size, fps_fixed)
+        self.configure_mode(mode, fps, avail_size, fps_fixed, main_size=main_size, raw=raw)
         if was_started:
             self.start()
 
