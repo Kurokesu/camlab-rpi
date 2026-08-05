@@ -273,6 +273,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.monitor.stats_changed.connect(self.log_panel.update_integrity)
         self.monitor.stats_changed.connect(self._on_integrity)
         self.status.stats_tapped.connect(self.viewfinder_area.toggle_stats_overlay)
+        self.viewfinder_area.tapped.connect(self._on_viewfinder_tapped)
         # Clearing the view resets counts, so the two never disagree.
         self.log_panel.cleared.connect(self.monitor.reset)
         self.first_frame.connect(self._on_first_frame)
@@ -479,6 +480,10 @@ class MainWindow(QtWidgets.QMainWindow):
             self._position_sheet(self._open_sheet)
         return super().eventFilter(obj, event)
 
+    def _on_viewfinder_tapped(self) -> None:
+        if self._open_sheet is not None:
+            self._close_sheet()
+
     def _close_sheet(self) -> None:
         self._open_sheet = None
         for sheet in self._sheets.values():
@@ -558,9 +563,15 @@ class MainWindow(QtWidgets.QMainWindow):
         clear = None
         if self.viewfinder_area.has_camera:
             clear = self.viewfinder_area.geometry()
-        # Overlay traps Tab and swallows backdrop clicks. Enter/Escape are window shortcuts.
+        # Overlay traps Tab. Backdrop press cancels, same as Escape. Enter/Escape are shortcuts.
         margin = 16 if self._profile.compact else 40
-        self._overlay = ModalOverlay(self.centralWidget(), card, clear_rect=clear, margin=margin)
+        self._overlay = ModalOverlay(
+            self.centralWidget(),
+            card,
+            clear_rect=clear,
+            margin=margin,
+            on_backdrop=self._close_modal,
+        )
 
     def _close_modal(self) -> None:
         if self._overlay is not None:
