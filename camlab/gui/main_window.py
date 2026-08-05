@@ -26,10 +26,11 @@ from .covers import BootCover, SwitchCover
 from .log_panel import LogPanel
 from .mode_dialog import ModeCard
 from .overlay import ModalOverlay, message_card
+from .rpi_stats import field_texts
 from .sensor_dialog import SensorCard
 from .settings_dialog import SettingsCard
 from .status_strip import StatusStrip
-from .style import UiProfile, build_stylesheet, profile_for_screen
+from .style import SEV_COLOR, UiProfile, build_stylesheet, profile_for_screen
 from .viewfinder_area import ViewfinderArea
 from .widgets import repolish, vline
 
@@ -38,9 +39,6 @@ log = logging.getLogger(__name__)
 # Amber = "not showing the plain picture" (manual control, assist overlay).
 _ACCENT_ON = "#e5c07b"
 _ACCENT_OFF = "#d7dae0"
-
-# Log button tint by worst severity, mirroring log filter glyphs.
-_SEV_ACCENT = {"error": "#e06c75", "warning": "#e5c07b"}
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -81,6 +79,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._profile: UiProfile = profile_for_screen(QtWidgets.QApplication.primaryScreen())
         self._display_key: tuple | None = None
         self._sev = ""  # worst severity seen, tints log button
+        self._log_btn_state: tuple | None = None  # last synced look, skips no-op restyles
         px = self._profile.icon_px
 
         self.setWindowTitle("camlab")
@@ -365,10 +364,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # slots
     def _sample_rpi(self) -> None:
-        """One sample feeds the strip cluster and the overlay card."""
-        s = self._rpi_stats.sample()
-        self.status.set_rpi_stats(s)
-        self.viewfinder_area.update_stats(s)
+        """One sample rendered once, feeds the strip cluster and the overlay card."""
+        texts = field_texts(self._rpi_stats.sample())
+        self.status.set_rpi_stats(texts)
+        self.viewfinder_area.update_stats(texts)
 
     @Slot(float)
     def _on_first_frame(self, boot_time: float) -> None:
@@ -429,8 +428,13 @@ class MainWindow(QtWidgets.QMainWindow):
     def _sync_log_button(self, checked: bool) -> None:
         # Same button closes panel: open state reads as pressed toggle and relabels.
         # Closed, carries severity tint so trouble shows unopened.
+        # Integrity ticks mostly re-report the same severity, skip those.
         compact = self._profile.compact
-        color = _SEV_ACCENT.get(self._sev, _ACCENT_OFF)
+        state = (checked, self._sev, compact, self._profile.icon_px)
+        if state == self._log_btn_state:
+            return
+        self._log_btn_state = state
+        color = SEV_COLOR.get(self._sev, _ACCENT_OFF)
         if checked:
             self.log_btn.setIcon(icons.icon("close", self._profile.icon_px))
             self.log_btn.setText("" if compact else " Close log")

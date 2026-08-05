@@ -28,8 +28,10 @@ def _pct(value: float | None) -> str | None:
     return None if value is None else _pad(f"{min(value, 99):.0f}%", 3)
 
 
-def _texts(s) -> dict[str, str | None]:
-    """Rendered text per field (None when source is missing)."""
+def field_texts(s) -> dict[str, str | None]:
+    """Render RpiStatsSample to text per field (None when source is missing).
+
+    Computed once per sample, all views consume the same dict."""
     ram = None
     if s.ram_used_mb is not None and s.ram_total_mb is not None:
         total = f"{s.ram_total_mb / 1024:.1f}"
@@ -75,9 +77,8 @@ class RpiStatsView(QtWidgets.QWidget):
         """True once at least one field rendered, hide empty cluster."""
         return self._has_data
 
-    def set_stats(self, s) -> None:
-        """Render RpiStatsSample. Missing source drops field and leading hairline."""
-        texts = _texts(s)
+    def set_texts(self, texts: dict[str, str | None]) -> None:
+        """Render field_texts. Missing source drops field and leading hairline."""
         shown_any = False
         for field in self._fields:
             text = texts.get(field)
@@ -112,9 +113,8 @@ class RpiStatsCard(QtWidgets.QWidget):
             col.addWidget(lbl)
             self._labels[field] = lbl
 
-    def set_stats(self, s) -> None:
-        """Render RpiStatsSample. Missing source drops field."""
-        texts = _texts(s)
+    def set_texts(self, texts: dict[str, str | None]) -> None:
+        """Render field_texts. Missing source drops field."""
         for field, lbl in self._labels.items():
             text = texts[field]
             lbl.setVisible(text is not None)

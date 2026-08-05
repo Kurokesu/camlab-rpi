@@ -44,6 +44,7 @@ class ViewfinderArea(QtWidgets.QWidget):
         self._stats_card = RpiStatsCard(self)
         self._stats_card.setVisible(False)
         self._stats_enabled = False
+        self._stats_texts: dict[str, str | None] | None = None
 
     @property
     def has_camera(self) -> bool:
@@ -89,13 +90,23 @@ class ViewfinderArea(QtWidgets.QWidget):
     def toggle_stats_overlay(self) -> None:
         self.set_stats_overlay(not self._stats_enabled)
 
-    def update_stats(self, s) -> None:
-        """Push fresh board sample (kept warm while hidden so card opens current)."""
-        self._stats_card.set_stats(s)
+    def update_stats(self, texts: dict[str, str | None]) -> None:
+        """Push fresh field_texts. Hidden card only stores them, renders on show."""
+        self._stats_texts = texts
+        if self._stats_card.isVisible():
+            self._render_stats()
+
+    def _render_stats(self) -> None:
+        if self._stats_texts is None:
+            return
+        self._stats_card.set_texts(self._stats_texts)
         self._place_stats_card()
 
     def _sync_stats_visible(self) -> None:
-        self._stats_card.setVisible(self._stats_enabled and not self._frosted)
+        visible = self._stats_enabled and not self._frosted
+        if visible:
+            self._render_stats()
+        self._stats_card.setVisible(visible)
         self._stats_card.raise_()
 
     def _place_stats_card(self) -> None:
@@ -104,7 +115,9 @@ class ViewfinderArea(QtWidgets.QWidget):
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
-        self._place_stats_card()
+        # Hidden card is re-placed on show.
+        if self._stats_card.isVisible():
+            self._place_stats_card()
 
     def set_assists(self, peaking: bool, zebra: bool, zebra_threshold: float) -> None:
         """Focus peaking / zebra overlays (no-op without a camera)."""
