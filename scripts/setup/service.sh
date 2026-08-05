@@ -50,6 +50,10 @@ sed \
     > /etc/systemd/system/camlab.service
 log "Rendered /etc/systemd/system/camlab.service"
 
+CURSOR_DIR=/usr/local/lib/camlab/cursors
+python3 "$REPO_DIR/deploy/blank-cursor.py" "$CURSOR_DIR"
+log "Wrote blank cursor theme to $CURSOR_DIR (XCURSOR_PATH in the unit)"
+
 cat > /etc/pam.d/camlab <<'PAMEOF'
 auth       required pam_unix.so
 auth       required pam_env.so
