@@ -53,15 +53,12 @@ CMDLINE_REMOVE=(
     plymouth.ignore-serial-consoles
 )
 
-# Managed block markers, mirroring camlab.config_manager so the edits are
-# greppable, idempotent and cleanly removable.
+# Managed block markers, same convention as config_manager. Greppable and re-run safe.
 BEGIN="# >>> camlab boot (do not edit) >>>"
 END="# <<< camlab boot <<<"
 
-# systemd units the kiosk never uses (only those present are touched). Left out
-# on purpose: journald (logs), logind (Cage/PAM session), and avahi/mDNS (LAN
-# name resolution, off the critical path). Drop networking with camlabctl net
-# off for production instead of masking those.
+# Units kiosk never uses (only present ones touched). Left alone: journald, logind
+# and avahi. Drop networking with camlabctl net off for production.
 MASK_UNITS=(
     NetworkManager-wait-online.service
     systemd-networkd-wait-online.service

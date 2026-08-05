@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Paint boot logo onto a framebuffer device.
+"""Paint boot logo onto framebuffer device.
 
-kernel fullscreen logo only reaches the firmware framebuffer. DRM
-fbdevs (DSI panel, HDMI) register after boot logo data is freed, so fbcon
-leaves them black. A udev rule starts camlab-splash@fbN.service when a DRM
-fbdev appears and this script repaints the logo there, kernel-style:
-image centered, border filled with its top-left pixel.
+Kernel logo only reaches firmware framebuffer. DRM fbdevs register after boot
+logo data is freed, so fbcon leaves them black. udev starts camlab-splash@fbN
+when fbdev appears. Logo centered, border filled from top-left pixel.
 
 Usage: fbsplash.py /dev/fbN [logo.tga]
 """

@@ -1,19 +1,10 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Sheets docked over viewfinder's bottom edge: camera controls and display assists.
+"""Sheets docked over viewfinder bottom edge: camera controls and display assists.
 
-Sheets are plain Qt widgets stacked over the viewfinder (it renders in-scene
-in Qt's own surface, so ordinary child stacking works). Translucent bar,
-background painted in paintEvent.
-
-ControlSheet is an auto/manual + slider row for one camera control. In auto
-the slider silently tracks live metadata value, touching it flips the control
-to manual at that position (no value jump). Exposure and gain span orders of
-magnitude, so their sliders map logarithmically.
-
-MonitorSheet toggles focus peaking and zebra (with clip-threshold slider),
-after cinepi-kurokesu's monitor sheet.
+Plain Qt widgets over in-scene viewfinder. ControlSheet: auto/manual + slider,
+log scale for exposure/gain. MonitorSheet: focus peaking and zebra after cinepi-kurokesu.
 """
 
 from __future__ import annotations
@@ -49,10 +40,10 @@ def fmt_ct(kelvin: float) -> str:
 
 
 class JumpSlider(QtWidgets.QSlider):
-    """Absolute pointing: press and drag put the handle at the cursor.
+    """Absolute pointing: press and drag put handle at cursor.
 
-    Stock QSlider only drags from the handle and page-steps elsewhere. Own
-    the mouse so every press grabs and maps through the groove rect.
+    Stock QSlider only drags from handle and page-steps elsewhere. Own mouse
+    so every press grabs and maps through groove rect.
     """
 
     def _value_at(self, x: float) -> int:

@@ -28,8 +28,7 @@ require_root
 
 header "Installing camlab apt dependencies"
 
-# Official archive setup script. It installs the signing key, verifies its
-# fingerprint, writes deb822 source and refreshes apt (--update).
+# Official archive setup: signing key, deb822 source, apt refresh.
 log "Enabling Kurokesu apt archive..."
 ARCHIVE_SETUP="$(mktemp)"
 curl -fsSL https://apt.kurokesu.com/setup.sh -o "$ARCHIVE_SETUP"
@@ -40,12 +39,8 @@ rm -f "$ARCHIVE_SETUP"
 log "Installing eatmydata..."
 apt-get install -y eatmydata
 
-# One resolver pass, recommends off to keep GUI extras (VA/VDPAU/Vulkan, GTK,
-# QML) away. Hard deps stay unlisted: picamera2 pulls the +krks libcamera
-# fork. Recommends the kiosk does need are pinned: python3-opengl
-# (GlViewfinder imports it), qt6-wayland (Qt under Cage), awb-nn
-# (libcamera-ipa AWB models). wlr-randr drives display switching
-# (camlab/display.py) on rigs with both HDMI and a DSI touch panel.
+# One pass, recommends off. picamera2 pulls +krks libcamera fork.
+# Pinned recommends: python3-opengl, qt6-wayland, awb-nn. wlr-randr for HDMI/DSI switch.
 log "Installing packages..."
 apt_get install -y --no-install-recommends \
     python3-picamera2 \
@@ -54,10 +49,7 @@ apt_get install -y --no-install-recommends \
     cage wlr-randr \
     qt6-wayland awb-nn
 
-# camlab never runs rpicam-* CLI. Drop preinstalled rpicam-apps stack
-# and its OpenCV deps (~20 MB). picamera2 keeps libcamera from autoremoval.
-# Purge only what is actually installed: hardcoded names would abort the
-# install (set -e) if a name ever disappears from configured sources.
+# camlab never runs rpicam-* CLI. Purge only installed names (set -e safe).
 log "Removing unused rpicam-apps stack..."
 mapfile -t RPICAM < <(dpkg-query -Wf '${db:Status-Status} ${Package}\n' 'rpicam-apps*' 2>/dev/null \
     | awk '$1 == "installed" { print $2 }')

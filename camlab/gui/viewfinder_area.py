@@ -1,12 +1,10 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""ViewfinderArea - hosts the live viewfinder widget.
+"""ViewfinderArea hosts live viewfinder widget.
 
-Thin wrapper: owns the slot in the main layout and exposes the frost toggle
-modals use. The viewfinder renders in-scene (see gl_viewfinder), so overlays
-and sheets are plain Qt widgets stacked above it, no freeze-frame swap needed.
-Also hosts the corner overlays: histogram top-left, board stats card top-right.
+Owns main layout slot, exposes frost toggle for modals. Viewfinder renders in-scene,
+overlays stack above. Corner overlays: histogram top-left, stats card top-right.
 """
 
 from __future__ import annotations
@@ -56,11 +54,10 @@ class ViewfinderArea(QtWidgets.QWidget):
         return self.width(), self.height()
 
     def set_frost(self, frosted: bool) -> None:
-        """Blur the live viewfinder in-shader.
+        """Blur live viewfinder in-shader.
 
-        Without a camera the placeholder text cannot blur, so it hides while
-        frosted instead of shining sharply through the modal glass. The corner
-        overlays hide too: the frost signals "attention is on the modal".
+        Without camera placeholder cannot blur, hides while frosted. Corner overlays
+        hide too: frost signals attention on modal.
         """
         self._frosted = bool(frosted)
         if hasattr(self._live, "set_frosted"):
@@ -93,8 +90,7 @@ class ViewfinderArea(QtWidgets.QWidget):
         self.set_stats_overlay(not self._stats_enabled)
 
     def update_stats(self, s) -> None:
-        """Push a fresh board sample (kept warm even while hidden, so the
-        card opens current)."""
+        """Push fresh board sample (kept warm while hidden so card opens current)."""
         self._stats_card.set_stats(s)
         self._place_stats_card()
 

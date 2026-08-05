@@ -1,21 +1,11 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Sensor mode selection card - Resolution -> Bit depth -> FPS cascade.
+"""Sensor mode selection card: Resolution, Bit depth, FPS cascade.
 
-Rendered inside a ModalDialog using inline SegmentedSelectors (not dropdowns,
-whose popups misplace under the Cage kiosk). The three selectors are dependent:
-changing the resolution reconciles the bit-depth row (keeping the current depth
-if it still exists, else snapping to the deepest), and any change upstream
-rebuilds the FPS row carrying the chosen rate over - kept when the new mode still
-offers it, otherwise the nearest achievable rate (e.g. 60 -> 33.89 when 60 drops
-out at 4K). The FPS row locks when a mode offers only one rate. The UI can
-therefore only ever present a combination the hardware actually supports.
-
-FPS lock is Fixed or Exposure driven. Selected FPS remains the ceiling.
-
-Applying does not persist directly: MainWindow applies it to the camera first and
-only writes the persisted selection if the reconfigure succeeds.
+Inline SegmentedSelectors (Cage misplaces dropdown popups). Selectors dependent:
+resolution reconciles bit depth, upstream change rebuilds FPS row. Apply persists
+only after MainWindow confirms reconfigure.
 """
 
 from __future__ import annotations
@@ -51,8 +41,7 @@ class ModeCard(QtWidgets.QFrame):
         self.setMinimumWidth(420)
         self._modes = modes
         self._on_apply = on_apply
-        # Compact (800 px panel) shortens option labels so the widest rows
-        # (resolutions, fps) still fit as one segment row.
+        # Compact shortens labels so widest rows still fit one segment.
         self._compact = bool(compact)
 
         title = QtWidgets.QLabel("Sensor mode")
@@ -74,11 +63,10 @@ class ModeCard(QtWidgets.QFrame):
             [("Fixed", True), ("Exposure driven", False)], current=bool(fps_fixed)
         )
 
-        # The dirty check compares against what the card actually shows after
-        # seeding (fps_current may have been snapped to the nearest option).
+        # Dirty check uses post-seed values (fps may snap to nearest option).
         self._initial = self._selection()
 
-        # Connect after the initial build so the seeding stays silent.
+        # Connect after build so seeding stays silent.
         self.res_sel.changed.connect(self._on_res_changed)
         self.depth_sel.changed.connect(self._on_depth_changed)
         self.fps_sel.changed.connect(self._refresh_apply)
@@ -95,7 +83,7 @@ class ModeCard(QtWidgets.QFrame):
         cancel_btn.clicked.connect(on_cancel)
         self.apply_btn = QtWidgets.QPushButton("Apply")
         self.apply_btn.clicked.connect(self._apply)
-        # Apply is safe (no reboot), so it is the primary Enter target.
+        # Apply is safe (no reboot), so it is primary Enter target.
         self.primary_button = self.apply_btn
         buttons.addWidget(cancel_btn)
         buttons.addStretch(1)
@@ -142,7 +130,7 @@ class ModeCard(QtWidgets.QFrame):
         m = mode_for(self._modes, self.res_sel.current_value(), self.depth_sel.current_value())
         opts = fps_options(m.max_fps) if m else [30.0]
         unit = "" if self._compact else " fps"
-        # Carry the chosen rate over: keep it when still offered, else the nearest.
+        # Keep chosen rate when still offered, else nearest.
         self.fps_sel.set_options(
             [(f"{format_fps(o)}{unit}", o) for o in opts],
             current=nearest_fps_option(opts, prefer_fps),

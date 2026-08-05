@@ -2,19 +2,13 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Boot splash via the kernel fullscreen logo (no daemon, no DRM, no Plymouth).
-# The rpi kernel draws deploy/splash/logo.tga from the initramfs at fbcon
-# init, the earliest point custom pixels appear, and it holds until Cage
-# modesets over it. The Qt boot cover then carries a black screen until the
-# first camera frame.
-# kernel draw only reaches the firmware framebuffer, which scans out on
-# HDMI. DSI panel fbdev registers seconds later, past the boot logo window,
-# so a udev rule starts camlab-splash@fbN.service to repaint logo there
-# with fbsplash.py.
+# Boot splash via kernel fullscreen logo (no Plymouth).
+# logo.tga from initramfs until Cage modesets. HDMI only for kernel path.
+# DSI fbdev arrives late: udev runs camlab-splash@fbN with fbsplash.py.
 # Regenerate logo.tga from splash.png with:
 #   convert splash.png -background black -alpha remove -alpha off -colors 224 \
 #     -depth 8 -type TrueColor -compress none logo.tga
-# Safe to re-run on a writable root. Requires sudo. Reboot to apply.
+# Safe to re-run on writable root. Requires sudo. Reboot to apply.
 #
 # Usage:
 #   sudo scripts/setup/splash.sh            # install + activate
@@ -50,8 +44,7 @@ FBSPLASH_BIN="/usr/local/lib/camlab/fbsplash.py"
 FBSPLASH_UNIT="/etc/systemd/system/camlab-splash@.service"
 FBSPLASH_RULE="/etc/udev/rules.d/99-camlab-splash.rules"
 
-# Kernel fullscreen-logo tokens. boot.sh owns the quiet-console tokens and
-# already removes quiet/logo.nologo, which suppress the logo.
+# Fullscreen logo cmdline tokens. boot.sh removes quiet/logo.nologo (suppress logo).
 CMDLINE_TOKENS=(
     fullscreen_logo=1
     fullscreen_logo_name=logo.tga

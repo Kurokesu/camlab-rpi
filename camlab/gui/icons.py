@@ -3,16 +3,10 @@
 
 """Material Symbols icon helper.
 
-The bundled font (assets/MaterialSymbolsOutlined.ttf, from Google Fonts) is loaded
-once into Qt. Icons are referenced by name and painted from the glyph:
-
-  - pixmap(name, ...) -> a QPixmap, for an inline icon QLabel.
-  - icon(name, ...)   -> a QIcon, for QPushButton.setIcon.
-  - cached_png(...)   -> a glyph rasterised to a PNG on disk, for stylesheets
-    that need an `image: url(...)` (e.g. the checkbox tick).
-
-If the font fails to load (e.g. asset missing), pixmap() returns a transparent
-pixmap and icon() an empty QIcon, so the UI degrades to text-only.
+Bundled font (assets/MaterialSymbolsOutlined.ttf) loads once into Qt. Name to
+glyph: pixmap() for QLabel, icon() for QPushButton, cached_png() for QSS
+`image: url(...)` (checkbox tick). Missing font: transparent pixmap / empty
+icon, UI falls back to text.
 """
 
 from __future__ import annotations

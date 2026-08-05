@@ -2,17 +2,14 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# camlab installer
-# Thin orchestrator over scripts/setup/* primitives.
-#
-# Installs camlab to /opt/camlab as a kiosk that auto-starts on boot
-# (camlab.service). For partial reconfigures, call individual primitives
-# under scripts/setup/.
+# camlab installer. Orchestrates scripts/setup/* primitives.
+# Installs to /opt/camlab as boot kiosk (camlab.service).
+# Partial reconfig: run individual scripts/setup/ scripts.
 #
 # Usage:
 #   sudo ./install.sh                                # full install
 #   sudo ./install.sh --no-readonly                  # keep root fs writable (dev install)
-#   sudo ./install.sh --display vc4-kms-dsi-7inch    # DSI touch panel (CM5, Pi 5 auto-detects)
+#   sudo ./install.sh --display vc4-kms-dsi-7inch    # CM5 DSI panel (Pi 5 auto-detects)
 #   ./install.sh --help                              # this message
 #
 # Requirements:
@@ -71,15 +68,13 @@ log "Architecture: $ARCH"
 log "OS: ${PRETTY_NAME:-unknown}"
 [ "${VERSION_CODENAME:-}" = "trixie" ] \
     || die "unsupported OS: ${PRETTY_NAME:-unknown} (need Raspberry Pi OS Lite Trixie, 64-bit)"
-# Desktop images boot to graphical.target and the session would fight the
-# kiosk for tty1. Lite boots to multi-user.target.
+# Desktop image boots graphical.target and fights kiosk for tty1. Lite uses multi-user.
 if [ "$(systemctl get-default)" = "graphical.target" ]; then
     die "Raspberry Pi OS Desktop detected. Use the Lite image."
 fi
 log "Install user: $CAMLAB_USER (uid=$CAMLAB_UID)"
 
-# Fixed app location. Re-run from $APP_DIR itself skips the copy.
-# Stage the copy, then swap. A failed copy leaves the old tree in place.
+# Fixed app location. Re-run from $APP_DIR skips copy. Stage then swap on failure.
 APP_DIR="/opt/camlab"
 if [ "$REPO_DIR" != "$APP_DIR" ]; then
     header "Installing app to $APP_DIR"
@@ -96,16 +91,14 @@ if [ "$REPO_DIR" != "$APP_DIR" ]; then
     mv "$STAGE_DIR" "$APP_DIR"
     log "Copied $REPO_DIR -> $APP_DIR"
 fi
-# Precompile, the service user cannot write bytecode into the root-owned tree.
+# Precompile: service user cannot write bytecode into root-owned tree.
 python3 -m compileall -q -j 0 "$APP_DIR/camlab"
 
-# Setup primitives run from $APP_DIR so every rendered path points there.
-# Kernel trim before drivers, so DKMS builds for the running flavor only.
-# Overlay-root last, so a partial install never leaves a read-only box.
+# Primitives run from $APP_DIR. Kernel trim before drivers. Overlay-root last.
 "$APP_DIR/scripts/setup/deps.sh"
 "$APP_DIR/scripts/setup/kernel.sh"
 "$APP_DIR/scripts/setup/drivers.sh"
-# Display before camera: config.sh picks a CSI port the panel does not claim.
+# Display before camera: config.sh picks CSI port panel does not claim.
 if [ -n "$DISPLAY_OVERLAY" ]; then
     "$APP_DIR/scripts/setup/display.sh" --overlay "$DISPLAY_OVERLAY"
 fi

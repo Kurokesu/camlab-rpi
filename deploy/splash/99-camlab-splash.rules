@@ -1,6 +1,5 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Paint boot logo onto DRM fbdevs as they appear. Name match skips the
-# firmware simplefb, which kernel fullscreen logo already covers.
+# Paint boot logo on DRM fbdevs as they appear. Skip simplefb (kernel logo covers it).
 SUBSYSTEM=="graphics", KERNEL=="fb[0-9]*", ACTION=="add", ATTR{name}=="*drm*", TAG+="systemd", ENV{SYSTEMD_WANTS}+="camlab-splash@%k.service"

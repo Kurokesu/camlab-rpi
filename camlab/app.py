@@ -24,15 +24,14 @@ from .settings import SettingsStore
 
 log = logging.getLogger("camlab")
 
-# Estimated chrome height (status strip + controls row) sizing the boot lores
-# stream. Compact measures 85 px (29 + 56). Errors are free, the stream refits
-# to the real viewfinder before camera start (MainWindow._start_engine).
+# Chrome height (status strip + controls row) sizing the boot lores stream.
+# Errors are free, the stream refits to the real viewfinder before camera start.
 _CHROME_PX = 90
 _CHROME_COMPACT_PX = 85
 
 
 def _avail_size(app) -> tuple[int, int]:
-    """Viewfinder area estimate (screen minus chrome), for the boot lores size."""
+    """Viewfinder area estimate (screen minus chrome) for boot lores sizing."""
     screen = app.primaryScreen()
     geo = screen.geometry() if screen else None
     if geo is None:
@@ -65,8 +64,7 @@ def _setup_logging() -> None:
 def main(argv: list[str] | None = None) -> int:
     _setup_logging()
 
-    # Splice stderr BEFORE libcamera/Picamera2 init so the IPA child inherits it.
-    # StderrCapture is a plain QObject and is safe to build before QApplication.
+    # Splice stderr before libcamera/Picamera2 init so IPA child inherits it.
     capture = NullCapture() if os.environ.get("CAMLAB_NO_CAPTURE") else StderrCapture()
     classifier = LogClassifier()
 
@@ -75,26 +73,22 @@ def main(argv: list[str] | None = None) -> int:
     config = ConfigManager()
     settings = SettingsStore()
 
-    # open() only enumerates modes. The stream is configured below once the
-    # display size is known.
+    # open() only enumerates modes. Stream is configured below, once display size is known.
     engine = CameraEngine()
     try:
         engine.open(camera_num=int(os.environ.get("CAMLAB_CAMERA_NUM", "0")))
     except Exception as exc:  # noqa: BLE001
         log.error("camera open failed: %s", exc)
 
-    # Run natively on Wayland under a Wayland session (e.g. Cage). Importing
-    # picamera2 force-sets QT_QPA_PLATFORM=xcb there, which is poison for the
-    # in-scene viewfinder: its PyOpenGL calls need the Qt context EGL-current,
-    # and under Xwayland it is GLX-current (xcb also flashes the window at its
-    # X11 size before fullscreening).
+    # Force native Wayland under Wayland session. picamera2 import sets xcb, which breaks
+    # in-scene viewfinder (PyOpenGL needs EGL-current, Xwayland makes GLX-current).
     if os.environ.get("WAYLAND_DISPLAY"):
         os.environ["QT_QPA_PLATFORM"] = "wayland"
         # Kiosk: no client-side decorations, even if fullscreen state drops.
         os.environ["QT_WAYLAND_DISABLE_WINDOWDECORATION"] = "1"
 
-    # Settle HDMI versus DSI panel before Qt connects to the compositor, so
-    # layout profile and lores sizing see the final display.
+    # Settle HDMI versus DSI before Qt connects to the compositor, so layout profile
+    # and lores sizing see the final display.
     enforce_output_policy()
 
     # Restore persisted panel brightness before anything renders.
@@ -109,21 +103,20 @@ def main(argv: list[str] | None = None) -> int:
 
     avail = _avail_size(app)
 
-    # Resolve and configure the boot mode: a valid persisted selection, else the
-    # heaviest runnable mode. Single configure at boot.
+    # Boot mode: persisted selection when valid, else heaviest runnable mode.
+    # One configure at boot.
     if engine.picam2 is not None and engine.modes:
         overlay = config.get_current().get("overlay") or ""
         saved = settings.get_mode(overlay)
         mode, fps = resolve_initial_mode(engine.modes, saved)
         try:
             engine.configure_mode(mode, fps, avail, fps_fixed=saved["fps_fixed"] if saved else True)
-            # Restore persisted manual overrides. Must follow configure so
-            # they clamp against the new mode's ranges.
+            # Restore manual overrides after configure, so they clamp to the new ranges.
             engine.set_control_state(**settings.get_controls(overlay))
         except Exception as exc:  # noqa: BLE001
             log.error("camera configure failed: %s", exc)
 
-    # Both run for the whole app, kept alive by QApplication parentage.
+    # CursorPolicy needs no handle: QApplication parentage keeps it alive.
     display_manager = DisplayManager(app)
     CursorPolicy(app)
 
@@ -141,9 +134,7 @@ def main(argv: list[str] | None = None) -> int:
     win.showFullScreen()
     display_manager.start()
 
-    # The camera is started by the window once it reaches fullscreen (see
-    # MainWindow). Starting it here, before the event loop runs, would block with
-    # the window still mapped at its initial size and look like a boot glitch.
+    # Window starts camera once fullscreen. Starting here blocks before event loop runs.
 
     rc = app.exec()
 
