@@ -10,7 +10,7 @@
 [![picamera2](https://img.shields.io/badge/picamera2-0.3.36-blue)](https://github.com/raspberrypi/picamera2)
 ![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
 
-Kiosk app for previewing and testing MIPI CSI camera modules on Raspberry Pi.
+Kiosk app for live preview and testing MIPI CSI camera modules on Raspberry Pi.
 
 ![onsemi AR0234](https://img.shields.io/badge/onsemi-AR0234-008E9B?style=flat-square)
 ![onsemi AR0822](https://img.shields.io/badge/onsemi-AR0822-008E9B?style=flat-square)
