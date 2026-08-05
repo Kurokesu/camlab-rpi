@@ -86,6 +86,9 @@ def main(argv: list[str] | None = None) -> int:
         os.environ["QT_QPA_PLATFORM"] = "wayland"
         # Kiosk: no client-side decorations, even if fullscreen state drops.
         os.environ["QT_WAYLAND_DISABLE_WINDOWDECORATION"] = "1"
+    # Cage runs on a blank cursor theme to keep boot screen clean. Qt must not
+    # inherit it, a real mouse needs a cursor it can see.
+    os.environ.pop("XCURSOR_PATH", None)
 
     # Settle HDMI versus DSI before Qt connects to the compositor, so layout profile
     # and lores sizing see the final display.

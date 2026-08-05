@@ -27,6 +27,9 @@ SyslogIdentifier=camlab
 
 # Do not raise LIBCAMERA_LOG_LEVELS: ERROR lines are integrity signal.
 Environment=PYTHONUNBUFFERED=1
+# Blank cursor theme for Cage, so no pointer shows on boot screen. app.py
+# drops it before Qt starts.
+Environment=XCURSOR_PATH=/usr/local/lib/camlab/cursors
 
 ExecStart=/usr/bin/cage -- /usr/bin/python3 -m camlab
 
