@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -45,6 +46,15 @@ DISPLAY_BEGIN = "# >>> camlab display (do not edit) >>>"
 DISPLAY_END = "# <<< camlab display <<<"
 
 VALID_PORTS = ("cam0", "cam1")
+
+# One dtoverlay element (token or param). No whitespace or newlines, so shim
+# callers cannot smuggle extra config.txt directives into the root write.
+_SAFE_PART = re.compile(r"[A-Za-z0-9._=-]+")
+
+
+def _require_safe(value: str, what: str) -> None:
+    if not _SAFE_PART.fullmatch(value):
+        raise ConfigError(f"invalid {what} {value!r} (allowed: letters, digits, . _ = -)")
 
 
 def is_compute_module() -> bool:
@@ -153,10 +163,14 @@ class ConfigManager:
     def compose_dtoverlay(token: str, port: str, options: list[str] | None) -> str:
         if port not in VALID_PORTS:
             raise ConfigError(f"invalid port {port!r} (expected cam0/cam1)")
+        _require_safe(token, "overlay")
         parts = [token]
         if port == "cam0":  # cam1 is overlay default (no param)
             parts.append("cam0")
-        parts.extend(o for o in (options or []) if o)
+        for o in options or []:
+            if o:
+                _require_safe(o, "overlay option")
+                parts.append(o)
         return "dtoverlay=" + ",".join(parts)
 
     @staticmethod
@@ -164,6 +178,7 @@ class ConfigManager:
         """Panel on connector camera does not use: cam0 --> DISP1, cam1 --> DISP0."""
         if cam_port not in VALID_PORTS:
             raise ConfigError(f"invalid port {cam_port!r} (expected cam0/cam1)")
+        _require_safe(token, "overlay")
         return token if cam_port == "cam0" else f"{token},dsi0"
 
     def _render_block(self, token: str, port: str, options: list[str] | None) -> str:
@@ -235,6 +250,8 @@ class ConfigManager:
 
     def _rewrite_display_in_place(self, raw_overlay: str | None) -> None:
         if raw_overlay is not None:
+            for part in raw_overlay.split(","):
+                _require_safe(part, "overlay")
             token = raw_overlay.split(",")[0]
             if not self.overlay_exists(token):
                 raise ConfigError(
