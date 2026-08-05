@@ -64,7 +64,22 @@ def _glyph(name: str) -> str:
     return chr(cp)
 
 
+# Rendered once per (name, size, color). QPixmap/QIcon are implicitly shared,
+# so periodic callers (status ticks) can request freely without repainting.
+_PIXMAP_CACHE: dict[tuple[str, int, str], QtGui.QPixmap] = {}
+_ICON_CACHE: dict[tuple[str, int, str], QtGui.QIcon] = {}
+
+
 def pixmap(name: str, size_px: int, color: str = "#d7dae0") -> QtGui.QPixmap:
+    key = (name, size_px, color)
+    pm = _PIXMAP_CACHE.get(key)
+    if pm is None:
+        pm = _render(name, size_px, color)
+        _PIXMAP_CACHE[key] = pm
+    return pm
+
+
+def _render(name: str, size_px: int, color: str) -> QtGui.QPixmap:
     glyph = _glyph(name)
     pm = QtGui.QPixmap(size_px, size_px)
     pm.fill(Qt.GlobalColor.transparent)
@@ -81,7 +96,12 @@ def pixmap(name: str, size_px: int, color: str = "#d7dae0") -> QtGui.QPixmap:
 
 
 def icon(name: str, size_px: int = 22, color: str = "#d7dae0") -> QtGui.QIcon:
-    return QtGui.QIcon(pixmap(name, size_px, color))
+    key = (name, size_px, color)
+    ic = _ICON_CACHE.get(key)
+    if ic is None:
+        ic = QtGui.QIcon(pixmap(name, size_px, color))
+        _ICON_CACHE[key] = ic
+    return ic
 
 
 _PNG_CACHE: dict[tuple, str] = {}
