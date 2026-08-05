@@ -680,7 +680,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 # config.txt is never left half-applied.
                 try:
                     self.config.apply_display(disp["overlay"])
-                except Exception:  # noqa: BLE001
+                except Exception:
                     log.exception("display rollback failed")
                     detail += " The display change stuck, re-apply to undo it."
             self._show_message("Apply failed", detail)
