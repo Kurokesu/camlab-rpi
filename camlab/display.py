@@ -139,7 +139,13 @@ class DisplayManager(QtCore.QObject):
 
 
 class CursorPolicy(QtCore.QObject):
-    """Blank the cursor until a real mouse moves, re-blank it on touch."""
+    """Blank the cursor until a real mouse moves, re-blank it on touch.
+
+    The app-wide filter costs a Python call per event, so it retires itself
+    after the first reveal when no touchscreen is attached (nothing would
+    ever re-blank). Panels are wired at boot, so a touchscreen cannot appear
+    later on a rig that retired the filter.
+    """
 
     def __init__(self, app: QtWidgets.QApplication):
         super().__init__(app)
@@ -173,8 +179,15 @@ class CursorPolicy(QtCore.QObject):
         self._visible = visible
         if visible:
             self._app.restoreOverrideCursor()
+            self._maybe_retire()
         else:
             self._app.setOverrideCursor(QtGui.QCursor(QtCore.Qt.CursorShape.BlankCursor))
+
+    def _maybe_retire(self) -> None:
+        touch = QtGui.QInputDevice.DeviceType.TouchScreen
+        if any(d.type() == touch for d in QtGui.QInputDevice.devices()):
+            return
+        self._app.removeEventFilter(self)
 
 
 # At 0 the operator cannot find the slider to bring the picture back.
