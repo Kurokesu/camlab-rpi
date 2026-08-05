@@ -3,14 +3,9 @@
 
 """Signal-integrity / error surfacing.
 
-libcamera (and its IPA proxy child) log to stderr. We splice fd 2 onto a pipe so
-we can (a) re-emit every byte to the real stderr -> journald (nothing lost) and
-(b) feed each line through a classifier. Matched lines (e.g. AR0822 embedded-data
-parse failures from a marginal CSI cable) are split by severity (error vs
-warning) into two running counts the log panel surfaces as FACTs (no pass/fail
-verdict, per spec).
-
-fd splicing must happen before Picamera2()/libcamera init so the IPA child
+libcamera and IPA child log to stderr. fd 2 is spliced onto a pipe so bytes
+still reach journald while each line is classified. Matches count by severity
+as facts, no pass/fail. Splice before Picamera2()/libcamera init so IPA child
 inherits the redirected fd.
 """
 
@@ -24,7 +19,7 @@ from dataclasses import dataclass, field
 
 from .qt import QtCore, Signal
 
-# category -> regex. Editable data, not logic. Order matters (first match wins).
+# category -> regex, order matters (first match wins).
 DEFAULT_PATTERNS: dict[str, str] = {
     "embedded_data": r"Embedded data buffer parsing failed",
     "register_tags": r"Incorrect register value tags",
@@ -34,7 +29,6 @@ DEFAULT_PATTERNS: dict[str, str] = {
     "v4l2_error": r"(?i)\bVIDIOC_\w+ failed|Failed to queue buffer|Failed to start",
 }
 
-# Human labels for the categories above.
 CATEGORY_LABELS: dict[str, str] = {
     "embedded_data": "Embedded-data parse",
     "register_tags": "Register-tag mismatch",
@@ -44,9 +38,7 @@ CATEGORY_LABELS: dict[str, str] = {
     "v4l2_error": "V4L2 error",
 }
 
-# Severity fallback per category, used only when a matched line carries no
-# explicit libcamera level token. Corruption / driver failures are errors.
-# Transient per-frame hiccups are warnings.
+# Severity fallback, used when a matched line carries no libcamera level token.
 CATEGORY_SEVERITY: dict[str, str] = {
     "embedded_data": "error",
     "register_tags": "error",
@@ -61,11 +53,7 @@ _LEVEL_RE = re.compile(r"\b(ERROR|FATAL|WARN(?:ING)?)\b")
 
 
 def severity_for(line: str, category: str) -> str:
-    """'error' or 'warning' for a matched line.
-
-    Prefer libcamera's own level word. Fall back to the category default when a
-    matched line has none.
-    """
+    """'error' or 'warning' for a line, from libcamera's level word or category default."""
     m = _LEVEL_RE.search(line)
     if m:
         return "error" if m.group(1) in ("ERROR", "FATAL") else "warning"
@@ -84,7 +72,7 @@ class LogClassifier:
         return None
 
     def classify_with_severity(self, line: str) -> tuple[str | None, str | None]:
-        """(category, severity) for a line, or (None, None) if it matches nothing."""
+        """(category, severity) for a line, or (None, None) when nothing matches."""
         cat = self.classify(line)
         if cat is None:
             return None, None
@@ -166,7 +154,7 @@ class IntegrityMonitor(QtCore.QObject):
     """Consumes log lines, classifies integrity issues, emits rolling stats."""
 
     stats_changed = Signal(object)  # IntegrityStats
-    # NB: do NOT name a signal 'event' - it shadows QObject.event() and aborts.
+    # Never name a signal 'event', it shadows QObject.event() and aborts.
 
     def __init__(self, classifier: LogClassifier | None = None, emit_hz: float = 4.0, parent=None):
         super().__init__(parent)
@@ -175,8 +163,8 @@ class IntegrityMonitor(QtCore.QObject):
         self._warnings = 0
         self._by_cat: collections.Counter = collections.Counter()
         self._dirty = False
-        # Coalesce bursts: feed() runs on the capture thread for every matched
-        # line. A timer publishes the rolled-up counts only when they changed.
+        # feed() runs on the capture thread. Timer publishes rolled-up counts only when
+        # they changed, so bursts coalesce.
         self._timer = QtCore.QTimer(self)
         self._timer.setInterval(int(1000 / emit_hz))
         self._timer.timeout.connect(self._emit)

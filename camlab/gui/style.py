@@ -3,13 +3,9 @@
 
 """Application stylesheet and layout profiles.
 
-One QSS blob plus generated pieces: profile-sized rules, modal-card glass and
-the checkbox tick (a glyph rasterised to PNG, QSS needs an image url).
-
-REGULAR covers HDMI monitors, COMPACT small high-density touch panels
-(800x480 class) where text must stay readable and controls finger-sized.
-Profile is picked from the active screen and re-applied live on display
-switches.
+One QSS blob plus profile-sized rules, modal glass and checkbox tick PNG.
+REGULAR for HDMI monitors, COMPACT for small touch panels (800x480 class).
+Profile picked from active screen, re-applied on display switch.
 """
 
 from __future__ import annotations
@@ -19,9 +15,8 @@ from dataclasses import dataclass
 from ..qt import QtGui
 from . import icons
 
-# Glass background/border, shared by sheets (painted directly) and modal
-# cards (via QSS). Alpha tuned so live picture reads through while labels
-# keep contrast against bright scenes.
+# Glass background/border shared by sheets (painted) and modal cards (QSS).
+# Alpha tuned so live picture reads through while labels keep contrast.
 GLASS_BG = QtGui.QColor(24, 26, 32, 175)
 GLASS_BORDER = QtGui.QColor(70, 76, 90, 200)
 
@@ -67,8 +62,8 @@ REGULAR = UiProfile(
     zebra_slider_w=260,
 )
 
-# 13 px is ~1.5 mm on the 800x480 4.3" panel: unreadable, and 30 px touch
-# targets are unhittable. Larger type, thicker sliders, taller buttons.
+# 13 px is ~1.5 mm on 800x480 4.3" panel: unreadable. 30 px touch targets unhittable.
+# Larger type, thicker sliders, taller buttons.
 COMPACT = UiProfile(
     compact=True,
     font_px=16,
@@ -174,9 +169,8 @@ QLabel#modalText { color: #aeb4bf; }
 QLabel#modalHint { color: #9aa1ac; }
 """
 
-# Hover is mouse-only feedback: a tap parks Qt's synthesized mouse on the
-# widget, pinning :hover until the next tap. Compact skips these rules.
-# Prepended so checked/focus rules keep winning equal-specificity ties.
+# Hover is mouse-only feedback: tap parks synthesized mouse on widget, pinning :hover until next tap.
+# Compact skips these rules. Prepended so checked/focus rules win equal-specificity ties.
 _HOVER = """
 QPushButton:hover { background: #353b47; }
 QPushButton#danger:hover { background: #50211a; }
@@ -233,8 +227,7 @@ QLabel#modalHint {{ font-size: {p.modal_hint_font_px}px; }}
 
 
 def build_stylesheet(profile: UiProfile = REGULAR) -> str:
-    # Modal cards wear the same glass as the sheets. Sheets paint it directly
-    # in paintEvent, cards get it via QSS.
+    # Modal cards wear same glass as sheets. Sheets paint in paintEvent, cards via QSS.
     glass = (
         f"QFrame#modalCard {{ background: {_rgba(GLASS_BG)};"
         f" border-radius: 10px;"

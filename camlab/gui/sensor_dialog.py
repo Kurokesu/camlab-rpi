@@ -1,15 +1,10 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Sensor selection card - pick sensor, CSI port and touch display, then shut down.
+"""Sensor selection card: pick sensor, CSI port and touch display, then shut down.
 
-Rendered inside a ModalDialog (a Cage kiosk renders separate windows
-unreliably). Every choice here rewires hardware, so one Apply writes all
-config.txt blocks and powers off for the rewire.
-
-The panel rides whichever CAM/DISP connector the camera leaves free (pairing
-is derived, never asked). On Pi 5 firmware auto-detects panels, so the
-display row locks to "Auto-detected" and the claimed port greys out.
+Rendered inside ModalOverlay (Cage kiosk renders separate windows unreliably).
+Apply writes config.txt blocks and powers off for rewire. Pi 5 locks display row to auto-detected.
 """
 
 from __future__ import annotations
@@ -44,9 +39,7 @@ class SensorCard(QtWidgets.QFrame):
         self._on_apply = on_apply
         self._display_locked = bool(display_locked)
         self._locked_ports = set(locked_ports)
-        # Off-catalogue display blocks are kept as-is on apply (unknown overlay
-        # syntax, never recomposed), so the port they claim locks while that
-        # display stays selected.
+        # Off-catalogue display blocks kept as-is on apply, port they claim locks while selected.
         self._offcat_name = (
             current_display
             if current_display is not None and panels.by_name(current_display) is None
@@ -61,8 +54,7 @@ class SensorCard(QtWidgets.QFrame):
         title = QtWidgets.QLabel("Select sensor")
         title.setObjectName("modalTitle")
 
-        # Selected sensor's note (Sensor.notes), to the right of the title so it
-        # does not split the selector rows.
+        # Selected sensor note (Sensor.notes), right of title.
         self.notes_lbl = QtWidgets.QLabel()
         self.notes_lbl.setObjectName("modalText")
         self.notes_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
@@ -100,8 +92,7 @@ class SensorCard(QtWidgets.QFrame):
             disabled_values=self._port_locks_applied,
         )
         self.port_sel.changed.connect(self._on_wiring_changed)
-        # Persisted port, not selector state: a forced shift off a locked port
-        # must register as a pending change so Apply stays live.
+        # Persisted port not selector state: forced shift off locked port registers pending change.
         self._init_port = port
 
         self.wiring_note = QtWidgets.QLabel()
@@ -122,8 +113,6 @@ class SensorCard(QtWidgets.QFrame):
         self._update_notes(current_name)
         self._sync_wiring_note()
 
-        # Daily-workflow reminder of the README hot-plug warning, kept as a
-        # quiet hint next to the actions.
         hint = QtWidgets.QLabel("Power off and unplug RPi before rewiring")
         hint.setObjectName("modalHint")
 
@@ -133,9 +122,8 @@ class SensorCard(QtWidgets.QFrame):
         self.apply_btn = QtWidgets.QPushButton("Apply && Shutdown")
         self.apply_btn.setObjectName("danger")
         self.apply_btn.clicked.connect(self._apply)
-        # Apply here powers off, so a bare Enter must not trigger it: Cancel is the
-        # primary target (what Enter hits before tabbing to a button). Applying
-        # needs a deliberate Tab-to-Apply then Enter, or a click.
+        # Apply powers off. Bare Enter must not trigger it: Cancel is primary.
+        # Apply needs Tab-to-Apply then Enter or click.
         self.primary_button = cancel_btn
         buttons.addWidget(cancel_btn)
         buttons.addStretch(1)

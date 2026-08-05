@@ -1,22 +1,18 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Boot-persistent settings store (per-sensor mode/fps and control overrides).
+"""Boot-persistent settings (per-sensor mode/fps and control overrides).
 
-A tiny atomic JSON file. Selections are keyed by the sensor's dtoverlay token so
-each sensor remembers its own last mode. Writes are unprivileged (no sudo): the
-file lives on a dedicated writable data directory that survives an eventual
-read-only root (Phase 5 mounts a data partition at /var/lib/camlab, excluded
-from the overlay).
+Atomic JSON keyed by dtoverlay token. No sudo. Lives on data partition at
+/var/lib/camlab (writable under read-only root).
 
-Path resolution, first hit wins:
-  1. $CAMLAB_STATE_FILE         (explicit override, e.g. for tests)
-  2. $STATE_DIRECTORY/state.json (set by systemd StateDirectory=camlab)
-  3. /var/lib/camlab/state.json (fallback for manual runs)
+Path, first hit wins:
+  1. $CAMLAB_STATE_FILE
+  2. $STATE_DIRECTORY/state.json (systemd StateDirectory=camlab)
+  3. /var/lib/camlab/state.json
 
-Reads never raise: a missing or corrupt file is treated as "no saved selection".
-Writes never raise: a read-only or full filesystem logs a warning and is ignored,
-so the GUI keeps working (the selection is simply not remembered).
+Reads never raise (missing/corrupt = no selection). Writes never raise
+(read-only/full logs a warning, GUI keeps working).
 """
 
 from __future__ import annotations
@@ -38,7 +34,7 @@ def default_state_file() -> Path:
         return Path(override)
     state_dir = os.environ.get("STATE_DIRECTORY")
     if state_dir:
-        # systemd may pass a colon-separated list. The first entry is ours.
+        # systemd may pass a colon-separated list, first entry is ours.
         return Path(state_dir.split(":")[0]) / "state.json"
     return Path("/var/lib/camlab/state.json")
 
@@ -66,8 +62,8 @@ class SettingsStore:
         return data
 
     def get_mode(self, overlay: str) -> dict | None:
-        """Return {'size': [w, h], 'bit_depth': int, 'fps': float,
-        'fps_fixed': bool} or None. Missing fps_fixed reads as fixed."""
+        """{'size': [w, h], 'bit_depth': int, 'fps': float, 'fps_fixed': bool}
+        or None. Missing fps_fixed reads as fixed."""
         if not overlay:
             return None
         entry = (self._load().get("modes") or {}).get(overlay)
@@ -93,7 +89,7 @@ class SettingsStore:
         fps: float,
         fps_fixed: bool = True,
     ) -> bool:
-        """Persist a selection for a sensor. Returns True if written."""
+        """Persist a selection for a sensor. True when written."""
         if not overlay:
             return False
         data = self._load()
@@ -108,10 +104,7 @@ class SettingsStore:
         return self._atomic_write(data)
 
     def get_controls(self, overlay: str) -> dict:
-        """Per-sensor manual control overrides, None per control means auto.
-
-        Always returns all three keys, so it can seed ControlState directly.
-        """
+        """Per-sensor manual control overrides, None means auto. Always returns all keys."""
         out = {"exposure_us": None, "gain": None, "colour_temp": None}
         if not overlay:
             return out

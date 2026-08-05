@@ -4,8 +4,8 @@
 #
 # Install Kurokesu out-of-tree sensor drivers, DKMS source packages from the
 # Kurokesu apt archive (enabled by deps.sh). Package postinst compiles
-# <sensor>.dtbo into /boot/overlays, which must be a symlink to the live
-# /boot/firmware/overlays dir on Trixie.
+# <sensor>.dtbo into /boot/overlays, which on Trixie must be a symlink to the
+# live /boot/firmware/overlays dir.
 # Safe to re-run. Requires sudo.
 #
 # Usage:
@@ -20,8 +20,8 @@ CAMLAB_TAG="drivers"
 # shellcheck source=../common.sh
 source "$(dirname "${BASH_SOURCE[0]}")/../common.sh"
 
-# Driver packages come from the sensor registry (camlab/data/sensors.yaml),
-# adding a sensor is a single edit there.
+# Driver packages come from camlab/data/sensors.yaml, adding a sensor is a single
+# edit there.
 REPO_DIR="$(resolve_repo_dir)"
 SENSORS_YAML="$REPO_DIR/camlab/data/sensors.yaml"
 
@@ -58,13 +58,10 @@ done
 
 require_root
 
-# DKMS builds against the running kernel. If an apt upgrade installed a new
-# kernel but the box has not rebooted, the modules we build now would not load
-# after the next reboot. Use the canonical reboot-required flag (set by the
-# kernel package post-install) rather than comparing /lib/modules entries, which
-# carries several flavors (rpi-2712, rpi-v8) of the same version and would
-# misfire on a CM5 running the 2712 flavor. The package list lives in the .pkgs
-# companion; we only block when a kernel package is the reason.
+# DKMS builds against the running kernel, so modules built before a pending
+# kernel reboot would not load afterwards. Check the reboot-required flag rather
+# than comparing /lib/modules, which carries several flavors (rpi-2712, rpi-v8)
+# of one version and would misfire on a CM5. Block only on kernel packages.
 if [ -f /run/reboot-required ] \
    && grep -qiE 'linux-image|raspi-firmware|rpi-.*kernel' /run/reboot-required.pkgs 2>/dev/null; then
     die "a kernel update is pending a reboot ($(uname -r) is running). Reboot first, then re-run."
@@ -75,7 +72,7 @@ FW_OVERLAYS="/boot/firmware/overlays"
 header "Installing sensor drivers: ${SENSORS[*]}"
 
 # Trixie: drivers install overlays to /boot/overlays, but the active dir is
-# /boot/firmware/overlays. Make /boot/overlays point there.
+# /boot/firmware/overlays.
 if [ -d "$FW_OVERLAYS" ] && [ ! -e /boot/overlays ]; then
     ln -s firmware/overlays /boot/overlays
     log "Symlinked /boot/overlays -> firmware/overlays"

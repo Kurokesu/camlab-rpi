@@ -36,9 +36,7 @@ def has_dsi_connector() -> bool:
 
 
 def dsi_blocked_ports() -> set[str]:
-    """CSI ports claimed by a DSI display overlay: DSI-1 pairs with cam0
-    (DISP0), DSI-2 with cam1 (DISP1). Reports overlay claims, not wiring,
-    since DSI connectors read "connected" with no panel attached."""
+    """CSI ports claimed by DSI overlay: DSI-1 --> cam0, DSI-2 --> cam1."""
     blocked = set()
     for status in DRM_ROOT.glob("card*-DSI-*/status"):
         try:

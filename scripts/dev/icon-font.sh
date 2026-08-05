@@ -2,9 +2,8 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Rebuild camlab/assets/MaterialSymbolsOutlined.ttf from Google's variable
-# font, keeping only the glyphs listed in camlab/gui/icons.py. Run after
-# adding a codepoint there.
+# Rebuild MaterialSymbolsOutlined.ttf from Google variable font.
+# Keeps only glyphs in camlab/gui/icons.py. Run after adding codepoint.
 #
 # Needs python3-fonttools and network access.
 #
@@ -23,8 +22,7 @@ FONT_URL="https://github.com/google/material-design-icons/raw/$FONT_REF/variable
 
 python3 -c "import fontTools" 2>/dev/null || { echo "fontTools missing: sudo apt install python3-fonttools" >&2; exit 1; }
 
-# Codepoints are the single source of truth, so the asset cannot drift from
-# the names the app asks for.
+# icons.py lists glyphs. Asset cannot drift from codepoints there.
 mapfile -t CPS < <(python3 - "$REPO" <<'PY'
 import re, sys, pathlib
 src = (pathlib.Path(sys.argv[1]) / "camlab/gui/icons.py").read_text()
@@ -42,8 +40,7 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 curl -fsSL -o "$TMP/full.ttf" "$FONT_URL"
-# Pin the variable axes first: the app renders one static weight, and an
-# instanced font subsets far smaller than the variable original.
+# Instance axes first: static weight subsets smaller than variable font.
 python3 -m fontTools.varLib.instancer -o "$TMP/static.ttf" "$TMP/full.ttf" \
     FILL=0 GRAD=0 opsz=24 wght=400
 python3 -m fontTools.subset "$TMP/static.ttf" \

@@ -9,8 +9,7 @@
 #   sudo scripts/setup/service.sh             # install unit, do NOT enable at boot
 #   sudo scripts/setup/service.sh --enable    # install AND enable at boot (used by install.sh)
 #
-# The unit is rendered from deploy/camlab.service. Cage needs a valid logind
-# session on the tty, which the PAM stack (pam_systemd) provides.
+# Rendered from deploy/camlab.service. PAM gives Cage logind session on tty.
 
 set -euo pipefail
 
@@ -38,8 +37,7 @@ log "repo=$REPO_DIR user=$CAMLAB_USER uid=$CAMLAB_UID enable-at-boot=$ENABLE_AT_
 
 systemctl stop camlab.service 2>/dev/null || true
 
-# Backlight sysfs writes need video group. Default Pi OS users have it,
-# custom service users may not.
+# Backlight sysfs writes need video group.
 if ! id -nG "$CAMLAB_USER" | tr ' ' '\n' | grep -qx video; then
     usermod -aG video "$CAMLAB_USER"
     log "Added $CAMLAB_USER to video group (panel backlight control)"

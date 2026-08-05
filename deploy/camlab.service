@@ -1,8 +1,8 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Rendered by scripts/setup/service.sh (CAMLAB_USER / CAMLAB_REPO_DIR are
-# substituted). Runs the camlab GUI fullscreen under a Cage kiosk on tty1.
+# Rendered by service.sh (CAMLAB_USER / CAMLAB_REPO_DIR substituted).
+# camlab GUI fullscreen under Cage kiosk on tty1.
 
 [Unit]
 Description=camlab camera bench tool (Kurokesu)
@@ -15,10 +15,7 @@ User=CAMLAB_USER
 PAMName=camlab
 WorkingDirectory=CAMLAB_REPO_DIR
 
-# Writable, persistent state owned by the service user (creates /var/lib/camlab
-# and exports $STATE_DIRECTORY). Holds the boot-persistent mode/fps selection.
-# Phase 5 (read-only root) must keep this path on a writable data partition,
-# excluded from the overlay, so the selection survives reboots.
+# Persistent state (mode/fps selection). Read-only root keeps this on data partition.
 StateDirectory=camlab
 StateDirectoryMode=0750
 
@@ -28,9 +25,7 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=camlab
 
-# Deliberately do NOT raise LIBCAMERA_LOG_LEVELS: ERROR lines (e.g. AR0822
-# embedded-data parse failures) are the integrity signal we surface.
-# Cursor visibility is handled in-app (camlab.display.CursorPolicy).
+# Do not raise LIBCAMERA_LOG_LEVELS: ERROR lines are integrity signal.
 Environment=PYTHONUNBUFFERED=1
 
 ExecStart=/usr/bin/cage -- /usr/bin/python3 -m camlab

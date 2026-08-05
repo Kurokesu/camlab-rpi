@@ -1,14 +1,10 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Settings card - app-level system options, one row per setting.
+"""Settings card: app-level system options, one row per setting.
 
-Rendered inside a ModalOverlay like the sensor/mode cards. Rows: networking
-toggle, histogram overlay toggle and, while touch panel is active display,
-panel brightness.
-The card reads live state when built. Apply only acts on rows whose selection
-changed. Brightness applies live while dragging: the screen itself is the
-feedback.
+Networking toggle, histogram overlay and panel brightness on touch display.
+Apply only acts on changed rows. Brightness applies live while dragging.
 """
 
 from __future__ import annotations
@@ -69,8 +65,6 @@ class SettingsCard(QtWidgets.QFrame):
         note.setWordWrap(True)
         note.setMaximumWidth(400)
 
-        # Networking's note spans the form between the rows, so it reads as a
-        # footnote to the row above it.
         form.addRow(note)
 
         hist_label = QtWidgets.QLabel()
@@ -84,8 +78,7 @@ class SettingsCard(QtWidgets.QFrame):
         hist_row.addWidget(self.hist_sel, 1)
         form.addRow("Histogram:", hist_row)
 
-        # None hides the row: no backlight device or the panel is not the
-        # active display.
+        # None hides row: no backlight device or panel is not active display.
         if backlight_pct is not None:
             bl_label = QtWidgets.QLabel()
             bl_label.setPixmap(icons.pixmap("brightness_6", _ICON_PX, "#8a909b"))
@@ -109,9 +102,7 @@ class SettingsCard(QtWidgets.QFrame):
         self.apply_btn = QtWidgets.QPushButton("Apply")
         self.apply_btn.clicked.connect(self._apply)
         self.apply_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        # Turning networking off cuts the rig's reachability, so a bare Enter
-        # must not trigger it: Cancel is the primary target, same convention
-        # as the sensor card.
+        # Networking off cuts reachability. Bare Enter must not trigger Apply: Cancel is primary.
         self.primary_button = cancel_btn
         buttons.addWidget(cancel_btn)
         buttons.addStretch(1)

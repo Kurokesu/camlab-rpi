@@ -1,49 +1,33 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Sensor mode catalogue + selection logic (pure, no Picamera2/Qt imports).
+"""Sensor mode catalogue and selection (pure, no Picamera2/Qt).
 
-A "mode" is one raw output the sensor can deliver: a libcamera packed format
-(e.g. SGRBG12_CSI2P), an output size, a bit depth and the sensor's max fps for
-that combination. The GUI lets the operator pick one at runtime as a cascade:
-
-    Resolution  ->  Bit depth  ->  FPS
-
-FPS choices follow a fixed policy (see fps_options): the standard bench rates
-(24, 30, 60, 120) capped by what the sensor mode can sustain and by the app
-ceiling MAX_FPS, with the sensor's own maximum surfaced as the top option
-when it falls between two standard rates. The display never limits the
-sensor rate: the viewfinder draws the latest frame at each screen refresh
-and drops the ones between. With no valid persisted selection the default
-is the heaviest mode (largest area, deepest bits) at DEFAULT_FPS.
-
-Everything here is deterministic and side-effect free so it can be unit tested
-and reasoned about without a camera. CameraEngine turns a (SensorMode, fps) pair
-into an actual Picamera2 configuration.
+A mode is one raw sensor output: packed format, size, bit depth, max fps.
+Operator picks via Resolution --> Bit depth --> FPS. Bench rates (24, 30, 60,
+120) capped by mode and MAX_FPS, plus sensor max when it sits between rates.
+Display never limits sensor rate. Default without a persisted pick: heaviest
+mode at DEFAULT_FPS.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-# Standard bench framerates, lowest first (24 for cinema work). Anything
-# else offered is a sensor-imposed cap surfaced alongside these.
+# Standard bench rates, lowest first. Sensor caps surface alongside these.
 BASE_FPS: tuple[float, ...] = (24.0, 30.0, 60.0, 120.0)
 
-# App-supported ceiling. Rates above run the pipeline fine, but sensor mode
-# tables advertising them have proven unreliable to start (AR0234 960x600
-# claims 236.85, locks maybe half the time), so the beta stops at the rate
-# every bench sensor starts dependably.
+# App ceiling. Higher rates run but start unreliably (AR0234 960x600 claims
+# 236.85, locks about half the time).
 MAX_FPS = 120.0
 
 # Boot rate when nothing is persisted. Higher rates are opt-in.
 DEFAULT_FPS = 30.0
 
-# Tolerance when comparing reported fps (floats like 33.89) to nominal rates.
+# Tolerance when matching reported fps (e.g. 33.89) to nominal rates.
 _FPS_EPS = 0.5
 
-# Lores stream alignment. Picamera2 aligns further, but keeping our planned size
-# even avoids fractional scaling artefacts.
+# Lores alignment. Even size avoids fractional scaling artefacts.
 _LORES_ALIGN = 2
 
 
@@ -73,11 +57,11 @@ class SensorMode:
 
 
 def enumerate_modes(raw_modes) -> list[SensorMode]:
-    """Build a clean, de-duplicated mode list from Picamera2.sensor_modes.
+    """De-duplicated mode list from Picamera2.sensor_modes.
 
-    raw_modes is the list of dicts picamera2 exposes (keys: format, bit_depth,
-    size, fps, ...). Modes are keyed by (size, bit_depth), so duplicates collapse.
-    Sorted heaviest last (area, then bit depth, then fps) for stable iteration.
+    raw_modes is the list of dicts picamera2 exposes (format, bit_depth, size,
+    fps). Keyed by (size, bit_depth), so duplicates collapse. Sorted heaviest
+    last (area, then bit depth, then fps).
     """
     by_key: dict[tuple[tuple[int, int], int], SensorMode] = {}
     for m in raw_modes:
@@ -90,22 +74,18 @@ def enumerate_modes(raw_modes) -> list[SensorMode]:
         fmt = str(m.get("format") or "")
         sm = SensorMode(format=fmt, size=size, bit_depth=depth, max_fps=fps)
         prev = by_key.get((size, depth))
-        # Keep the higher fps if the stack lists the same mode twice.
+        # Keep higher fps when the stack lists the same mode twice.
         if prev is None or sm.max_fps > prev.max_fps:
             by_key[(size, depth)] = sm
     return sorted(by_key.values(), key=lambda s: (s.area, s.bit_depth, s.max_fps))
 
 
 def fps_options(max_fps: float) -> list[float]:
-    """FPS choices for a mode, honouring the bench policy.
+    """FPS choices for a mode under bench policy.
 
-    eff = min(sensor max, MAX_FPS). Then:
-      - eff <= 24  -> a single locked option (24 if it lands on 24, else eff).
-      - eff > 24   -> the standard rates (24, 30, 60, 120) that fit under eff,
-                      plus eff itself when it sits strictly between two standard
-                      rates (e.g. 33.89 -> [24, 30, 33.89],
-                      120.21 -> [24, 30, 60, 120]).
-    A single-element result means the selector should be locked (unselectable).
+    eff = min(sensor max, MAX_FPS). At or below 24: one locked option. Above:
+    standard rates that fit, plus eff when it sits between two rates
+    (33.89 --> [24, 30, 33.89]). One element means lock the selector.
     """
     eff = min(max_fps, MAX_FPS)
     if eff <= BASE_FPS[0] + _FPS_EPS:

@@ -1,12 +1,11 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""HistogramOverlay - live luma histogram in the viewfinder's corner.
+"""Live luma histogram in viewfinder corner.
 
-Data comes from the PiSP frontend's AGC statistics (CameraEngine.agc_histogram),
-so drawing is the only cost here. Painted as a translucent glass card matching
-the sheets/modals, with the 1024 ISP bins folded to one column per plot pixel
-and square-root scaled so shadow detail stays visible next to dominant peaks.
+Data from PiSP AGC stats. Draw-only cost. Glass card matches sheets. 1024 ISP
+bins fold to one column per plot pixel, square-root scaled so shadows stay
+visible next to peaks.
 """
 
 from __future__ import annotations
@@ -16,7 +15,7 @@ import numpy as np
 from ..qt import Qt, QtCore, QtGui, QtWidgets
 from .style import GLASS_BG
 
-MARGIN = 12  # from the viewfinder area's top-left corner
+MARGIN = 12  # from viewfinder top-left
 _SIZE = (256, 96)  # card size, plot fills it minus padding
 _PAD = 8
 _CURVE = QtGui.QColor(215, 218, 224, 230)
@@ -27,12 +26,12 @@ class HistogramOverlay(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFixedSize(*_SIZE)
-        # Purely informational: never steal clicks from the viewfinder.
+        # Informational only: never steal viewfinder taps.
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self._levels: np.ndarray | None = None
 
     def set_histogram(self, bins: np.ndarray) -> None:
-        """Fold the 1024 ISP bins to plot columns and cache 0..1 levels."""
+        """Fold 1024 ISP bins to plot columns and cache 0..1 levels."""
         cols = _SIZE[0] - 2 * _PAD
         group = len(bins) // cols
         folded = bins[: group * cols].reshape(cols, group).sum(axis=1)

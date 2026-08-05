@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # camlabctl - control tool for camlab.service.
-# Use for post-install verification, dev iteration, and field support.
+# Post-install verification, dev iteration and field support.
 #
 # Usage:
 #   camlabctl start
@@ -19,8 +19,8 @@
 #   camlabctl ro                         boot read-only next time
 #   camlabctl help
 #
-# log-level writes a systemd drop-in (Environment=CAMLAB_LOG_LEVEL). The app
-# reads this on startup - restart the service to apply.
+# log-level writes a systemd drop-in (Environment=CAMLAB_LOG_LEVEL), read at app
+# startup. Restart the service to apply.
 
 set -euo pipefail
 
@@ -84,10 +84,9 @@ cmd_shot() {
     log "saved $out"
 }
 
-# Networking toggle: off for production (faster boot), on for SSH dev. Units
-# are masked, not just disabled, so a dependency can't pull them back in. The
-# *-wait-online units gate only network-online.target (unused by the kiosk)
-# and stay masked even after 'net on', so re-enabling never slows boot down.
+# Networking toggle: off for production (faster boot), on for SSH dev. Masked,
+# not just disabled, so a dependency cannot pull units back in. *-wait-online
+# gates only the unused network-online.target, so 'net on' leaves it masked.
 NET_MANAGERS=(
     NetworkManager.service
     wpa_supplicant.service
@@ -103,8 +102,8 @@ _net_present() { systemctl list-unit-files "$1" >/dev/null 2>&1; }
 _overlay_active() { [ "$(findmnt -no FSTYPE / 2>/dev/null)" = "overlay" ]; }
 
 # Under overlayroot, systemctl writes land in the tmpfs upper and vanish on
-# reboot. Repeat the change against the lower root so it persists. The verbs
-# used here only manage symlinks, so the chroot needs no running systemd.
+# reboot. Repeat against the lower root to persist. These verbs only manage
+# symlinks, so the chroot needs no running systemd.
 _persist_net() {
     _overlay_active || return 0
     if ! command -v overlayroot-chroot >/dev/null 2>&1; then
@@ -122,8 +121,8 @@ cmd_net() {
                 _net_present "$u" || continue
                 sudo systemctl unmask "$u" >/dev/null 2>&1 || true
                 _persist_net unmask "$u"
-                # Unmask only: stock RPi OS ships networkd disabled and NM owns
-                # the interfaces. Starting both invites a manager conflict.
+                # Unmask only. Stock RPi OS ships networkd disabled and NM owns
+                # the interfaces, starting both invites a conflict.
                 [ "$u" = "systemd-networkd.service" ] && continue
                 sudo systemctl enable --now "$u" >/dev/null 2>&1 || true
                 _persist_net enable "$u"
@@ -147,8 +146,8 @@ cmd_net() {
             for u in "${NET_MANAGERS[@]}" "${NET_WAIT_UNITS[@]}"; do
                 _net_present "$u" || continue
                 any=1
-                # is-enabled/is-active print the state word but exit nonzero for
-                # disabled/inactive units. || true keeps set -e out of the way.
+                # is-enabled/is-active print the state but exit nonzero when
+                # disabled/inactive, so || true keeps set -e out of the way.
                 en="$(systemctl is-enabled "$u" 2>/dev/null || true)"; [ -n "$en" ] || en="n/a"
                 act="$(systemctl is-active "$u" 2>/dev/null || true)"; [ -n "$act" ] || act="inactive"
                 printf "%-42s %s / %s\n" "$u" "$en" "$act"
@@ -159,9 +158,9 @@ cmd_net() {
     esac
 }
 
-# Read-only root toggle. An overlayroot=disabled token in cmdline.txt means
-# boot writable, absent means read-only. Flip the token (remounting the boot
-# partition rw to do so), takes effect on next reboot.
+# Read-only root toggle. overlayroot=disabled in cmdline.txt boots writable,
+# absent boots read-only. Flipping it needs the boot partition remounted rw and
+# takes effect on next reboot.
 FW_DIR="${CAMLAB_FW_DIR:-/boot/firmware}"
 CMDLINE="$FW_DIR/cmdline.txt"
 
@@ -174,7 +173,7 @@ cmd_rw() {
         return
     fi
     sudo mount -o remount,rw "$FW_DIR" 2>/dev/null || true
-    # Append the token to the single cmdline line (space-separated, no newline).
+    # cmdline.txt is one line, so append space-separated with no newline.
     sudo sed -i 's/[[:space:]]*$/ overlayroot=disabled/' "$CMDLINE"
     log "writable on next boot. Apply: sudo reboot   (then camlabctl ro to re-lock)"
 }

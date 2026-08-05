@@ -1,13 +1,10 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Shared in-window controls for the kiosk UI.
+"""Shared in-window controls for kiosk UI.
 
-Under the Cage compositor the app renders as a single fullscreen surface, and
-separate top-level surfaces (QDialog/QMessageBox and QComboBox dropdown
-popups) misbehave - they render as a tiny artifact or open at the screen corner.
-ModalOverlay already replaces dialogs. SegmentedSelector replaces dropdowns with
-an inline exclusive button row, so every choice stays on the main surface.
+Under Cage separate top-level surfaces (QDialog, QComboBox popups) misbehave.
+ModalOverlay replaces dialogs. SegmentedSelector replaces dropdowns.
 """
 
 from __future__ import annotations
@@ -25,7 +22,7 @@ def repolish(*widgets: QtWidgets.QWidget) -> None:
 
 
 def hline(parent=None) -> QtWidgets.QFrame:
-    """A 1px horizontal hairline (styled via QFrame#hsep in the app stylesheet)."""
+    """1px horizontal hairline (styled via QFrame#hsep)."""
     line = QtWidgets.QFrame(parent)
     line.setObjectName("hsep")
     line.setFixedHeight(1)
@@ -33,7 +30,7 @@ def hline(parent=None) -> QtWidgets.QFrame:
 
 
 def vline(parent=None) -> QtWidgets.QFrame:
-    """A 1px vertical hairline (styled via QFrame#vsep in the app stylesheet)."""
+    """1px vertical hairline (styled via QFrame#vsep)."""
     line = QtWidgets.QFrame(parent)
     line.setObjectName("vsep")
     line.setFixedWidth(1)
@@ -41,21 +38,16 @@ def vline(parent=None) -> QtWidgets.QFrame:
 
 
 class SegmentedSelector(QtWidgets.QWidget):
-    """An exclusive row of buttons - a dropdown replacement with no popup.
+    """Exclusive button row, dropdown replacement with no popup.
 
-    `changed` fires only on user interaction. Rebuilding the options or setting
-    the value programmatically is silent, so dependent cascades do not recurse.
+    changed fires only on user interaction. Programmatic rebuild is silent.
     """
 
     changed = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        # A fused segmented control: a row of buttons whose shared borders collapse
-        # into single hairlines (via a -1px left margin) and which round only their
-        # outer corners, so the row reads as one control - "pick one". Each button
-        # rounds itself (no parent-pill clipping artifacts). Arrow keys move within
-        # the exclusive group (the radio convention).
+        # Fused segmented control: row reads as one pick-one widget. Arrow keys move within group.
         self._values: list[Any] = []
         self._group = QtWidgets.QButtonGroup(self)
         self._group.setExclusive(True)
@@ -74,10 +66,9 @@ class SegmentedSelector(QtWidgets.QWidget):
     ) -> None:
         """Populate (text, value) options, preselecting `current` if present.
 
-        `stretch` trails the row with an expanding spacer (left-packs buttons
-        in a wide form). Pass False to keep the row hugging its buttons
-        (e.g. inline in a toolbar header). `disabled_values` greys out
-        individual options (e.g. a CSI port occupied by a DSI display).
+        `stretch` trails expanding spacer to left-pack buttons in wide form.
+        False keeps row hugging buttons. `disabled_values` greys out options,
+        e.g. CSI port occupied by DSI display.
         """
         for btn in self._group.buttons():
             self._group.removeButton(btn)
@@ -93,8 +84,7 @@ class SegmentedSelector(QtWidgets.QWidget):
         for i, (text, value) in enumerate(options):
             btn = QtWidgets.QPushButton(text)
             btn.setObjectName("segment")
-            # Position drives which outer corners round. Non-first buttons overlap
-            # the previous border by 1px so the shared edge is a single hairline.
+            # pos drives outer corner rounding. Non-first buttons overlap previous border by 1px.
             if last == 0:
                 pos = "only"
             elif i == 0:
@@ -121,8 +111,7 @@ class SegmentedSelector(QtWidgets.QWidget):
             self._group.button(idx).setChecked(True)
 
     def button(self, value: Any) -> QtWidgets.QPushButton | None:
-        """The segment button for `value`, to restyle in place (a running
-        count, say) where set_options would rebuild every button."""
+        """Segment button for `value`, to restyle in place without rebuilding the row."""
         if value not in self._values:
             return None
         return self._group.button(self._values.index(value))
@@ -137,5 +126,5 @@ class SegmentedSelector(QtWidgets.QWidget):
         return self._values[bid] if 0 <= bid < len(self._values) else None
 
     def checked_button(self) -> QtWidgets.QAbstractButton | None:
-        """The selected segment, the selector's single Tab stop."""
+        """Selected segment, the selector's single Tab stop."""
         return self._group.checkedButton()
