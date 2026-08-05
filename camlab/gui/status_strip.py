@@ -177,9 +177,9 @@ class StatusStrip(QtWidgets.QFrame):
         if has_temp:
             self.temp_lbl.setText(f"{self._temp:.1f}\u00b0C")
 
-    def set_rpi_stats(self, s) -> None:
-        """Board facts (RpiStatsSample), missing sources drop out."""
-        self.stats.set_stats(s)
-        self.stats_compact.set_stats(s)
+    def set_rpi_stats(self, texts: dict[str, str | None]) -> None:
+        """Board facts as field_texts, missing sources drop out."""
+        self.stats.set_texts(texts)
+        self.stats_compact.set_texts(texts)
         self._sync_stats()
         self._sync_balance()

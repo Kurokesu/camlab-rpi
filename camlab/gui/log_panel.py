@@ -14,6 +14,7 @@ import html
 
 from ..integrity import IntegrityStats, LogClassifier, breakdown_text
 from ..qt import Qt, QtCore, QtGui, QtWidgets, Signal, Slot
+from .style import SEV_COLOR
 from .widgets import SegmentedSelector, repolish
 
 _MAX_LINES = 2000
@@ -27,8 +28,6 @@ _POINTER_EVENTS = frozenset(
         QtCore.QEvent.Type.MouseMove,
     }
 )
-
-_SEV_COLOR = {"error": "#e06c75", "warning": "#e5c07b"}
 
 
 class LogPanel(QtWidgets.QWidget):
@@ -92,6 +91,9 @@ class LogPanel(QtWidgets.QWidget):
 
         self.view = QtWidgets.QTextEdit()
         self.view.setReadOnly(True)
+        # Read-only does not stop the document recording every programmatic
+        # edit as undo history, which grows without bound on a kiosk.
+        self.view.setUndoRedoEnabled(False)
         self.view.setObjectName("logView")
         font = QtGui.QFont("monospace")
         font.setStyleHint(QtGui.QFont.StyleHint.Monospace)
@@ -146,10 +148,17 @@ class LogPanel(QtWidgets.QWidget):
             btn = self.filter.button(value)
             if btn is None:
                 continue
-            btn.setText(f"{word} {count}")
-            btn.setToolTip(breakdown_text(stats, value))
-            btn.setProperty("sev", value if count else None)
-            repolish(btn)
+            text = f"{word} {count}"
+            if btn.text() != text:
+                btn.setText(text)
+                btn.setToolTip(breakdown_text(stats, value))
+                # Ratchet width so a digit rollover cannot shift the header.
+                btn.setMinimumWidth(max(btn.minimumWidth(), btn.sizeHint().width()))
+            sev = value if count else None
+            # Tint flips are rare, restyle only then.
+            if btn.property("sev") != sev:
+                btn.setProperty("sev", sev)
+                repolish(btn)
 
     # log stream
     def append_line(self, line: str) -> None:
@@ -168,18 +177,21 @@ class LogPanel(QtWidgets.QWidget):
         return self._filter == "all" or sev == self._filter
 
     def _append_html(self, line: str, sev: str | None) -> None:
+        cur = QtGui.QTextCursor(self.view.document())
+        cur.movePosition(QtGui.QTextCursor.MoveOperation.End)
+        self._insert_line(cur, line, sev)
+        self._trim()
+
+    @staticmethod
+    def _insert_line(cur: QtGui.QTextCursor, line: str, sev: str | None) -> None:
         safe = html.escape(line)
-        color = _SEV_COLOR.get(sev or "")
+        color = SEV_COLOR.get(sev or "")
         if color:
             safe = f"<span style='color:{color}'>{safe}</span>"
-        doc = self.view.document()
-        cur = QtGui.QTextCursor(doc)
-        cur.movePosition(QtGui.QTextCursor.MoveOperation.End)
         # Fresh formats, else severity colour bleeds into following lines.
-        if not doc.isEmpty():
+        if not cur.document().isEmpty():
             cur.insertBlock(QtGui.QTextBlockFormat(), QtGui.QTextCharFormat())
         cur.insertHtml(safe)
-        self._trim()
 
     def _trim(self) -> None:
         """Drop oldest lines in batches, cheaper than trimming on every append."""
@@ -228,9 +240,17 @@ class LogPanel(QtWidgets.QWidget):
     def _rerender(self) -> None:
         self._syncing = True
         self.view.clear()
-        for line, sev in self._buffer:
-            if self._passes(sev):
-                self._append_html(line, sev)
+        cur = QtGui.QTextCursor(self.view.document())
+        cur.movePosition(QtGui.QTextCursor.MoveOperation.End)
+        # One edit block for the whole rebuild, so up to 2000 line inserts
+        # trigger a single relayout instead of one each.
+        cur.beginEditBlock()
+        try:
+            for line, sev in self._buffer:
+                if self._passes(sev):
+                    self._insert_line(cur, line, sev)
+        finally:
+            cur.endEditBlock()
         self._syncing = False
         self._pending = False
         if self.autoscroll_btn.isChecked():

@@ -23,6 +23,7 @@ class _Cover(QtWidgets.QWidget):
         super().__init__(host)
         self._host = host
         self._window = window
+        # Stylesheet, not palette fill: app-wide QSS backgrounds override palettes.
         self.setStyleSheet("background: #000;")
 
 
