@@ -1,6 +1,7 @@
 # Kurokesu camlab
 
 [![CI](https://github.com/Kurokesu/camlab-rpi/actions/workflows/ci.yml/badge.svg)](https://github.com/Kurokesu/camlab-rpi/actions/workflows/ci.yml)
+[![REUSE status](https://api.reuse.software/badge/github.com/Kurokesu/camlab-rpi)](https://api.reuse.software/info/github.com/Kurokesu/camlab-rpi)
 [![Release](https://img.shields.io/github/v/release/Kurokesu/camlab-rpi?include_prereleases&label=release)](https://github.com/Kurokesu/camlab-rpi/releases)
 ![OS](https://img.shields.io/badge/OS-RPi%20Trixie%20Lite-blue?logo=raspberrypi&logoColor=white)
 ![Platform](https://img.shields.io/badge/platform-Pi%205%20%7C%20CM5-blue?logo=raspberrypi&logoColor=white)
