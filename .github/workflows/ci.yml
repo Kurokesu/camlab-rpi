@@ -26,11 +26,17 @@ jobs:
           pip install pyyaml
           python3 -c "import camlab.modes, camlab.sensors, camlab.settings, camlab.network, camlab.config_manager, camlab.dsi_panels, camlab.drm, camlab.stats"
 
+      # Hardware-free unit tests (config.txt blocks, DRM port mapping).
+      - name: Pytest
+        run: |
+          pip install pytest
+          pytest
+
       - name: Ruff
         run: |
           pip install ruff
-          ruff check camlab
-          ruff format --check camlab
+          ruff check camlab tests
+          ruff format --check camlab tests
 
       - name: Shellcheck
         run: git ls-files '*.sh' | xargs shellcheck
