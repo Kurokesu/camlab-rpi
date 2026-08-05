@@ -23,7 +23,7 @@ class ModalOverlay(QtWidgets.QWidget):
     """Covers host, dims it, blocks input and centres a card.
 
     Dim skips optional clear_rect (frosted viewfinder) so frost stays full
-    strength. Tab stays in card. Backdrop clicks are swallowed.
+    strength. Tab stays in card.
     """
 
     def __init__(
@@ -32,11 +32,13 @@ class ModalOverlay(QtWidgets.QWidget):
         card: QtWidgets.QWidget,
         clear_rect: QtCore.QRect | None = None,
         margin: int = 40,
+        on_backdrop: Callable[[], None] | None = None,
     ):
         super().__init__(host)
         self._host = host
         self.card = card
         self._clear_rect = clear_rect
+        self._on_backdrop = on_backdrop
         self.setObjectName("modalOverlay")
         for btn in card.findChildren(QtWidgets.QPushButton):
             btn.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
@@ -72,7 +74,11 @@ class ModalOverlay(QtWidgets.QWidget):
         painter.fillRect(self.rect(), _DIM)
 
     def mousePressEvent(self, event) -> None:
-        # Swallow backdrop clicks so dimmed chrome stays inert.
+        # Card widgets ignore presses as well, so geometry decides what is backdrop.
+        if self._on_backdrop is not None and not self.card.geometry().contains(
+            event.position().toPoint()
+        ):
+            self._on_backdrop()
         event.accept()
 
     def _tab_targets(self) -> list[QtWidgets.QWidget]:

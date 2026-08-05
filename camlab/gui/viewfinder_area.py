@@ -11,12 +11,15 @@ from __future__ import annotations
 
 import os
 
-from ..qt import Qt, QtWidgets
+from ..qt import Qt, QtWidgets, Signal
 from .histogram import MARGIN, HistogramOverlay
 from .rpi_stats import RpiStatsCard
 
 
 class ViewfinderArea(QtWidgets.QWidget):
+    # Press on the picture, dismisses whatever control is open over it.
+    tapped = Signal()
+
     def __init__(self, engine, parent: QtWidgets.QWidget | None = None):
         super().__init__(parent)
         self._engine = engine
@@ -45,6 +48,11 @@ class ViewfinderArea(QtWidgets.QWidget):
         self._stats_card.setVisible(False)
         self._stats_enabled = False
         self._stats_texts: dict[str, str | None] | None = None
+
+    def mousePressEvent(self, event) -> None:
+        # Live widget and corner overlays ignore presses, so they land here.
+        self.tapped.emit()
+        event.accept()
 
     @property
     def has_camera(self) -> bool:
