@@ -662,13 +662,24 @@ class MainWindow(QtWidgets.QMainWindow):
             target_raw = disp["overlay"]
         else:
             target_raw = None
+        display_written = False
         try:
             # Display first, the camera write validates its port against that block.
             if target_raw != disp["overlay"]:
                 self.config.apply_display(target_raw)
+                display_written = True
             self.config.apply(chosen.overlay, port, options)
         except Exception as exc:  # noqa: BLE001 surface the failure, do not power off
-            self._show_message("Apply failed", str(exc))
+            detail = str(exc)
+            if display_written:
+                # Camera write failed after display write, undo it so
+                # config.txt is never left half-applied.
+                try:
+                    self.config.apply_display(disp["overlay"])
+                except Exception:  # noqa: BLE001
+                    log.exception("display rollback failed")
+                    detail += " The display change stuck, re-apply to undo it."
+            self._show_message("Apply failed", detail)
             return
         # Power down rather than reboot, rewiring needs the box off.
         poweroff()
