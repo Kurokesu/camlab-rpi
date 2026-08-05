@@ -18,7 +18,6 @@ DEFAULT_REGISTRY = Path(__file__).parent / "data" / "dsi_panels.yaml"
 class Panel:
     name: str
     overlay: str
-    notes: str = ""
 
 
 class PanelRegistry:
@@ -31,11 +30,7 @@ class PanelRegistry:
         with open(path, "r") as f:
             data = yaml.safe_load(f) or {}
         panels = [
-            Panel(
-                name=str(d["name"]),
-                overlay=str(d["overlay"]),
-                notes=str(d.get("notes", "")),
-            )
+            Panel(name=str(d["name"]), overlay=str(d["overlay"]))
             for d in (data.get("panels") or [])
         ]
         if not panels:

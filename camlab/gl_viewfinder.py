@@ -1,26 +1,12 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""GlViewfinder - zero-copy camera viewfinder rendered inside Qt's own scene.
+"""GlViewfinder: zero-copy camera viewfinder rendered inside Qt scene.
 
-Replaces picamera2's QGlPicamera2, which renders through a private EGL context
-into a native Wayland subsurface. That subsurface stacks above every Qt-painted
-widget and cannot be overlaid without more subsurfaces, whose late mapping is
-broken in qtwayland. Rendering in-scene via QOpenGLWidget keeps the whole UI
-in one composited surface, so plain Qt widgets - control sheets, modal cards -
-stack above the live picture with translucency.
-
-Zero-copy path is the same trick QGlPicamera2 uses: each camera dmabuf is
-imported once as an EGLImage bound to a GL_TEXTURE_EXTERNAL_OES texture
-(driver does YUV->RGB), then drawn letterboxed. Textures are cached per
-request and dropped when the camera is reconfigured.
-
-set_frosted(True) swaps the passthrough draw for a GPU blur, so modals float
-over a live frosted picture. set_assists() switches the sharp draw to a focus
-peaking / zebra shader.
-
-samplerExternalOES needs a GLES context: call install_gles_format() before
-constructing QApplication.
+Replaces QGlPicamera2 subsurface path. In-scene QOpenGLWidget keeps UI in one
+surface, plain widgets stack above with translucency. Each dmabuf imported as
+EGLImage to GL_TEXTURE_EXTERNAL_OES, letterboxed draw. set_frosted swaps blur for
+modals. set_assists adds peaking/zebra. Call install_gles_format() before QApplication.
 """
 
 from __future__ import annotations
@@ -112,9 +98,8 @@ from OpenGL.GLES2.VERSION.GLES2_2_0 import (
 )
 from OpenGL.GLES3.VERSION.GLES3_3_0 import glBindVertexArray
 
-# Raw entry point: the PyOpenGL wrapper caches the array in per-context
-# storage keyed by eglGetCurrentContext(), which reads 0 inside Qt's
-# QOpenGLWidget context and raises. The quad array is kept alive on self.
+# Raw entry point: PyOpenGL wrapper caches array per-context keyed by
+# eglGetCurrentContext(), reads 0 inside QOpenGLWidget and raises.
 from OpenGL.raw.GLES2.VERSION.GLES2_2_0 import glVertexAttribPointer
 from picamera2.previews.gl_helpers import str_to_fourcc
 
@@ -126,9 +111,8 @@ log = logging.getLogger(__name__)
 # equivalent), two together read as the intended frost strength.
 _BLUR_PASSES = 2
 
-# uRotate turns the sampled texcoord about the centre, so a portrait panel can
-# display a landscape sensor upright without re-plumbing the streams. Identity
-# for 0 degrees, so an unrotated viewfinder samples exactly as before.
+# uRotate turns sampled texcoord about centre, portrait panel shows landscape sensor upright.
+# Identity at 0 degrees.
 _VERT = """
     attribute vec2 aPosition;
     varying vec2 texcoord;
@@ -361,13 +345,10 @@ class GlViewfinder(QOpenGLWidget):
     def __init__(self, picam2, parent=None, transform: int = 0):
         super().__init__(parent)
         self.picamera2 = picam2
-        # Display rotation in degrees (0/90/180/270). The panel may be mounted
-        # turned, so the picture rotates in the shader rather than in a stream.
         if transform not in (0, 90, 180, 270):
             raise ValueError(f"transform must be 0, 90, 180 or 270 (got {transform})")
         self._transform = transform
-        # Pure black pillarboxes: the picture reads as the natural focus
-        # target against them, and they blend into a dark bench.
+        # Pure black pillarboxes: picture reads as natural focus target, blend into dark bench.
         self._bg = (0.0, 0.0, 0.0, 1.0)
         self.current_request = None
         self.own_current = False
@@ -380,8 +361,8 @@ class GlViewfinder(QOpenGLWidget):
         self._zebra = False
         self._zebra_thr = 0.95
         self._fx_t0 = time.monotonic()  # zebra stripe animation epoch
-        # ctypes array (not a list): raw glVertexAttribPointer takes the
-        # pointer as-is, and GL reads it at every draw, so it must stay alive.
+        # ctypes array not list: raw glVertexAttribPointer takes pointer as-is,
+        # GL reads at every draw, must stay alive.
         self._quad = (ctypes.c_float * 8)(0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0)
         self._target_size: tuple[int, int] | None = None
 
@@ -481,21 +462,21 @@ class GlViewfinder(QOpenGLWidget):
         return prog
 
     def _rotate_matrix(self):
-        """Column-major mat2 that turns a centred texcoord by -transform, so the
-        displayed picture turns by +transform. Identity at 0 degrees."""
-        # Rotating the sampled coordinate by the negative of the display angle
-        # is what makes the image appear rotated the positive way.
+        """Column-major mat2 turns centred texcoord by -transform, picture turns by +transform."""
         angle = math.radians(-self._transform)
         c, s = math.cos(angle), math.sin(angle)
         # glUniformMatrix2fv with transpose=FALSE reads column-major: [m00, m10, m01, m11].
         return (ctypes.c_float * 4)(c, s, -s, c)
 
-    def _use(self, prog) -> None:
-        """Activate a program with its aPosition attribute fed from the quad.
+    def _displayed(self, iw: int, ih: int) -> tuple[int, int]:
+        """Size as shown: a quarter turn presents stored height as width."""
+        return (ih, iw) if self._transform in (90, 270) else (iw, ih)
 
-        Rebinding the pointer per use, not once at init: Qt drives its own
-        VAOs through this shared context and client attribute state lives in
-        whatever VAO is bound, so anything set earlier is long gone.
+    def _use(self, prog) -> None:
+        """Activate program with aPosition fed from quad.
+
+        Rebind pointer per use, not once at init: Qt drives VAOs through shared
+        context and client attribute state lives in bound VAO.
         """
         glUseProgram(prog)
         loc = self._attr_locs[prog]
@@ -592,10 +573,7 @@ class GlViewfinder(QOpenGLWidget):
             iw, ih = self._display_size()
         except Exception:  # noqa: BLE001 no stream size yet, fill the widget
             return 0, 0, ww, wh
-        # A quarter turn presents the camera's height as the picture's width, so
-        # fit against the displayed aspect, not the stored one.
-        if self._transform in (90, 270):
-            iw, ih = ih, iw
+        iw, ih = self._displayed(iw, ih)
         if iw * wh > ww * ih:
             w = ww
             h = w * ih // iw
@@ -606,11 +584,9 @@ class GlViewfinder(QOpenGLWidget):
 
     # frost chain (camera -> 1/4 -> 1/8 -> Gaussian ping-pong -> screen)
     def _draw_frosted(self, camera_texture: int, viewport) -> None:
-        iw, ih = self._display_size()
-        # The camera -> A pass rotates while sampling, so A onward holds the
-        # displayed orientation. Size the FBOs to match or the frost squashes.
-        if self._transform in (90, 270):
-            iw, ih = ih, iw
+        # camera -> A rotates while sampling, so A onward is already displayed
+        # orientation. FBOs must match it or the frost squashes.
+        iw, ih = self._displayed(*self._display_size())
         self._ensure_targets(iw, ih)
         (aw, ah), (bw, bh) = self._sizes[0], self._sizes[1]
         a_fbo, b_fbo, c_fbo = self._fbos

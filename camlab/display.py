@@ -1,15 +1,10 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Display management: output policy, cursor policy and panel backlight.
+"""Output policy, cursor policy and panel backlight.
 
-With both an HDMI monitor and a DSI touch panel wired, HDMI wins while
-connected and the panel takes over when it unplugs. Switching runs through
-wlr-randr (Cage exposes zwlr_output_manager_v1). A disabled output loses its
-wl_output, so Qt always sees exactly one screen.
-
-Cursor visibility follows input events, not device presence: a KVM emulates a
-permanent mouse, so presence would pin an arrow over the picture forever.
+HDMI wins while connected, else DSI. Switching via wlr-randr. Cursor follows
+input events, not device presence (KVM would pin an arrow).
 """
 
 from __future__ import annotations
@@ -26,8 +21,7 @@ log = logging.getLogger(__name__)
 
 _WLR_TIMEOUT_S = 2.0
 
-# _SETTLE_MS debounces Qt's screen-event burst before enforcing. The same
-# beat after enforcing lets Qt pick up new output topology.
+# Debounce Qt screen-event burst before enforcing. Same beat after lets Qt pick up new topology.
 _SETTLE_MS = 300
 # Safety net for DRM changes Qt never reported.
 _POLL_MS = 2000
@@ -60,25 +54,19 @@ def _wlr_outputs() -> dict[str, bool]:
     return outputs
 
 
-def enforce_output_policy() -> bool:
-    """One synchronous policy pass: HDMI on and DSI off when HDMI is
-    connected, DSI on otherwise. Returns True when outputs were switched.
-
-    Needs no Qt event loop, so startup can call it before QApplication exists
-    and connect to the compositor with the right output already up.
-    """
+def enforce_output_policy() -> None:
+    """HDMI on and DSI off when HDMI connected, else DSI on. No Qt loop required."""
     if not has_dsi_connector():  # HDMI-only rig: nothing to switch between
-        return False
+        return
     outputs = _wlr_outputs()
     if not outputs:
-        return False
-    # Require HDMI in both views before dropping the panel, so a race cannot
-    # leave zero outputs enabled.
+        return
+    # Require HDMI in both views before dropping panel. Avoids zero-output race.
     hdmi = any(_is_hdmi(n) for n in connected_connectors()) and any(_is_hdmi(n) for n in outputs)
     targets = [n for n in outputs if _is_hdmi(n) == hdmi]
     if not targets:
-        return False
-    # One config: the compositor applies enables and disables together.
+        return
+    # One config so compositor applies enables and disables together.
     args: list[str] = []
     for name in targets:
         if not outputs[name]:
@@ -87,7 +75,7 @@ def enforce_output_policy() -> bool:
         if name not in targets and outputs[name]:
             args += ["--output", name, "--off"]
     if not args:
-        return False
+        return
     log.info("display switch: %s", " ".join(args))
     try:
         subprocess.run(
@@ -99,18 +87,14 @@ def enforce_output_policy() -> bool:
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         log.error("wlr-randr switch failed: %s", exc)
-        return False
     except subprocess.CalledProcessError as exc:
         log.error("wlr-randr switch failed: %s", exc.stderr)
-        return False
-    return True
 
 
 class DisplayManager(QtCore.QObject):
     """Keeps exactly one output class enabled: HDMI when connected, else DSI."""
 
-    # Active QScreen after an enforcement pass. MainWindow dedupes, so firing
-    # after a no-op pass is fine.
+    # Active QScreen after every enforcement pass, no-ops included.
     display_changed = Signal(object)
 
     def __init__(self, app: QtWidgets.QApplication):
@@ -128,10 +112,8 @@ class DisplayManager(QtCore.QObject):
         self._poll.timeout.connect(self._poll_drm)
 
     def start(self) -> None:
-        """Connect hotplug signals and run the initial enforcement pass.
-        Without a DSI connector there is nothing to switch between, so
-        only report the boot screen."""
-        if not has_dsi_connector():
+        """Connect hotplug signals and run the first enforcement pass."""
+        if not has_dsi_connector():  # nothing to switch between, just report
             QtCore.QTimer.singleShot(0, self._emit_changed)
             return
         self._app.screenAdded.connect(lambda _s: self._settle.start())
@@ -148,7 +130,6 @@ class DisplayManager(QtCore.QObject):
 
     def _enforce(self) -> None:
         enforce_output_policy()
-        # Give Qt a beat to pick up the new wl_output topology.
         QtCore.QTimer.singleShot(_SETTLE_MS, self._emit_changed)
 
     def _emit_changed(self) -> None:
@@ -175,8 +156,7 @@ class CursorPolicy(QtCore.QObject):
             if t == QtCore.QEvent.Type.TouchBegin:
                 self._set_visible(False)
             elif t == QtCore.QEvent.Type.MouseMove:
-                # Names the real device even for touch-synthesized mouse
-                # events, so fingers never summon the cursor.
+                # Names real device even for touch-synthesized events. Fingers never summon cursor.
                 dev = event.pointingDevice()
                 if dev is not None:
                     touch = dev.type() == QtGui.QInputDevice.DeviceType.TouchScreen
@@ -202,7 +182,7 @@ BACKLIGHT_FLOOR_PCT = 5
 
 
 class Backlight:
-    """First /sys/class/backlight device (the DSI panel), if any."""
+    """First /sys/class/backlight device (DSI panel), if any."""
 
     def __init__(self, root: Path = Path("/sys/class/backlight")):
         self._dir: Path | None = None
@@ -218,8 +198,7 @@ class Backlight:
 
     @property
     def available(self) -> bool:
-        """Present and writable (needs video group), so the GUI never offers
-        a dead slider."""
+        """Present and writable (needs video group). GUI never offers dead slider."""
         return (
             self._dir is not None and self._max > 0 and os.access(self._dir / "brightness", os.W_OK)
         )
@@ -234,8 +213,7 @@ class Backlight:
         return round(raw * 100 / self._max)
 
     def set_percent(self, pct: int) -> bool:
-        """Set brightness, floored so the panel never blacks out. False when
-        sysfs write fails (e.g. not in the video group)."""
+        """Set brightness floored so panel never blacks out. False when write fails."""
         if not self.available:
             return False
         pct = min(max(int(pct), BACKLIGHT_FLOOR_PCT), 100)

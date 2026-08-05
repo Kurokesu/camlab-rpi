@@ -1,16 +1,10 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Collapsible log panel - shows the captured camera-stack stderr stream.
+"""Collapsible log panel for captured camera-stack stderr.
 
-Lines matching an integrity pattern are coloured by severity (errors red,
-warnings orange) and can be isolated with a mutually-exclusive filter whose
-warning and error segments double as the running counts, so warnings are not
-buried when errors flood the stream. The panel keeps a bounded ring buffer so
-the filter re-renders without re-tailing.
-
-It is also the session-diagnostics home: boot-to-viewfinder time sits in the
-header.
+Integrity lines coloured by severity with exclusive filter and running counts.
+Ring buffer lets filter re-render without re-tailing. Boot-to-viewfinder time in header.
 """
 
 from __future__ import annotations
@@ -33,7 +27,6 @@ _POINTER_EVENTS = frozenset(
     }
 )
 
-# Log line color per severity
 _SEV_COLOR = {"error": "#e06c75", "warning": "#e5c07b"}
 
 
@@ -44,7 +37,6 @@ class LogPanel(QtWidgets.QWidget):
     def __init__(self, classifier: LogClassifier | None = None, parent=None):
         super().__init__(parent)
         self._classifier = classifier or LogClassifier()
-        # (line, severity): severity is None for unmatched lines.
         self._buffer: collections.deque[tuple[str, str | None]] = collections.deque(
             maxlen=_MAX_LINES
         )
@@ -74,16 +66,16 @@ class LogPanel(QtWidgets.QWidget):
         )
         self.filter.changed.connect(self._on_filter)
 
-        self.follow_btn = QtWidgets.QPushButton("Autoscroll")
-        self.follow_btn.setCheckable(True)
-        self.follow_btn.setChecked(True)
-        self.follow_btn.setToolTip(
+        self.autoscroll_btn = QtWidgets.QPushButton("Autoscroll")
+        self.autoscroll_btn.setCheckable(True)
+        self.autoscroll_btn.setChecked(True)
+        self.autoscroll_btn.setToolTip(
             "Follow new lines. Swipe or scroll up to freeze the view for "
             "inspection, new lines keep buffering and reappear on return."
         )
-        self.follow_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.follow_btn.setFocusPolicy(Qt.FocusPolicy.TabFocus)
-        self.follow_btn.toggled.connect(self._on_follow)
+        self.autoscroll_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.autoscroll_btn.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+        self.autoscroll_btn.toggled.connect(self._on_autoscroll)
 
         clear_btn = QtWidgets.QPushButton("Clear")
         clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -94,7 +86,7 @@ class LogPanel(QtWidgets.QWidget):
         header.addWidget(self.boot_lbl)
         header.addStretch(1)
         header.addWidget(self.filter)
-        header.addWidget(self.follow_btn)
+        header.addWidget(self.autoscroll_btn)
         header.addWidget(clear_btn)
 
         self.view = QtWidgets.QPlainTextEdit()
@@ -105,9 +97,8 @@ class LogPanel(QtWidgets.QWidget):
         font.setStyleHint(QtGui.QFont.StyleHint.Monospace)
         font.setPointSize(9)
         self.view.setFont(font)
-        # Kinetic touch scrolling. grabGesture also sets WA_AcceptTouchEvents
-        # on the viewport, which stops Qt synthesizing mouse events from
-        # finger drags (those would drag-select text instead).
+        # Kinetic touch scrolling. grabGesture sets WA_AcceptTouchEvents on viewport,
+        # blocking synthesized mouse drag-select.
         viewport = self.view.viewport()
         QtWidgets.QScroller.grabGesture(
             viewport, QtWidgets.QScroller.ScrollerGestureType.TouchGesture
@@ -131,9 +122,8 @@ class LogPanel(QtWidgets.QWidget):
     def eventFilter(self, obj, ev) -> bool:
         """Drop mouse events Qt synthesizes from finger drags.
 
-        The viewport takes the touch stream (what QScroller scrolls on), but
-        Qt posts a synthesized mouse stream alongside it, which the text edit
-        reads as a selection drag. A real mouse still selects.
+        QScroller uses touch stream. Text edit reads synthesized mouse as selection drag.
+        Real mouse still selects.
         """
         if obj is self.view.viewport() and ev.type() in _POINTER_EVENTS:
             dev = ev.pointingDevice()
@@ -148,8 +138,7 @@ class LogPanel(QtWidgets.QWidget):
 
     @Slot(object)
     def update_integrity(self, stats: IntegrityStats) -> None:
-        """Counts ride filter segments they select for, text tinted by
-        severity when count is non-zero."""
+        """Counts ride filter segments they select for, tinted when non-zero."""
         for value, word, count in (
             ("warning", "Warnings", stats.warnings),
             ("error", "Errors", stats.errors),
@@ -166,9 +155,8 @@ class LogPanel(QtWidgets.QWidget):
     def append_line(self, line: str) -> None:
         _cat, sev = self._classifier.classify_with_severity(line)
         self._buffer.append((line, sev))
-        # Frozen: keep recording, but leave the view still so the operator can
-        # read it. It catches up when following resumes.
-        if not self.follow_btn.isChecked():
+        # Frozen: keep recording but leave the view still. It catches up on resume.
+        if not self.autoscroll_btn.isChecked():
             self._pending = True
             return
         if not self._passes(sev):
@@ -201,12 +189,11 @@ class LogPanel(QtWidgets.QWidget):
         if self._syncing:
             return
         at_bottom = value >= self.view.verticalScrollBar().maximum() - 2
-        if at_bottom != self.follow_btn.isChecked():
-            self.follow_btn.setChecked(at_bottom)
+        if at_bottom != self.autoscroll_btn.isChecked():
+            self.autoscroll_btn.setChecked(at_bottom)
 
-    def _on_follow(self, checked: bool) -> None:
-        # Re-rendering catches up with everything buffered while frozen, but
-        # only pay for it when lines actually arrived.
+    def _on_autoscroll(self, checked: bool) -> None:
+        # Only pay for a re-render when lines actually arrived while frozen.
         if not checked:
             return
         if self._pending:
@@ -222,7 +209,7 @@ class LogPanel(QtWidgets.QWidget):
                 self._append_html(line, sev)
         self._syncing = False
         self._pending = False
-        if self.follow_btn.isChecked():
+        if self.autoscroll_btn.isChecked():
             self._scroll_to_bottom()
 
     def clear(self) -> None:
