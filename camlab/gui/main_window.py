@@ -686,6 +686,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.config.apply(chosen.overlay, port, options)
         except Exception as exc:  # noqa: BLE001 surface the failure, do not power off
             detail = str(exc)
+            log.error("apply failed: %s", detail)
             if display_written:
                 # Camera write failed after display write, undo it so
                 # config.txt is never left half-applied.

@@ -57,6 +57,17 @@ def _require_safe(value: str, what: str) -> None:
         raise ConfigError(f"invalid {what} {value!r} (allowed: letters, digits, . _ = -)")
 
 
+def _run_privileged(cmd: list[str]) -> None:
+    """Run the sudo helper, re-raising its reason. GUI shows this text on Apply failed."""
+    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if proc.returncode == 0:
+        return
+    lines = (proc.stderr or proc.stdout).strip().splitlines()
+    # Last line carries the message, for a clean error and for a traceback.
+    reason = lines[-1].removeprefix("error: ") if lines else f"exit status {proc.returncode}"
+    raise ConfigError(reason)
+
+
 def is_compute_module() -> bool:
     try:
         return "Compute Module" in MODEL_PATH.read_text()
@@ -215,7 +226,7 @@ class ConfigManager:
             ]
         for o in options or []:
             cmd += ["--options", o]
-        subprocess.run(cmd, check=True)
+        _run_privileged(cmd)
 
     def _rewrite_in_place(self, token: str, port: str, options: list[str] | None) -> None:
         if not self.overlay_exists(token):
@@ -246,7 +257,7 @@ class ConfigManager:
             cmd = ["sudo", APPLY_BIN, *args]
         else:  # dev fallback when shim not installed
             cmd = ["sudo", sys.executable, "-m", "camlab.config_manager", *args]
-        subprocess.run(cmd, check=True)
+        _run_privileged(cmd)
 
     def _rewrite_display_in_place(self, raw_overlay: str | None) -> None:
         if raw_overlay is not None:
@@ -368,4 +379,9 @@ def _main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(_main())
+    try:
+        code = _main()
+    except ConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        code = 2
+    raise SystemExit(code)
