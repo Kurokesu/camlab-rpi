@@ -17,6 +17,7 @@ from ..qt import Qt, QtCore, QtGui, QtWidgets, Signal, Slot
 from .widgets import SegmentedSelector, repolish
 
 _MAX_LINES = 2000
+_TRIM_SLACK = 256
 
 _POINTER_EVENTS = frozenset(
     {
@@ -89,10 +90,9 @@ class LogPanel(QtWidgets.QWidget):
         header.addWidget(self.autoscroll_btn)
         header.addWidget(clear_btn)
 
-        self.view = QtWidgets.QPlainTextEdit()
+        self.view = QtWidgets.QTextEdit()
         self.view.setReadOnly(True)
         self.view.setObjectName("logView")
-        self.view.setMaximumBlockCount(_MAX_LINES)
         font = QtGui.QFont("monospace")
         font.setStyleHint(QtGui.QFont.StyleHint.Monospace)
         font.setPointSize(9)
@@ -172,7 +172,29 @@ class LogPanel(QtWidgets.QWidget):
         color = _SEV_COLOR.get(sev or "")
         if color:
             safe = f"<span style='color:{color}'>{safe}</span>"
-        self.view.appendHtml(safe)
+        doc = self.view.document()
+        cur = QtGui.QTextCursor(doc)
+        cur.movePosition(QtGui.QTextCursor.MoveOperation.End)
+        # Fresh formats, else severity colour bleeds into following lines.
+        if not doc.isEmpty():
+            cur.insertBlock(QtGui.QTextBlockFormat(), QtGui.QTextCharFormat())
+        cur.insertHtml(safe)
+        self._trim()
+
+    def _trim(self) -> None:
+        """Drop oldest lines in batches, cheaper than trimming on every append."""
+        doc = self.view.document()
+        if doc.blockCount() <= _MAX_LINES + _TRIM_SLACK:
+            return
+        self._syncing = True
+        cur = QtGui.QTextCursor(doc.firstBlock())
+        cur.movePosition(
+            QtGui.QTextCursor.MoveOperation.NextBlock,
+            QtGui.QTextCursor.MoveMode.KeepAnchor,
+            doc.blockCount() - _MAX_LINES,
+        )
+        cur.removeSelectedText()
+        self._syncing = False
 
     def _scroll_to_bottom(self) -> None:
         sb = self.view.verticalScrollBar()
@@ -188,7 +210,9 @@ class LogPanel(QtWidgets.QWidget):
         """Leaving the bottom freezes the view, returning resumes."""
         if self._syncing:
             return
-        at_bottom = value >= self.view.verticalScrollBar().maximum() - 2
+        # Scrollbar counts pixels, so grant a line of grace before calling it away.
+        slop = self.view.fontMetrics().lineSpacing()
+        at_bottom = value >= self.view.verticalScrollBar().maximum() - slop
         if at_bottom != self.autoscroll_btn.isChecked():
             self.autoscroll_btn.setChecked(at_bottom)
 
