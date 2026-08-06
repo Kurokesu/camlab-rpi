@@ -78,7 +78,16 @@ class StatusStrip(QtWidgets.QFrame):
         self._compact = False
 
         self.set_telemetry(None, None)
+        self._sync_stats()
+        self._pin_stats()
         self._sync_balance()
+
+    def changeEvent(self, ev) -> None:
+        super().changeEvent(ev)
+        # QSS font lands after construction
+        if ev.type() in (QtCore.QEvent.Type.StyleChange, QtCore.QEvent.Type.FontChange):
+            self._pin_stats()
+            self._sync_balance()
 
     def set_compact(self, compact: bool) -> None:
         """Shorten version, drop frame counter, trim stats.
@@ -111,25 +120,20 @@ class StatusStrip(QtWidgets.QFrame):
         return self.stats_compact if self._compact else self.stats
 
     def _sync_stats(self) -> None:
-        active = self._active_stats()
+        self.stats.setVisible(not self._compact)
+        self.stats_compact.setVisible(self._compact)
+
+    def _pin_stats(self) -> None:
         for view in (self.stats, self.stats_compact):
-            view.setVisible(view is active and view.has_data)
+            view.pin_width()
 
     def _sync_balance(self) -> None:
-        """Pin both zones to wider one so centred telemetry cannot drift.
-
-        Compact has no width to spare: zones hug content, telemetry floats.
-        """
-        left_min = self.version_lbl.sizeHint().width()
+        """Pin both zones to the wider one so centred telemetry cannot drift."""
         active = self._active_stats()
-        right_min = active.sizeHint().width() if active.has_data else 0
-        if self._compact:
-            self._left.setFixedWidth(left_min)
-            self._right.setFixedWidth(right_min)
-        else:
-            width = max(left_min, right_min)
-            self._left.setFixedWidth(width)
-            self._right.setFixedWidth(width)
+        right_min = max(active.minimumWidth(), active.sizeHint().width())
+        width = max(self.version_lbl.sizeHint().width(), right_min)
+        self._left.setFixedWidth(width)
+        self._right.setFixedWidth(width)
 
     def set_telemetry(
         self,
@@ -141,13 +145,14 @@ class StatusStrip(QtWidgets.QFrame):
     ) -> None:
         """Live per-frame numbers from engine and libcamera metadata.
 
-        frame None hides line rather than placeholders.
+        frame None hides line rather than placeholders. Individual gaps keep the
+        last reading, else segments blink in and out mid-line.
         """
         self._frame = frame
-        self._fps = fps
-        self._exp_us = exposure_us
-        self._ag = analogue_gain
-        self._dg = digital_gain
+        self._fps = fps if fps is not None else self._fps
+        self._exp_us = exposure_us if exposure_us is not None else self._exp_us
+        self._ag = analogue_gain if analogue_gain is not None else self._ag
+        self._dg = digital_gain if digital_gain is not None else self._dg
         self._render_telemetry()
 
     def set_temperature(self, temp_c: float | None) -> None:
@@ -170,16 +175,20 @@ class StatusStrip(QtWidgets.QFrame):
                 parts.append(f"ag {self._ag:.2f}")
             if self._dg is not None:
                 parts.append(f"dg {self._dg:.2f}")
-            self.telemetry_lbl.setText(" ".join(parts))
+            text = " ".join(parts)
+            # QLabel relayouts even on identical text, skip: this runs at 10 Hz.
+            if text != self.telemetry_lbl.text():
+                self.telemetry_lbl.setText(text)
         has_temp = self._temp is not None
         self._temp_sep.setVisible(has_temp and live)
         self.temp_lbl.setVisible(has_temp)
         if has_temp:
-            self.temp_lbl.setText(f"{self._temp:.1f}\u00b0C")
+            text = f"{self._temp:.1f}\u00b0C"
+            if text != self.temp_lbl.text():
+                self.temp_lbl.setText(text)
 
     def set_rpi_stats(self, texts: dict[str, str | None]) -> None:
         """Board facts as field_texts, missing sources drop out."""
         self.stats.set_texts(texts)
         self.stats_compact.set_texts(texts)
-        self._sync_stats()
         self._sync_balance()
