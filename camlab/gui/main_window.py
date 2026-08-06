@@ -6,7 +6,8 @@
 from __future__ import annotations
 
 import logging
-from typing import ClassVar
+from collections.abc import Callable
+from typing import ClassVar, NamedTuple
 
 from .. import network
 from ..camera import CameraEngine
@@ -41,14 +42,23 @@ _ACCENT_ON = "#e5c07b"
 _ACCENT_OFF = "#d7dae0"
 
 
+class _ChipSpec(NamedTuple):
+    """One camera-control chip: label, icon, metadata source, formatting."""
+
+    label: str
+    glyph: str
+    md_key: str
+    fmt: Callable[[float], str]
+    sample: str  # widest realistic value, pins chip width
+
+
 class MainWindow(QtWidgets.QMainWindow):
     first_frame = Signal(float)
 
-    # (chip label, icon glyph, metadata key, value formatter) per camera control.
-    _CTRL_SPEC: ClassVar[dict[str, tuple]] = {
-        "exposure_us": ("Exp", "shutter_speed", "ExposureTime", fmt_exposure),
-        "gain": ("Gain", "iso", "AnalogueGain", fmt_gain),
-        "colour_temp": ("WB", "wb_sunny", "ColourTemperature", fmt_ct),
+    _CTRL_SPEC: ClassVar[dict[str, _ChipSpec]] = {
+        "exposure_us": _ChipSpec("Exp", "shutter_speed", "ExposureTime", fmt_exposure, "888.8 ms"),
+        "gain": _ChipSpec("Gain", "iso", "AnalogueGain", fmt_gain, "88.88x"),
+        "colour_temp": _ChipSpec("WB", "wb_sunny", "ColourTemperature", fmt_ct, "8888 K"),
     }
 
     def __init__(
@@ -80,7 +90,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._display_key: tuple | None = None
         self._sev = ""  # worst severity seen, tints log button
         self._log_btn_state: tuple | None = None  # last synced look, skips no-op restyles
-        px = self._profile.icon_px
+        self._chip_values: dict[str, float] = {}  # last metadata reading per chip
 
         self.setWindowTitle("camlab")
         self.setStyleSheet(build_stylesheet(self._profile))
@@ -103,6 +113,38 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         root.addWidget(self.viewfinder_area, 1)
 
+        self._build_sheets()
+        root.addWidget(self._build_controls_row())
+
+        # Log panel starts collapsed. Equal stretch shrinks viewfinder when open.
+        self.log_panel = LogPanel(classifier)
+        self.log_panel.setVisible(False)
+        root.addWidget(self.log_panel, 1)
+
+        self._wire()
+        self._populate_static()
+        # Histogram overlay (beta easter egg), persisted app-wide, default off.
+        self._histogram_on = settings.get_histogram()
+        if self._histogram_on:
+            self.engine.set_stats_output(True)
+            self.viewfinder_area.set_histogram_enabled(True)
+        # Start on inert sink so nothing highlighted until Tab.
+        central.setFocus(Qt.FocusReason.OtherFocusReason)
+
+        self._build_shortcuts()
+        self._build_timers()
+
+        # Black covers over chrome: boot until first fullscreen, switch across a hotplug.
+        self._boot_cover: BootCover | None = BootCover(central, self)
+        self._boot_cover.revealed.connect(self._on_boot_revealed)
+        self._switch_cover = SwitchCover(central, self)
+
+        self._watch_screens()
+        if display_manager is not None:
+            display_manager.display_changed.connect(self._on_display_changed)
+
+    # construction
+    def _build_sheets(self) -> None:
         # Sheets dock over viewfinder bottom edge. Exposure and gain span decades, log sliders.
         self._sheets: dict[str, QtWidgets.QWidget] = {
             "exposure_us": ControlSheet("Exposure", fmt_exposure, log_scale=True, parent=self),
@@ -120,20 +162,22 @@ class MainWindow(QtWidgets.QMainWindow):
         # Keep open sheet glued to viewfinder bottom edge on resize.
         self.viewfinder_area.installEventFilter(self)
 
+    def _build_controls_row(self) -> QtWidgets.QFrame:
         # Sensor/Mode merge status and chooser. Divider fences Shutdown against mis-clicks.
         controls = QtWidgets.QFrame()
         controls.setObjectName("controls")
         crow = QtWidgets.QHBoxLayout(controls)
         self._crow = crow
+        px = self._profile.icon_px
         self.sensor_btn = QtWidgets.QPushButton()
         self.sensor_btn.clicked.connect(self._choose_sensor)
         self.mode_btn = QtWidgets.QPushButton()
         self.mode_btn.clicked.connect(self._choose_mode)
         self.mode_btn.setEnabled(bool(self.engine.modes))
         # Control chips: live value on button, amber when manual, click opens sheet.
+        # Born bare, _populate_static renders icon and placeholder before first paint.
         self._ctrl_buttons: dict[str, QtWidgets.QPushButton] = {
-            key: QtWidgets.QPushButton(f" {label}")
-            for key, (label, _glyph, _md, _fmt) in self._CTRL_SPEC.items()
+            key: QtWidgets.QPushButton() for key in self._CTRL_SPEC
         }
         self.monitor_btn = QtWidgets.QPushButton(icons.icon("stroke_partial", px), " Monitor")
         self._sheet_buttons = dict(self._ctrl_buttons, monitor=self.monitor_btn)
@@ -192,23 +236,9 @@ class MainWindow(QtWidgets.QMainWindow):
         crow.addSpacing(6)
         crow.addWidget(self.shutdown_btn)
         self._apply_row_metrics()
-        root.addWidget(controls)
+        return controls
 
-        # Log panel starts collapsed. Equal stretch shrinks viewfinder when open.
-        self.log_panel = LogPanel(classifier)
-        self.log_panel.setVisible(False)
-        root.addWidget(self.log_panel, 1)
-
-        self._wire()
-        self._populate_static()
-        # Histogram overlay (beta easter egg), persisted app-wide, default off.
-        self._histogram_on = settings.get_histogram()
-        if self._histogram_on:
-            self.engine.set_stats_output(True)
-            self.viewfinder_area.set_histogram_enabled(True)
-        # Start on inert sink so nothing highlighted until Tab.
-        central.setFocus(Qt.FocusReason.OtherFocusReason)
-
+    def _build_shortcuts(self) -> None:
         # Window shortcuts fire regardless of child focus, cover main screen and modal overlay.
         esc = QtGui.QShortcut(QtGui.QKeySequence(Qt.Key.Key_Escape), self)
         esc.setContext(Qt.ShortcutContext.WindowShortcut)
@@ -218,6 +248,7 @@ class MainWindow(QtWidgets.QMainWindow):
             sc.setContext(Qt.ShortcutContext.WindowShortcut)
             sc.activated.connect(self._on_return)
 
+    def _build_timers(self) -> None:
         # Telemetry at 10 Hz: about the fastest a changing number stays readable.
         self._status_timer = QtCore.QTimer(self)
         self._status_timer.setInterval(100)
@@ -250,11 +281,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._refit_timer.setInterval(500)
         self._refit_timer.timeout.connect(self._refit_lores)
 
-        # Black covers over chrome: boot until first fullscreen, switch across a hotplug.
-        self._boot_cover: BootCover | None = BootCover(central, self)
-        self._boot_cover.revealed.connect(self._on_boot_revealed)
-        self._switch_cover = SwitchCover(central, self)
-
+    def _watch_screens(self) -> None:
         # Re-assert fullscreen whenever screen topology changes.
         app = QtWidgets.QApplication.instance()
         app.screenAdded.connect(self._on_screen_added)
@@ -262,9 +289,6 @@ class MainWindow(QtWidgets.QMainWindow):
         app.primaryScreenChanged.connect(lambda _s: self._resync_fullscreen())
         for scr in app.screens():
             scr.geometryChanged.connect(lambda _g: self._resync_fullscreen())
-
-        if display_manager is not None:
-            display_manager.display_changed.connect(self._on_display_changed)
 
     # wiring
     def _wire(self) -> None:
@@ -289,6 +313,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._refresh_sensor_status()
         self._refresh_mode_status()
         self._refresh_control_buttons()
+        self._render_chips()
+        self._reserve_chip_widths()
 
     def _apply_chrome_texts(self) -> None:
         """Static button labels: full words on a monitor, icon-only compact."""
@@ -397,22 +423,47 @@ class MainWindow(QtWidgets.QMainWindow):
         # without blob (libcamera skips some above 30 fps).
         if self._histogram_on and self.engine.latest_histogram is not None:
             self.viewfinder_area.update_histogram(self.engine.latest_histogram)
-        # Chips carry live values, open sheet tracks value in auto. Compact drops label.
-        st = self.engine.control_state
-        for key, (label, glyph, md_key, fmt) in self._CTRL_SPEC.items():
-            value = md.get(md_key)
-            if self._profile.compact:
-                text = f" {fmt(value)}" if value is not None else " --"
+        self._render_chips()
+
+    def _render_chips(self) -> None:
+        """Chips carry live values, open sheet tracks value in auto.
+
+        Metadata drops keys across a pipeline restart, so a gap keeps the last
+        reading rather than flashing the placeholder.
+        """
+        md = self.engine.telemetry.metadata or {}
+        for key, spec in self._CTRL_SPEC.items():
+            value = md.get(spec.md_key)
+            if value is None:
+                value = self._chip_values.get(key)
             else:
-                text = f" {label} {fmt(value)}" if value is not None else f" {label} --"
-            btn = self._ctrl_buttons[key]
-            if btn.text() != text:
-                btn.setText(text)
-                # Ratchet width so a metadata gap never shrinks a chip and shifts neighbours.
-                btn.setMinimumWidth(max(btn.minimumWidth(), btn.sizeHint().width()))
-            self._set_chip_accent(btn, glyph, getattr(st, key) is not None)
+                self._chip_values[key] = value
+            self._render_chip(key, value)
             if key == self._open_sheet:
                 self._sheets[key].set_live(value)
+
+    def _render_chip(self, key: str, value: float | None) -> None:
+        """Value text ("--" until metadata) and manual accent. Compact drops label."""
+        spec = self._CTRL_SPEC[key]
+        body = spec.fmt(value) if value is not None else "--"
+        text = f" {body}" if self._profile.compact else f" {spec.label} {body}"
+        btn = self._ctrl_buttons[key]
+        if btn.text() != text:
+            btn.setText(text)
+            # Ratchet width so a metadata gap never shrinks a chip and shifts neighbours.
+            btn.setMinimumWidth(max(btn.minimumWidth(), btn.sizeHint().width()))
+        self._set_chip_accent(btn, spec.glyph, getattr(self.engine.control_state, key) is not None)
+
+    def _reserve_chip_widths(self) -> None:
+        """Pin each chip to its widest realistic value so live data never moves the row."""
+        for key, spec in self._CTRL_SPEC.items():
+            btn = self._ctrl_buttons[key]
+            btn.ensurePolished()  # sizeHint must measure with the QSS font
+            sample = f" {spec.sample}" if self._profile.compact else f" {spec.label} {spec.sample}"
+            current = btn.text()
+            btn.setText(sample)
+            btn.setMinimumWidth(btn.sizeHint().width())
+            btn.setText(current)
 
     def _set_chip_accent(self, btn: QtWidgets.QPushButton, glyph: str, active: bool) -> None:
         """Amber accent on/off. Re-polish and re-tint only on a flip."""
@@ -817,9 +868,8 @@ class MainWindow(QtWidgets.QMainWindow):
         px = profile.icon_px
         for btn in self._chrome_btns:
             btn.setIconSize(QtCore.QSize(px, px))
-        # Chip widths ratchet and accents re-tint only on flips, so clear both for the new font.
-        for btn in self._ctrl_buttons.values():
-            btn.setMinimumWidth(0)
+        # Accents re-tint only on flips, clear the latch so icons rebuild at the new size.
+        # Chip widths are re-pinned by _populate_static via _reserve_chip_widths.
         for btn in self._sheet_buttons.values():
             btn.setProperty("manual", None)
         self.settings_btn.setIcon(icons.icon("settings", px))
