@@ -3,10 +3,8 @@
 
 """Signal-integrity / error surfacing.
 
-libcamera and IPA child log to stderr. fd 2 is spliced onto a pipe so bytes
-still reach journald while each line is classified. Matches count by severity
-as facts, no pass/fail. Splice before Picamera2()/libcamera init so IPA child
-inherits the redirected fd.
+fd 2 is spliced onto a pipe, so each line is classified on its way to journald.
+Splice before Picamera2()/libcamera init so the IPA child inherits the fd.
 """
 
 from __future__ import annotations
@@ -51,6 +49,14 @@ CATEGORY_SEVERITY: dict[str, str] = {
 # libcamera prefixes each line with a level word (e.g. "... ERROR RPI ...").
 _LEVEL_RE = re.compile(r"\b(ERROR|FATAL|WARN(?:ING)?)\b")
 
+# Own records, as _setup_logging formats them: "HH:MM:SS LEVEL name: message".
+_APP_LEVEL_RE = re.compile(r"^\d\d:\d\d:\d\d (DEBUG|INFO|WARNING|ERROR|CRITICAL) ")
+
+# journald parses a leading <N>. Syslog: 2 crit, 3 err, 4 warning, 6 info, 7 debug.
+_APP_PRIORITY = {"CRITICAL": 2, "ERROR": 3, "WARNING": 4, "INFO": 6, "DEBUG": 7}
+_SEVERITY_PRIORITY = {"error": 3, "warning": 4}
+_INFO_PRIORITY = 6
+
 
 def severity_for(line: str, category: str) -> str:
     """'error' or 'warning' for a line, from libcamera's level word or category default."""
@@ -77,6 +83,30 @@ class LogClassifier:
         if cat is None:
             return None, None
         return cat, severity_for(line, cat)
+
+
+def journal_priority(line: str, classifier: LogClassifier) -> int:
+    """Syslog priority for a captured line, own records first then camera stack.
+
+    Anything else stays info, so compositor noise cannot flood journalctl -p err.
+    """
+    m = _APP_LEVEL_RE.match(line)
+    if m:
+        return _APP_PRIORITY[m.group(1)]
+    _cat, sev = classifier.classify_with_severity(line)
+    return _SEVERITY_PRIORITY.get(sev or "", _INFO_PRIORITY)
+
+
+def prefix_lines(buf: bytes, classifier: LogClassifier) -> tuple[bytes, list[str], bytes]:
+    """Take complete lines off buf: journald bytes with priorities, lines, remainder."""
+    out = bytearray()
+    lines: list[str] = []
+    while b"\n" in buf:
+        raw, buf = buf.split(b"\n", 1)
+        line = raw.decode("utf-8", "replace")
+        out += b"<%d>" % journal_priority(line, classifier) + raw + b"\n"
+        lines.append(line)
+    return bytes(out), lines, buf
 
 
 @dataclass
@@ -109,12 +139,13 @@ class NullCapture(QtCore.QObject):
 
 
 class StderrCapture(QtCore.QObject):
-    """Splices fd 2 onto a pipe, emits each captured line, mirrors to real stderr."""
+    """Splices fd 2 onto a pipe, emits each line, mirrors it with a priority prefix."""
 
     line_received = Signal(str)
 
-    def __init__(self, parent=None):
+    def __init__(self, classifier: LogClassifier, parent=None):
         super().__init__(parent)
+        self._classifier = classifier
         self._orig_fd = os.dup(2)
         r, w = os.pipe()
         os.dup2(w, 2)
@@ -131,14 +162,22 @@ class StderrCapture(QtCore.QObject):
                 chunk = os.read(self._read_fd, 4096)
                 if not chunk:
                     break
-                try:  # keep journald copy
-                    os.write(self._orig_fd, chunk)
-                except OSError:
-                    pass
-                buf += chunk
-                while b"\n" in buf:
-                    raw, buf = buf.split(b"\n", 1)
-                    self.line_received.emit(raw.decode("utf-8", "replace"))
+                out, lines, buf = prefix_lines(buf + chunk, self._classifier)
+                self._mirror(out)
+                for line in lines:
+                    self.line_received.emit(line)
+        except OSError:
+            pass
+        if buf:  # unterminated tail still belongs in the journal
+            out, _lines, _rest = prefix_lines(buf + b"\n", self._classifier)
+            self._mirror(out)
+
+    def _mirror(self, data: bytes) -> None:
+        """Copy to the real stderr, which is the journal stream under systemd."""
+        if not data:
+            return
+        try:
+            os.write(self._orig_fd, data)
         except OSError:
             pass
 
