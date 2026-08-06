@@ -5,9 +5,17 @@
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 
-from camlab.integrity import LogClassifier, journal_priority, mirror_lines
+from camlab.integrity import (
+    LOG_DATEFMT,
+    LOG_FORMAT,
+    LogClassifier,
+    journal_priority,
+    mirror_lines,
+)
 
 
 @pytest.fixture
@@ -42,6 +50,13 @@ def test_camera_stack_warning_maps_to_warning(classifier):
 )
 def test_foreign_line_stays_info(classifier, line):
     assert journal_priority(line, classifier) == 6
+
+
+def test_priority_follows_the_real_formatter(classifier):
+    """Catches a LOG_FORMAT change that stops _APP_LEVEL_RE matching own records."""
+    record = logging.LogRecord("camlab.camera", logging.ERROR, __file__, 1, "boom", None, None)
+    line = logging.Formatter(LOG_FORMAT, LOG_DATEFMT).format(record)
+    assert journal_priority(line, classifier) == 3
 
 
 def test_every_line_gets_prefix(classifier):
