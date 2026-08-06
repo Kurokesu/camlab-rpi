@@ -7,7 +7,10 @@ Kernel logo only reaches firmware framebuffer. DRM fbdevs register after boot
 logo data is freed, so fbcon leaves them black. udev starts camlab-splash@fbN
 when fbdev appears. Logo centered, border filled from top-left pixel.
 
-Usage: fbsplash.py /dev/fbN [logo.tga]
+--progress adds a bar under the logo, repainted per step by camlab.updater on an
+update boot, where no compositor runs yet.
+
+Usage: fbsplash.py /dev/fbN [logo.tga] [--progress 0..1]
 """
 
 import sys
@@ -16,6 +19,7 @@ from pathlib import Path
 import numpy as np
 
 LOGO = "/lib/firmware/logo.tga"
+BAR_COLOR = (202, 32, 49)  # Kurokesu red
 
 
 def load_tga(path: str) -> np.ndarray:
@@ -44,6 +48,17 @@ def compose(logo: np.ndarray, width: int, height: int) -> np.ndarray:
     return canvas
 
 
+def draw_bar(canvas: np.ndarray, fraction: float) -> None:
+    """Outline a bar under the logo and fill it left to right, in place."""
+    height, width = canvas.shape[:2]
+    bar_w, bar_h = width // 3, max(8, height // 60)
+    x, y = (width - bar_w) // 2, min(int(height * 0.78), height - bar_h)
+    canvas[y : y + bar_h, x : x + bar_w] = BAR_COLOR
+    inner = canvas[y + 2 : y + bar_h - 2, x + 2 : x + bar_w - 2]
+    inner[:] = canvas[0, 0]
+    inner[:, : int(inner.shape[1] * min(max(fraction, 0.0), 1.0))] = BAR_COLOR
+
+
 def pack(canvas: np.ndarray, bpp: int) -> bytes:
     """RGB canvas to fbdev pixel bytes (XRGB8888 or RGB565)."""
     if bpp == 32:
@@ -59,15 +74,24 @@ def pack(canvas: np.ndarray, bpp: int) -> bytes:
 
 
 def main() -> None:
-    fbdev = sys.argv[1]
-    logo = load_tga(sys.argv[2] if len(sys.argv) > 2 else LOGO)
+    args = sys.argv[1:]
+    fraction = None
+    if "--progress" in args:
+        i = args.index("--progress")
+        fraction = float(args[i + 1])
+        del args[i : i + 2]
+    fbdev = args[0]
+    logo = load_tga(args[1] if len(args) > 1 else LOGO)
 
     sys_dir = Path("/sys/class/graphics") / Path(fbdev).name
     width, height = map(int, (sys_dir / "virtual_size").read_text().split(","))
     bpp = int((sys_dir / "bits_per_pixel").read_text())
     stride = int((sys_dir / "stride").read_text())
 
-    data = pack(compose(logo, width, height), bpp)
+    canvas = compose(logo, width, height)
+    if fraction is not None:
+        draw_bar(canvas, fraction)
+    data = pack(canvas, bpp)
     row_len = width * bpp // 8
     with open(fbdev, "wb") as fb:
         if stride == row_len:
