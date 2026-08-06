@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Installed by update.sh. Runs on the boot camlab-update apply armed, and only then.
+# Relock and reboot sit in ExecStopPost, so a killed run still leaves a locked box.
+
+[Unit]
+Description=camlab offline update
+ConditionPathExists=/var/lib/camlab/plan.json
+RequiresMountsFor=/var/lib/camlab /boot/firmware
+After=network.target
+Before=camlab.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/camlab-update run
+ExecStopPost=/usr/local/bin/camlab-update relock
+ExecStopPost=/usr/bin/systemctl reboot
+# DKMS rebuilds every sensor module against the running kernel.
+TimeoutStartSec=30min
+
+[Install]
+WantedBy=multi-user.target
