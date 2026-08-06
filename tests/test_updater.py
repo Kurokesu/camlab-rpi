@@ -771,3 +771,53 @@ class TestCli:
         updater.write_state({"version": 1, "last_run": {"error": "no dns"}})
         updater._main(["check"])
         assert updater.read_state()["last_run"] == {"error": "no dns"}
+
+
+class TestGuiHelpers:
+    """What the updates card reads and runs. The card itself stays free of logic."""
+
+    def _component(self, packages: list[dict]) -> dict:
+        return {"id": "stack", "label": "camera stack", "pending": False, "packages": packages}
+
+    def test_single_package_shows_its_version(self):
+        component = self._component([{"name": "camlab", "installed": "1.0.0", "pending": ""}])
+        assert updater.component_summary(component) == ("1.0.0", "")
+
+    def test_single_package_shows_what_it_moves_to(self):
+        component = self._component([{"name": "camlab", "installed": "1.0.0", "pending": "1.0.1"}])
+        assert updater.component_summary(component) == ("1.0.0", "1.0.1")
+
+    def test_many_packages_count_instead_of_listing(self):
+        component = self._component(
+            [
+                {"name": "libcamera0.7", "installed": "0.7.1", "pending": "0.7.2"},
+                {"name": "python3-picamera2", "installed": "0.3.31", "pending": "0.3.32"},
+                {"name": "libcamera-tools", "installed": "0.7.1", "pending": ""},
+            ]
+        )
+        assert updater.component_summary(component) == ("3 packages", "2 updates")
+
+    def test_pending_ids_are_what_the_card_offers(self):
+        state = {
+            "components": [
+                {"id": "app", "pending": True},
+                {"id": "driver:ar0234", "pending": False},
+                {"id": "stack", "pending": True},
+            ]
+        }
+        assert updater.pending_ids(state) == ["app", "stack"]
+
+    def test_never_checked_offers_nothing(self):
+        assert updater.pending_ids({}) == []
+
+    def test_commands_go_through_the_shim_sudoers_names(self):
+        assert updater.check_command() == ["sudo", updater.UPDATE_BIN, "check"]
+        assert updater.apply_command("driver:ar0234") == [
+            "sudo",
+            updater.UPDATE_BIN,
+            "apply",
+            "driver:ar0234",
+        ]
+
+    def test_apply_without_an_id_takes_everything_pending(self):
+        assert updater.apply_command() == ["sudo", updater.UPDATE_BIN, "apply"]
