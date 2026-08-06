@@ -20,8 +20,7 @@ from . import icons
 GLASS_BG = QtGui.QColor(24, 26, 32, 175)
 GLASS_BORDER = QtGui.QColor(70, 76, 90, 200)
 
-# Severity accents shared by log lines, filter segments and log button tint.
-# Mirrors the [sev=...] rules in the stylesheet below.
+# Severity accents, mirroring the [sev=...] rules in the stylesheet below.
 SEV_COLOR = {"error": "#e06c75", "warning": "#e5c07b"}
 
 

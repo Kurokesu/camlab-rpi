@@ -91,8 +91,7 @@ class LogPanel(QtWidgets.QWidget):
 
         self.view = QtWidgets.QTextEdit()
         self.view.setReadOnly(True)
-        # Read-only does not stop the document recording every programmatic
-        # edit as undo history, which grows without bound on a kiosk.
+        # Read-only still records undo history, which grows without bound here.
         self.view.setUndoRedoEnabled(False)
         self.view.setObjectName("logView")
         font = QtGui.QFont("monospace")
@@ -242,8 +241,7 @@ class LogPanel(QtWidgets.QWidget):
         self.view.clear()
         cur = QtGui.QTextCursor(self.view.document())
         cur.movePosition(QtGui.QTextCursor.MoveOperation.End)
-        # One edit block for the whole rebuild, so up to 2000 line inserts
-        # trigger a single relayout instead of one each.
+        # One edit block, so 2000 inserts relayout once instead of 2000 times.
         cur.beginEditBlock()
         try:
             for line, sev in self._buffer:

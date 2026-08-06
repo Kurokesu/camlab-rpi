@@ -64,8 +64,7 @@ def _glyph(name: str) -> str:
     return chr(cp)
 
 
-# Rendered once per (name, size, color). QPixmap/QIcon are implicitly shared,
-# so periodic callers (status ticks) can request freely without repainting.
+# Rendered once per key. QPixmap is shared, so callers can ask freely.
 _PIXMAP_CACHE: dict[tuple[str, int, str], QtGui.QPixmap] = {}
 _ICON_CACHE: dict[tuple[str, int, str], QtGui.QIcon] = {}
 

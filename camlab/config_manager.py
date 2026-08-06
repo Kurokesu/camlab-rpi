@@ -47,8 +47,7 @@ DISPLAY_END = "# <<< camlab display <<<"
 
 VALID_PORTS = ("cam0", "cam1")
 
-# One dtoverlay element (token or param). No whitespace or newlines, so shim
-# callers cannot smuggle extra config.txt directives into the root write.
+# No whitespace, so a shim caller cannot smuggle extra config.txt lines in.
 _SAFE_PART = re.compile(r"[A-Za-z0-9._=-]+")
 
 

@@ -739,8 +739,7 @@ class MainWindow(QtWidgets.QMainWindow):
             detail = str(exc)
             log.error("apply failed: %s", detail)
             if display_written:
-                # Camera write failed after display write, undo it so
-                # config.txt is never left half-applied.
+                # Camera write failed after the display one, undo to avoid a half-apply.
                 try:
                     self.config.apply_display(disp["overlay"])
                 except Exception:
