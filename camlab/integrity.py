@@ -97,14 +97,18 @@ def journal_priority(line: str, classifier: LogClassifier) -> int:
     return _SEVERITY_PRIORITY.get(sev or "", _INFO_PRIORITY)
 
 
-def prefix_lines(buf: bytes, classifier: LogClassifier) -> tuple[bytes, list[str], bytes]:
-    """Take complete lines off buf: journald bytes with priorities, lines, remainder."""
+def mirror_lines(
+    buf: bytes, classifier: LogClassifier, priorities: bool = True
+) -> tuple[bytes, list[str], bytes]:
+    """Take complete lines off buf: bytes for the mirror, decoded lines, remainder."""
     out = bytearray()
     lines: list[str] = []
     while b"\n" in buf:
         raw, buf = buf.split(b"\n", 1)
         line = raw.decode("utf-8", "replace")
-        out += b"<%d>" % journal_priority(line, classifier) + raw + b"\n"
+        if priorities:
+            out += b"<%d>" % journal_priority(line, classifier)
+        out += raw + b"\n"
         lines.append(line)
     return bytes(out), lines, buf
 
@@ -147,6 +151,8 @@ class StderrCapture(QtCore.QObject):
         super().__init__(parent)
         self._classifier = classifier
         self._orig_fd = os.dup(2)
+        # journald consumes the <N> prefix, a terminal would just show it.
+        self._priorities = not os.isatty(self._orig_fd)
         r, w = os.pipe()
         os.dup2(w, 2)
         os.close(w)
@@ -162,14 +168,14 @@ class StderrCapture(QtCore.QObject):
                 chunk = os.read(self._read_fd, 4096)
                 if not chunk:
                     break
-                out, lines, buf = prefix_lines(buf + chunk, self._classifier)
+                out, lines, buf = mirror_lines(buf + chunk, self._classifier, self._priorities)
                 self._mirror(out)
                 for line in lines:
                     self.line_received.emit(line)
         except OSError:
             pass
         if buf:  # unterminated tail still belongs in the journal
-            out, _lines, _rest = prefix_lines(buf + b"\n", self._classifier)
+            out, _lines, _rest = mirror_lines(buf + b"\n", self._classifier, self._priorities)
             self._mirror(out)
 
     def _mirror(self, data: bytes) -> None:
