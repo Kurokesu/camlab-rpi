@@ -41,6 +41,7 @@ class UiProfile:
     checkbox_px: int
     row_margin: int  # controls row content margins
     row_spacing: int
+    divider_pad: int  # gap each side of a controls-row hairline
     sheet_title_w: int  # 0 = hug contents
     sheet_value_w: int
     zebra_slider_w: int
@@ -60,6 +61,7 @@ REGULAR = UiProfile(
     checkbox_px=20,
     row_margin=10,
     row_spacing=8,
+    divider_pad=6,
     sheet_title_w=110,
     sheet_value_w=80,
     zebra_slider_w=260,
@@ -81,6 +83,7 @@ COMPACT = UiProfile(
     checkbox_px=24,
     row_margin=6,
     row_spacing=4,
+    divider_pad=2,
     sheet_title_w=0,
     sheet_value_w=96,
     zebra_slider_w=170,

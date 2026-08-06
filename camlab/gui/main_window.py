@@ -168,6 +168,7 @@ class MainWindow(QtWidgets.QMainWindow):
         controls.setObjectName("controls")
         crow = QtWidgets.QHBoxLayout(controls)
         self._crow = crow
+        self._divider_pads: list[QtWidgets.QSpacerItem] = []
         px = self._profile.icon_px
         self.sensor_btn = QtWidgets.QPushButton()
         self.sensor_btn.clicked.connect(self._choose_sensor)
@@ -216,27 +217,38 @@ class MainWindow(QtWidgets.QMainWindow):
         # Sensor and Mode read as one group, so no divider between.
         crow.addWidget(self.sensor_btn)
         crow.addWidget(self.mode_btn)
-        crow.addSpacing(6)
-        crow.addWidget(vline())
-        crow.addSpacing(6)
+        self._add_divider(vline())
         for btn in self._ctrl_buttons.values():
             crow.addWidget(btn)
         crow.addWidget(self.monitor_btn)
         # Stretch splits evenly around divider, keeping it centred in gap.
         self._mid_divider = vline()
         crow.addStretch(1)
-        crow.addSpacing(6)
-        crow.addWidget(self._mid_divider)
-        crow.addSpacing(6)
+        self._add_divider(self._mid_divider)
         crow.addStretch(1)
         crow.addWidget(self.settings_btn)
         crow.addWidget(self.log_btn)
-        crow.addSpacing(6)
-        crow.addWidget(vline())
-        crow.addSpacing(6)
+        self._add_divider(vline())
         crow.addWidget(self.shutdown_btn)
         self._apply_row_metrics()
         return controls
+
+    def _add_divider(self, divider: QtWidgets.QFrame) -> None:
+        """Hairline plus its padding, tracked so a profile flip can retune the gap."""
+        pads = (self._pad_item(), self._pad_item())
+        self._crow.addItem(pads[0])
+        self._crow.addWidget(divider)
+        self._crow.addItem(pads[1])
+        self._divider_pads.extend(pads)
+
+    @staticmethod
+    def _pad_item() -> QtWidgets.QSpacerItem:
+        return QtWidgets.QSpacerItem(
+            0,
+            0,
+            QtWidgets.QSizePolicy.Policy.Fixed,
+            QtWidgets.QSizePolicy.Policy.Minimum,
+        )
 
     def _build_shortcuts(self) -> None:
         # Window shortcuts fire regardless of child focus, cover main screen and modal overlay.
@@ -329,6 +341,12 @@ class MainWindow(QtWidgets.QMainWindow):
         m = self._profile.row_margin
         self._crow.setContentsMargins(m, 6, m, 6)
         self._crow.setSpacing(self._profile.row_spacing)
+        pad = self._profile.divider_pad
+        for item in self._divider_pads:
+            item.changeSize(
+                pad, 0, QtWidgets.QSizePolicy.Policy.Fixed, QtWidgets.QSizePolicy.Policy.Minimum
+            )
+        self._crow.invalidate()
         self._mid_divider.setVisible(self._profile.compact)
 
     def _refresh_sensor_status(self) -> None:
