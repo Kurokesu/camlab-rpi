@@ -38,7 +38,6 @@ done
 require_root
 
 FW_DIR="${CAMLAB_FW_DIR:-/boot/firmware}"
-CONFIG_TXT="$FW_DIR/config.txt"
 CMDLINE_TXT="$FW_DIR/cmdline.txt"
 DATA_IMG="$FW_DIR/camlab-data.img"
 DATA_MNT="/var/lib/camlab"
@@ -136,7 +135,6 @@ stage_overlay() {
     if [ "$REVERT" -eq 1 ]; then
         [ -f "$OVERLAY_CONF" ] && { rm -f "$OVERLAY_CONF"; log "removed $OVERLAY_CONF"; }
         [ -f "$REMOUNT_DROPIN" ] && { rm -f "$REMOUNT_DROPIN"; log "removed $REMOUNT_DROPIN"; }
-        block_strip "$CONFIG_TXT" "$BEGIN" "$END"
         # Drop disable token so revert leaves cmdline as-is.
         cmdline_remove "$CMDLINE_TXT" "overlayroot=disabled"
         update-initramfs -u >/dev/null 2>&1 || true
@@ -153,10 +151,6 @@ stage_overlay() {
     atomic_write "$REMOUNT_DROPIN" \
         '[Manager]'$'\n''DefaultEnvironment="LIBMOUNT_FORCE_MOUNT2=always"'$'\n'
     log "wrote $REMOUNT_DROPIN (legacy mount API for remount-fs)"
-
-    # auto_initramfs=1: firmware loads initramfs with overlay hook.
-    block_write "$CONFIG_TXT" "$BEGIN" "$END" "auto_initramfs=1"
-    log "config.txt: enabled auto_initramfs"
 
     # Stage overlay disabled for writable settle-boot. Finaliser clears token and reboots.
     if ! cmdline_has "$CMDLINE_TXT" "overlayroot=disabled"; then
