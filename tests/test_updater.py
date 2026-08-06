@@ -49,6 +49,18 @@ camlab:
 """
 
 
+def fake_resolve(ident: str, registry: SensorRegistry | None = None) -> Component:
+    """Stand in for registry lookups, one package named after the component."""
+    return Component(ident, ident, (f"{ident}-pkg",))
+
+
+def raiser(message: str):
+    def fail(*args, **kwargs):
+        raise UpdateError(message)
+
+    return fail
+
+
 @pytest.fixture(autouse=True)
 def pinned_archive(monkeypatch: pytest.MonkeyPatch) -> None:
     """Archive URL is read from the environment at import, pin it for tests."""
@@ -107,6 +119,12 @@ class TestPolicy:
         policy(HAND_INSTALLED)
         assert not updater.package_states(["camlab"])["camlab"].from_archive
 
+    def test_staging_archive_on_disk_counts(self, policy, monkeypatch):
+        """apt prints file: URLs with one slash, validation runs against such an archive."""
+        monkeypatch.setattr(updater, "ARCHIVE_URL", "file:///srv/camlab-staging")
+        policy(FROM_ARCHIVE.replace("https://apt.kurokesu.com", "file:/srv/camlab-staging"))
+        assert updater.package_states(["camlab"])["camlab"].from_archive
+
     def test_newer_candidate_is_pending(self, policy):
         policy(FROM_ARCHIVE)
         assert updater.package_states(["camlab"])["camlab"].pending == "1.0.1"
@@ -140,6 +158,14 @@ class TestArchivePackages:
     def test_missing_index_reads_as_empty(self, tmp_path: Path, monkeypatch):
         monkeypatch.setattr(updater, "APT_LISTS", tmp_path / "gone")
         assert updater.archive_packages() == set()
+
+    def test_staging_archive_path_becomes_the_index_prefix(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setattr(updater, "APT_LISTS", tmp_path)
+        monkeypatch.setattr(updater, "ARCHIVE_URL", "file:///srv/camlab-staging")
+        (tmp_path / "_srv_camlab-staging_dists_trixie_main_binary-arm64_Packages").write_text(
+            "Package: camlab\nVersion: 1.0.0\n"
+        )
+        assert updater.archive_packages() == {"camlab"}
 
 
 class TestComponents:
@@ -210,6 +236,185 @@ class TestSurvey:
 
     def test_uninstalled_component_is_left_out(self, registry):
         assert "driver:imx585" not in [c["id"] for c in updater.survey(registry)["components"]]
+
+
+class TestCmdline:
+    @pytest.fixture(autouse=True)
+    def readonly_box(self, tmp_path: Path, monkeypatch) -> Path:
+        cmdline = tmp_path / "cmdline.txt"
+        cmdline.write_text("console=serial0,115200 root=PARTUUID=abc rootwait quiet\n")
+        monkeypatch.setattr(updater, "CMDLINE", cmdline)
+        monkeypatch.setattr(updater, "_boot_rw", lambda: None)
+        monkeypatch.setattr(updater, "OVERLAY_CONF", tmp_path / "overlayroot.local.conf")
+        (tmp_path / "overlayroot.local.conf").touch()
+        return cmdline
+
+    def test_unlock_appends_the_token(self, readonly_box: Path):
+        updater.unlock_next_boot()
+        assert readonly_box.read_text().split()[-1] == updater.WRITABLE
+
+    def test_unlock_twice_leaves_one_token(self, readonly_box: Path):
+        updater.unlock_next_boot()
+        updater.unlock_next_boot()
+        assert readonly_box.read_text().count(updater.WRITABLE) == 1
+
+    def test_relock_drops_it_and_keeps_the_rest(self, readonly_box: Path):
+        updater.unlock_next_boot()
+        updater.relock()
+        assert readonly_box.read_text().split() == [
+            "console=serial0,115200",
+            "root=PARTUUID=abc",
+            "rootwait",
+            "quiet",
+        ]
+
+    def test_relock_without_the_token_is_a_no_op(self, readonly_box: Path):
+        before = readonly_box.read_text().split()
+        updater.relock()
+        assert readonly_box.read_text().split() == before
+
+    def test_writable_box_keeps_cmdline_untouched(self, readonly_box: Path, monkeypatch):
+        """No overlay config means the root is already writable, nothing to flip."""
+        monkeypatch.setattr(updater, "OVERLAY_CONF", readonly_box.parent / "absent")
+        updater.unlock_next_boot()
+        assert updater.WRITABLE not in readonly_box.read_text()
+
+
+class TestArm:
+    @pytest.fixture(autouse=True)
+    def armable(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setenv("CAMLAB_UPDATE_FILE", str(tmp_path / "update.json"))
+        monkeypatch.setattr(updater, "OVERLAY_CONF", tmp_path / "absent")
+        monkeypatch.setattr(updater, "update_path", lambda states=None: "")
+        monkeypatch.setattr(updater, "resolve", fake_resolve)
+
+    def test_plan_records_the_ids(self):
+        updater.arm(["app", "driver:ar0234"])
+        assert updater.read_plan()["ids"] == ["app", "driver:ar0234"]
+
+    def test_arm_refuses_without_an_update_path(self, monkeypatch):
+        monkeypatch.setattr(updater, "update_path", lambda states=None: "tarball install")
+        with pytest.raises(UpdateError, match="tarball install"):
+            updater.arm(["app"])
+
+    def test_disarm_clears_the_plan(self):
+        updater.arm(["app"])
+        updater.disarm()
+        assert updater.read_plan() == {}
+
+
+class TestRun:
+    @pytest.fixture(autouse=True)
+    def update_boot(self, tmp_path: Path, monkeypatch):
+        """An armed box with apt, converge and the framebuffer stubbed out."""
+        monkeypatch.setenv("CAMLAB_UPDATE_FILE", str(tmp_path / "update.json"))
+        monkeypatch.setattr(updater, "OVERLAY_CONF", tmp_path / "absent")
+        monkeypatch.setattr(updater, "FBSPLASH", tmp_path / "absent")
+        monkeypatch.setattr(updater, "resolve", fake_resolve)
+        monkeypatch.setattr(updater.os, "access", lambda path, mode: True)
+        monkeypatch.setattr(updater, "_refresh_with_retry", lambda: None)
+        monkeypatch.setattr(updater, "converge", lambda: True)
+        monkeypatch.setattr(updater, "survey", lambda reg=None: {"version": 1, "components": []})
+        self.installed = []
+        monkeypatch.setattr(updater, "_install", lambda packages: self.installed.append(packages))
+
+    def arm(self, attempts: int = 0) -> None:
+        plan = {"version": 1, "ids": ["app"], "attempts": attempts, "armed": "now"}
+        updater.write_state(plan, updater.plan_file())
+
+    def test_installs_what_the_plan_names(self):
+        self.arm()
+        assert updater.run() == ""
+        assert self.installed == [["app-pkg"]]
+
+    def test_success_disarms(self):
+        self.arm()
+        updater.run()
+        assert updater.read_plan() == {}
+
+    def test_failure_disarms_and_is_recorded(self, monkeypatch):
+        self.arm()
+        monkeypatch.setattr(updater, "_refresh_with_retry", raiser("no dns"))
+        assert updater.run() == "no dns"
+        assert updater.read_plan() == {}
+        assert updater.read_state()["last_run"]["error"] == "no dns"
+
+    def test_last_attempt_gives_up_without_installing(self):
+        """A power cut counted an attempt, so this boot stops instead of retrying forever."""
+        self.arm(attempts=updater.MAX_ATTEMPTS)
+        assert "did not finish" in updater.run()
+        assert self.installed == []
+
+    def test_attempt_is_counted_before_the_work(self, monkeypatch):
+        seen = []
+        monkeypatch.setattr(
+            updater, "_install", lambda packages: seen.append(updater.read_plan()["attempts"])
+        )
+        self.arm()
+        updater.run()
+        assert seen == [1]
+
+    def test_unarmed_boot_does_nothing(self):
+        assert updater.run() == ""
+        assert self.installed == []
+
+    def test_read_only_root_stops_before_apt(self, monkeypatch):
+        """The cmdline flip did not take, so this boot cannot install anything."""
+        self.arm()
+        monkeypatch.setattr(updater.os, "access", lambda path, mode: False)
+        assert "read-only" in updater.run()
+        assert self.installed == []
+
+
+class TestRefreshRetry:
+    def test_keeps_trying_while_the_network_settles(self, monkeypatch):
+        calls = []
+
+        def flaky() -> None:
+            calls.append(1)
+            if len(calls) < 3:
+                raise UpdateError("temporary failure resolving")
+
+        monkeypatch.setattr(updater, "refresh", flaky)
+        updater._refresh_with_retry(tries=5, delay=0)
+        assert len(calls) == 3
+
+    def test_gives_up_with_apt_own_reason(self, monkeypatch):
+        monkeypatch.setattr(updater, "refresh", raiser("could not resolve host"))
+        with pytest.raises(UpdateError, match="could not resolve host"):
+            updater._refresh_with_retry(tries=2, delay=0)
+
+
+class TestConverge:
+    @pytest.fixture(autouse=True)
+    def setup_tree(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setattr(updater, "CONVERGED", tmp_path / "converged")
+        monkeypatch.setattr(updater, "SETUP_DIR", tmp_path / "setup")
+        monkeypatch.setattr(updater, "installed_version", lambda package: "1.0.1")
+        self.ran: list[str] = []
+        monkeypatch.setattr(updater, "_run_logged", lambda cmd, env=None: self.ran.append(cmd[0]))
+
+    def test_runs_the_wiring_scripts_when_the_version_moved(self, tmp_path: Path):
+        (tmp_path / "converged").write_text("1.0.0\n")
+        assert updater.converge()
+        assert [Path(c).name for c in self.ran] == [s[0] for s in updater.CONVERGE_SCRIPTS]
+
+    def test_first_update_converges(self):
+        assert updater.converge()
+
+    def test_same_version_skips(self, tmp_path: Path):
+        (tmp_path / "converged").write_text("1.0.1\n")
+        assert not updater.converge()
+        assert self.ran == []
+
+    def test_marker_records_the_new_version(self, tmp_path: Path):
+        updater.converge()
+        assert (tmp_path / "converged").read_text().strip() == "1.0.1"
+
+    def test_operator_owned_scripts_stay_out(self):
+        """config.sh writes the sensor block, drivers/deps install packages."""
+        names = [s[0] for s in updater.CONVERGE_SCRIPTS]
+        assert not {"config.sh", "display.sh", "deps.sh", "drivers.sh", "readonly.sh"} & set(names)
 
 
 class TestStateFile:

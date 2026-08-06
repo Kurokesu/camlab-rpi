@@ -3,23 +3,25 @@
 
 """Updater - resolves update components to Kurokesu archive packages.
 
-Component ids the GUI asks about, mapped to package names here so the
-privileged shim never takes a package name from its caller:
+Component ids map to package names here, so the shim never takes a package
+name from its caller:
 
     app             camlab
     driver:<name>   driver_package from data/sensors.yaml
     stack           installed archive packages that are neither of the above
 
-Updates exist only where camlab itself came from the archive, so tarball
-installs and forks get no update path (update_path()).
+Only a camlab that came from the archive gets updates, so tarball installs and
+forks get none (update_path()).
 
-Surveying is unprivileged. Refreshing the archive index needs root via the
-sudo shim (deploy/camlab-sudoers):
+Surveying is unprivileged. Installing needs root via the sudo shim
+(deploy/camlab-sudoers):
 
     sudo /usr/local/bin/camlab-update check
+    sudo /usr/local/bin/camlab-update apply driver ar0234
 
-check stamps /var/lib/camlab/update.json, on the data partition so the record
-survives the read-only root.
+apply writes a plan and flips the next boot writable, where
+camlab-update.service installs, reapplies setup wiring, relocks and reboots.
+Plan and record live on /var/lib/camlab, which survives the read-only root.
 """
 
 from __future__ import annotations
@@ -30,6 +32,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -45,6 +48,30 @@ APT_LISTS = Path(os.environ.get("CAMLAB_APT_LISTS", "/var/lib/apt/lists"))
 
 APP_PACKAGE = "camlab"
 
+FW_DIR = Path(os.environ.get("CAMLAB_FW_DIR", "/boot/firmware"))
+CMDLINE = FW_DIR / "cmdline.txt"
+OVERLAY_CONF = Path(os.environ.get("CAMLAB_OVERLAY_CONF", "/etc/overlayroot.local.conf"))
+# Present boots writable, absent boots read-only. Same token camlabctl rw uses.
+WRITABLE = "overlayroot=disabled"
+
+APP_DIR = Path(__file__).resolve().parent.parent
+SETUP_DIR = APP_DIR / "scripts" / "setup"
+# Version setup last converged for. Root fs, so a reflash resets it.
+CONVERGED = Path(os.environ.get("CAMLAB_CONVERGED_FILE", "/var/lib/camlab-setup/converged"))
+# Wiring only, so an update boot never rewrites an operator choice or moves a package.
+CONVERGE_SCRIPTS = (
+    ("journald.sh",),
+    ("boot.sh",),
+    ("splash.sh",),
+    ("update.sh",),
+    ("service.sh", "--enable"),
+)
+
+FBSPLASH = Path(os.environ.get("CAMLAB_FBSPLASH", "/usr/local/lib/camlab/fbsplash.py"))
+
+# A power cut mid-update retries once, then the update gives up.
+MAX_ATTEMPTS = 2
+
 _STATE_VERSION = 1
 
 
@@ -52,13 +79,24 @@ class UpdateError(Exception):
     pass
 
 
-def _run(cmd: list[str]) -> str:
+def _run(cmd: list[str], env: dict[str, str] | None = None) -> str:
     """Stdout of cmd. Failure raises with the tool's own last line as reason."""
-    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    proc = subprocess.run(cmd, capture_output=True, text=True, check=False, env=env)
     if proc.returncode != 0:
         lines = (proc.stderr or proc.stdout).strip().splitlines()
         raise UpdateError(lines[-1] if lines else f"{cmd[0]} exited {proc.returncode}")
     return proc.stdout
+
+
+def _run_logged(cmd: list[str], env: dict[str, str] | None = None) -> None:
+    """Like _run but output goes to the journal, for the long steps of an update boot."""
+    proc = subprocess.run(cmd, check=False, env=env)
+    if proc.returncode != 0:
+        raise UpdateError(f"{Path(cmd[0]).name} failed (exit {proc.returncode}), see the journal")
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 def _newer(candidate: str, installed: str) -> bool:
@@ -68,9 +106,14 @@ def _newer(candidate: str, installed: str) -> bool:
 
 
 # package inventory
+def _archive_key() -> str:
+    """Archive URL without its scheme, the form apt uses for index names and policy rows."""
+    return ARCHIVE_URL.split("://", 1)[-1].rstrip("/")
+
+
 def archive_packages() -> set[str]:
     """Package names the archive serves, read from apt's cached index."""
-    prefix = ARCHIVE_URL.split("://", 1)[-1].rstrip("/").replace("/", "_")
+    prefix = _archive_key().replace("/", "_")
     names: set[str] = set()
     for path in APT_LISTS.glob(f"{prefix}*_Packages"):
         for line in path.read_text(errors="replace").splitlines():
@@ -96,20 +139,7 @@ class PackageState:
 
 
 def _parse_policy(text: str) -> dict[str, dict]:
-    """Split apt-cache policy output into {package: {installed, candidate, sites}}.
-
-    sites maps a version to the origins offering it, which tells an archive
-    version apart from one dpkg holds alone:
-
-        camlab:
-          Installed: 1.0.0
-          Candidate: 1.0.1
-          Version table:
-             1.0.1 500
-                500 https://apt.kurokesu.com trixie/main arm64 Packages
-         *** 1.0.0 100
-                100 /var/lib/dpkg/status
-    """
+    """apt-cache policy output as {package: {installed, candidate, sites per version}}."""
     out: dict[str, dict] = {}
     entry: dict | None = None
     version = ""
@@ -142,6 +172,7 @@ def package_states(names: Sequence[str]) -> dict[str, PackageState]:
     """Installed and offered versions for names apt knows about."""
     if not names:
         return {}
+    key = _archive_key()
     states = {}
     for name, raw in _parse_policy(_run(["apt-cache", "policy", *names])).items():
         installed, candidate = raw["installed"], raw["candidate"]
@@ -151,7 +182,7 @@ def package_states(names: Sequence[str]) -> dict[str, PackageState]:
             name=name,
             installed=installed,
             candidate=candidate,
-            from_archive=any(ARCHIVE_URL in site for site in sites),
+            from_archive=any(key in site for site in sites),
             pending=pending,
         )
     return states
@@ -172,8 +203,7 @@ def components(registry: SensorRegistry | None = None) -> list[Component]:
     out = [Component("app", APP_PACKAGE, (APP_PACKAGE,))]
     for overlay, package in sorted(drivers.items()):
         out.append(Component(f"driver:{overlay}", f"{overlay} driver", (package,)))
-    # Whatever else the archive supplies, so a renamed libcamera soname or a
-    # new stack package needs no edit here.
+    # Everything else the archive serves, so a libcamera soname bump needs no edit here.
     rest = sorted(
         (archive_packages() & installed_packages()) - {APP_PACKAGE} - set(drivers.values())
     )
@@ -218,6 +248,173 @@ def refresh() -> None:
             "APT::Get::List-Cleanup=0",
         ]
     )
+
+
+# update boot
+def _boot_rw() -> None:
+    """The boot partition locks with the root, so lift it before writing cmdline."""
+    subprocess.run(["mount", "-o", "remount,rw", str(FW_DIR)], check=False)
+
+
+def _cmdline_set(token: str, present: bool) -> None:
+    """Add or drop one whole cmdline token, leaving the tokens other scripts own."""
+    if not CMDLINE.is_file():
+        raise UpdateError(f"{CMDLINE} missing")
+    _boot_rw()
+    tokens = [t for t in CMDLINE.read_text().split() if t != token]
+    if present:
+        tokens.append(token)
+    tmp = CMDLINE.with_suffix(CMDLINE.suffix + ".camlab-tmp")
+    try:
+        tmp.write_text(" ".join(tokens) + "\n")
+        os.replace(tmp, CMDLINE)
+    except OSError:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def unlock_next_boot() -> None:
+    """Next boot mounts the real root writable. A dev install already is."""
+    if OVERLAY_CONF.is_file():
+        _cmdline_set(WRITABLE, True)
+
+
+def relock() -> None:
+    """Drop the writable token. Every exit path out of an update boot calls this."""
+    if OVERLAY_CONF.is_file():
+        _cmdline_set(WRITABLE, False)
+
+
+def plan_file() -> Path:
+    return default_state_file().parent / "plan.json"
+
+
+def read_plan() -> dict:
+    try:
+        with open(plan_file(), "r") as f:
+            plan = json.load(f)
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(plan, dict) or plan.get("version") != _STATE_VERSION:
+        return {}
+    return plan
+
+
+def arm(ids: Sequence[str]) -> list[Component]:
+    """Record what to install and flip the next boot writable. A reboot applies it."""
+    blocked = update_path()
+    if blocked:
+        raise UpdateError(blocked)
+    chosen = [resolve(i) for i in ids]
+    _write_json(
+        plan_file(),
+        {
+            "version": _STATE_VERSION,
+            "ids": [c.id for c in chosen],
+            "attempts": 0,
+            "armed": _now(),
+        },
+    )
+    unlock_next_boot()
+    return chosen
+
+
+def disarm() -> None:
+    plan_file().unlink(missing_ok=True)
+
+
+def _paint(fraction: float) -> None:
+    """Progress bar on every framebuffer. A dark screen must not stop an update."""
+    if not FBSPLASH.is_file():
+        return
+    for fb in sorted(Path("/dev").glob("fb[0-9]*")):
+        subprocess.run(
+            [sys.executable, str(FBSPLASH), str(fb), "--progress", f"{fraction:.2f}"],
+            check=False,
+        )
+
+
+def _require_writable_root() -> None:
+    """Fail here rather than deep inside dpkg if the boot came up read-only anyway."""
+    if not os.access("/usr", os.W_OK):
+        raise UpdateError("root filesystem is read-only, cannot install")
+
+
+def _refresh_with_retry(tries: int = 6, delay: int = 10) -> None:
+    """Networking comes up alongside this boot, so give the archive a minute."""
+    for left in range(tries - 1, -1, -1):
+        try:
+            refresh()
+            return
+        except UpdateError:
+            if left == 0:
+                raise
+            time.sleep(delay)
+
+
+def _install(packages: Sequence[str]) -> None:
+    _run_logged(
+        ["apt-get", "install", "-y", "--only-upgrade", "--no-install-recommends", *packages],
+        env={**os.environ, "DEBIAN_FRONTEND": "noninteractive"},
+    )
+
+
+def installed_version(package: str) -> str:
+    return _run(["dpkg-query", "-W", "-f", "${Version}", package]).strip()
+
+
+def converge() -> bool:
+    """Reapply setup wiring when the app moved past the version it last ran for."""
+    version = installed_version(APP_PACKAGE)
+    if CONVERGED.is_file() and CONVERGED.read_text().strip() == version:
+        return False
+    for script in CONVERGE_SCRIPTS:
+        _run_logged([str(SETUP_DIR / script[0]), *script[1:]])
+    CONVERGED.parent.mkdir(parents=True, exist_ok=True)
+    CONVERGED.write_text(f"{version}\n")
+    return True
+
+
+def run() -> str:
+    """Body of an update boot. Disarms and relocks on every path, returns the failure."""
+    plan = read_plan()
+    if not plan:
+        return ""
+    ids = [str(i) for i in plan.get("ids", [])]
+    attempts = int(plan.get("attempts", 0)) + 1
+    error = ""
+    if attempts > MAX_ATTEMPTS:
+        error = f"update did not finish in {MAX_ATTEMPTS} boots"
+    else:
+        # Counted before the work, so a power cut counts as an attempt too.
+        _write_json(plan_file(), {**plan, "attempts": attempts})
+        try:
+            _paint(0.0)
+            _require_writable_root()
+            _refresh_with_retry()
+            _paint(0.25)
+            _install(sorted({p for i in ids for p in resolve(i).packages}))
+            _paint(0.5)
+            converge()
+            _paint(0.75)
+        except UpdateError as exc:
+            error = str(exc)
+    disarm()
+    relock()
+    _record_run(ids, error)
+    _paint(1.0)
+    return error
+
+
+def _record_run(ids: Sequence[str], error: str) -> None:
+    """Leave the outcome where the GUI finds it after the reboot."""
+    try:
+        state = survey()
+    except UpdateError:
+        state = {"version": _STATE_VERSION, "blocked": "", "components": []}
+    state["checked"] = _now()
+    state["last_run"] = {"finished": _now(), "components": list(ids), "error": error}
+    write_state(state)
 
 
 # survey and state file
@@ -274,15 +471,19 @@ def read_state(path: Path | None = None) -> dict:
 
 
 def write_state(data: dict, path: Path | None = None) -> None:
-    path = path or default_state_file()
+    _write_json(path or default_state_file(), data)
+
+
+def _write_json(path: Path, data: dict) -> None:
+    """Atomic and world readable, root writes these and the GUI user reads them."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".update-", suffix=".json")
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".camlab-", suffix=".json")
     try:
         with os.fdopen(fd, "w") as f:
             json.dump(data, f, indent=2)
             f.flush()
             os.fsync(f.fileno())
-        os.chmod(tmp, 0o644)  # root writes it, the GUI user reads it
+        os.chmod(tmp, 0o644)
         os.replace(tmp, path)
     finally:
         if os.path.exists(tmp):
@@ -303,6 +504,11 @@ def _main(argv: list[str] | None = None) -> int:
     sub.add_parser("check", help="refresh the archive index and stamp the state file (root)")
     p_show = sub.add_parser("show", help="print the packages a component id resolves to")
     p_show.add_argument("component", nargs="+", help="component id, e.g. app or driver ar0234")
+    p_apply = sub.add_parser("apply", help="arm an update boot and reboot into it (root)")
+    p_apply.add_argument("component", nargs="*", help="component id, default everything pending")
+    p_apply.add_argument("--no-reboot", action="store_true", help="arm only, reboot by hand")
+    sub.add_parser("run", help="install the armed plan, for the update boot only (root)")
+    sub.add_parser("relock", help="drop the writable boot token (root)")
     args = ap.parse_args(argv)
 
     if args.cmd == "status":
@@ -316,13 +522,43 @@ def _main(argv: list[str] | None = None) -> int:
         if not _require_root(args.cmd):
             return 2
         refresh()
-        state = {**survey(), "checked": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+        state = {**survey(), "checked": _now()}
         write_state(state)
         if state["blocked"]:
             print(f"no update path: {state['blocked']}")
             return 0
         pending = [c["label"] for c in state["components"] if c["pending"]]
         print(f"updates available: {', '.join(pending)}" if pending else "everything up to date")
+        return 0
+    if args.cmd == "apply":
+        if not _require_root(args.cmd):
+            return 2
+        if args.component:
+            ids = [":".join(args.component)]
+        else:
+            ids = [c["id"] for c in survey()["components"] if c["pending"]]
+        if not ids:
+            print("nothing to update")
+            return 0
+        chosen = arm(ids)
+        print(f"armed: {', '.join(c.label for c in chosen)}")
+        if args.no_reboot:
+            print("reboot to run the update")
+            return 0
+        subprocess.run(["systemctl", "reboot"], check=False)
+        return 0
+    if args.cmd == "run":
+        if not _require_root(args.cmd):
+            return 2
+        error = run()
+        if error:
+            print(f"error: {error}", file=sys.stderr)
+            return 2
+        return 0
+    if args.cmd == "relock":
+        if not _require_root(args.cmd):
+            return 2
+        relock()
         return 0
     return 1
 
