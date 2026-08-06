@@ -29,7 +29,7 @@ Kiosk app for live preview and testing MIPI CSI camera modules on Raspberry Pi.
 
 ### Prepare Raspberry Pi
 
-Flash Raspberry Pi OS $\color{#CA2031}{\textsf{Lite}}$ (Trixie 64-bit) to an SD card using [Raspberry Pi Imager](https://www.raspberrypi.com/software/):
+Flash Raspberry Pi OS $\color{#CA2031}{\textbf{\textsf{Lite}}}$ (Trixie 64-bit) to an SD card using [Raspberry Pi Imager](https://www.raspberrypi.com/software/):
 
 - Select your Raspberry Pi device: **Raspberry Pi 5**
 - Choose operating system: **Raspberry Pi OS (other)** --> **Raspberry Pi OS Lite (64-bit)**
@@ -40,7 +40,7 @@ Flash Raspberry Pi OS $\color{#CA2031}{\textsf{Lite}}$ (Trixie 64-bit) to an SD 
 
 Connect and boot:
 
-- Connect your camera module to either CSI port (on CM5 use `CAM/DISP0`, see [CM5 IO board](#cm5-io-board))
+- Connect your camera module to either CSI port (CM5 needs extra steps, see [CM5 IO board](#cm5-io-board))
 - Attach HDMI display (1920×1080 recommended, other resolutions untested) or a DSI touch panel (see [Touch display](#touch-display))
 - Connect keyboard and/or mouse
 - Connect Ethernet, unless Wi-Fi was configured in Imager (install needs internet)
@@ -107,7 +107,7 @@ Install flow matches Pi 5, with these differences:
 
 - On eMMC variants, flash OS to eMMC using [usbboot](https://github.com/raspberrypi/usbboot). CM5 Lite boots from SD card as on Pi 5
 - Fit both J6 jumpers (route I2C to `CAM/DISP1`)
-- Connect camera to `CAM/DISP0` (`cam0` in **Select sensor**), optional touch panel to `CAM/DISP1`
+- Default wiring: camera on `CAM/DISP0` (`cam0` in **Select sensor**), optional touch panel on `CAM/DISP1`. Swap them with `--display vc4-kms-dsi-7inch,dsi0`
 
 ## Touch display
 
@@ -118,7 +118,7 @@ A DSI touch panel serves as both display and input device. Supported panels:
 Setup:
 
 - Pi 5: plug and play, firmware loads overlay and **Select sensor** shows touch display as auto-detected
-- CM5: pick it in **Select sensor** together with the sensor, one **Apply & Shutdown** covers both
+- CM5: pick it in **Select sensor** dialogue together with the sensor, one **Apply & Shutdown** covers both
 - CM5 without HDMI: install with `--display vc4-kms-dsi-7inch`, reboot and continue sensor selection on touch display
 
 ## Development
