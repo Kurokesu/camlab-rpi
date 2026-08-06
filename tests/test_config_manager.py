@@ -5,12 +5,13 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
 
 from camlab import config_manager
-from camlab.config_manager import ConfigError, ConfigManager
+from camlab.config_manager import ConfigError, ConfigManager, _run_privileged
 
 PANEL = "vc4-kms-dsi-7inch"
 
@@ -160,3 +161,29 @@ class TestPortArbitration:
         fake_drm({"DSI-1": "connected", "DSI-2": "connected"})
         with pytest.raises(ConfigError):
             cm.free_port()
+
+
+class TestWriteFailures:
+    """Paths that only run once something has already gone wrong."""
+
+    def test_failed_write_strands_no_temp_file(self, cm, monkeypatch):
+        cm.config_path.write_text("arm_boost=1\n")
+
+        def refuse(*_args):
+            raise OSError(30, "Read-only file system")
+
+        monkeypatch.setattr(config_manager.os, "replace", refuse)
+        with pytest.raises(OSError):
+            cm._rewrite_in_place("ar0234", "cam1", [])
+        assert list(cm.config_path.parent.glob("*.camlab-tmp")) == []
+        assert cm.config_path.read_text() == "arm_boost=1\n"
+
+    def test_helper_reason_reaches_caller(self, monkeypatch):
+        def fail(*_args, **_kwargs):
+            return subprocess.CompletedProcess(
+                args=[], returncode=2, stdout="", stderr="error: overlay 'imx999.dtbo' not found\n"
+            )
+
+        monkeypatch.setattr(config_manager.subprocess, "run", fail)
+        with pytest.raises(ConfigError, match=r"overlay 'imx999.dtbo' not found"):
+            _run_privileged(["sudo", "camlab-apply", "set"])
