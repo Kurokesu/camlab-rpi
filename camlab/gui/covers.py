@@ -10,7 +10,7 @@ compositor cannot strand black. Switch does not: oversized is mid-relayout.
 
 from __future__ import annotations
 
-from ..qt import QtCore, QtWidgets, Signal
+from ..qt import Qt, QtCore, QtWidgets, Signal
 
 
 def _screen_width(window: QtWidgets.QWidget) -> int | None:
@@ -23,8 +23,16 @@ class _Cover(QtWidgets.QWidget):
         super().__init__(host)
         self._host = host
         self._window = window
-        # Stylesheet, not palette fill: app-wide QSS backgrounds override palettes.
+        # Plain QWidget subclasses ignore QSS backgrounds without this attribute.
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet("background: #000;")
+
+    def _single_shot(self, ms: int, slot) -> QtCore.QTimer:
+        timer = QtCore.QTimer(self)
+        timer.setSingleShot(True)
+        timer.setInterval(ms)
+        timer.timeout.connect(slot)
+        return timer
 
 
 class BootCover(_Cover):
@@ -45,18 +53,12 @@ class BootCover(_Cover):
         # Show now so cover does not depend on construction order.
         self.show()
 
-        self._settle = QtCore.QTimer(self)
-        self._settle.setSingleShot(True)
-        self._settle.setInterval(self._SETTLE_MS)
-        self._settle.timeout.connect(self._reveal)
+        self._settle = self._single_shot(self._SETTLE_MS, self._reveal)
 
         # Cold boot can hold the fullscreen configure past the settle window,
         # so retry until it lands and reveal regardless after _MAX_TRIES.
         self._tries = 0
-        self._retry = QtCore.QTimer(self)
-        self._retry.setSingleShot(True)
-        self._retry.setInterval(self._RETRY_MS)
-        self._retry.timeout.connect(self._on_retry)
+        self._retry = self._single_shot(self._RETRY_MS, self._on_retry)
         self._retry.start()
 
     @property
@@ -105,16 +107,9 @@ class SwitchCover(_Cover):
         super().__init__(host, window)
         self.hide()
 
-        self._settle = QtCore.QTimer(self)
-        self._settle.setSingleShot(True)
-        self._settle.setInterval(self._SETTLE_MS)
-        self._settle.timeout.connect(self.lift)
-
+        self._settle = self._single_shot(self._SETTLE_MS, self.lift)
         # Never leave the operator on black because a resize never arrived.
-        self._timeout = QtCore.QTimer(self)
-        self._timeout.setSingleShot(True)
-        self._timeout.setInterval(self._TIMEOUT_MS)
-        self._timeout.timeout.connect(self.lift)
+        self._timeout = self._single_shot(self._TIMEOUT_MS, self.lift)
 
     def blank(self) -> None:
         self._settle.stop()
