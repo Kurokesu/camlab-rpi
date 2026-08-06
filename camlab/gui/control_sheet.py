@@ -100,7 +100,6 @@ def _jump_slider() -> JumpSlider:
 def _sheet_title(text: str) -> QtWidgets.QLabel:
     lbl = QtWidgets.QLabel(text)
     lbl.setObjectName("sheetTitle")
-    lbl.setMinimumWidth(110)  # one title column across all sheets
     return lbl
 
 
@@ -159,8 +158,6 @@ class ControlSheet(SheetCard):
 
         self.value_lbl = QtWidgets.QLabel("--")
         self.value_lbl.setObjectName("sheetValue")
-        # Fixed width so the row holds still as digits change.
-        self.value_lbl.setMinimumWidth(80)
         self.value_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
         row = QtWidgets.QHBoxLayout(self)
@@ -255,11 +252,8 @@ class ControlSheet(SheetCard):
 
 
 # Zebra clip-threshold span (percent of full scale), matching cinepi's
-# slider (0.7..1.0, default 0.95). Coarse control, so a short slider does.
+# slider (0.7..1.0, default 0.95).
 _ZEBRA_LO, _ZEBRA_HI, _ZEBRA_DEFAULT = 70, 100, 95
-_ZEBRA_SLIDER_W = 260
-
-_MONITOR_ICON_PX = 19
 
 
 class MonitorSheet(SheetCard):
@@ -272,16 +266,14 @@ class MonitorSheet(SheetCard):
 
         self.title_lbl = _sheet_title("Monitor")
 
-        self.peak_btn = QtWidgets.QPushButton(
-            icons.icon("center_focus_weak", _MONITOR_ICON_PX), " Focus Peaking"
-        )
-        self.zebra_btn = QtWidgets.QPushButton(icons.icon("texture", _MONITOR_ICON_PX), " Zebra")
+        # Icons come from apply_profile, rasterised at profile size.
+        self.peak_btn = QtWidgets.QPushButton(" Focus Peaking")
+        self.zebra_btn = QtWidgets.QPushButton(" Zebra")
         for btn in (self.peak_btn, self.zebra_btn):
             # Segment look (square corners) to match the Auto/Manual rows.
             # No pos property, so these stay visually separate toggles.
             btn.setObjectName("segment")
             btn.setCheckable(True)
-            btn.setIconSize(QtCore.QSize(_MONITOR_ICON_PX, _MONITOR_ICON_PX))
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setFocusPolicy(Qt.FocusPolicy.TabFocus)
             btn.toggled.connect(self._emit)
@@ -292,7 +284,6 @@ class MonitorSheet(SheetCard):
         self.slider = _jump_slider()
         self.slider.setRange(_ZEBRA_LO, _ZEBRA_HI)
         self.slider.setValue(_ZEBRA_DEFAULT)
-        self.slider.setFixedWidth(_ZEBRA_SLIDER_W)
         self.slider.valueChanged.connect(self._on_slider)
 
         self.value_lbl = QtWidgets.QLabel(f"{_ZEBRA_DEFAULT}%")
@@ -323,7 +314,8 @@ class MonitorSheet(SheetCard):
         self.title_lbl.setMinimumWidth(profile.sheet_title_w)
         self.slider.setFixedWidth(profile.zebra_slider_w)
         icon_px = profile.icon_px - 2
-        for btn in (self.peak_btn, self.zebra_btn):
+        for btn, name in ((self.peak_btn, "center_focus_weak"), (self.zebra_btn, "texture")):
+            btn.setIcon(icons.icon(name, icon_px))
             btn.setIconSize(QtCore.QSize(icon_px, icon_px))
 
     @property

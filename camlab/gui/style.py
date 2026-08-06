@@ -42,9 +42,9 @@ class UiProfile:
     row_margin: int  # controls row content margins
     row_spacing: int
     divider_pad: int  # gap each side of a controls-row hairline
-    sheet_title_w: int  # 0 = hug contents
-    sheet_value_w: int
-    zebra_slider_w: int
+    sheet_title_w: int  # one title column across sheets, 0 = hug contents
+    sheet_value_w: int  # pinned, so the row holds still as digits change
+    zebra_slider_w: int  # coarse control, a short slider does
 
 
 REGULAR = UiProfile(
