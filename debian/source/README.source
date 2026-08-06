@@ -77,3 +77,12 @@ modules cannot shadow packaged ones.
 
 The /usr/local/bin/camlabctl symlink stays install.sh-owned. Debian
 policy keeps packages out of /usr/local.
+
+Forks
+-----
+
+Updates only apply where the installed camlab came from the configured
+archive origin, so a git fork or a tarball install gets no update path.
+A fork wanting its own updates either renames the package, declaring
+Conflicts and Replaces on camlab since both own /opt/camlab, or serves
+camlab from its own archive.
