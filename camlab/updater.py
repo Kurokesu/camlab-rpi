@@ -48,6 +48,7 @@ APT_LISTS = Path(os.environ.get("CAMLAB_APT_LISTS", "/var/lib/apt/lists"))
 MOUNTS = Path(os.environ.get("CAMLAB_MOUNTS", "/proc/self/mounts"))
 
 APP_PACKAGE = "camlab"
+UPDATE_BIN = os.environ.get("CAMLAB_UPDATE_BIN", "/usr/local/bin/camlab-update")
 
 FW_DIR = Path(os.environ.get("CAMLAB_FW_DIR", "/boot/firmware"))
 CMDLINE = FW_DIR / "cmdline.txt"
@@ -639,6 +640,38 @@ def survey(registry: SensorRegistry | None = None) -> dict:
             }
         )
     return out
+
+
+def component_summary(component: dict) -> tuple[str, str]:
+    """(installed, available) row text for one surveyed component."""
+    packages = component.get("packages") or []
+    pending = [p["pending"] for p in packages if p.get("pending")]
+    installed = (packages[0].get("installed") or "-") if len(packages) == 1 else ""
+    if not installed:
+        installed = f"{len(packages)} packages"
+    if not pending:
+        return installed, ""
+    return installed, pending[0] if len(pending) == 1 else f"{len(pending)} updates"
+
+
+def pending_ids(state: dict) -> list[str]:
+    """Component ids with something to install, for the GUI to count or offer."""
+    return [c["id"] for c in state.get("components") or [] if c.get("pending")]
+
+
+def check_command() -> list[str]:
+    """Refresh and re-survey. One of two verbs sudoers grants the GUI user."""
+    return ["sudo", UPDATE_BIN, "check"]
+
+
+def apply_command(ident: str = "") -> list[str]:
+    """Arm an update boot for one component id, or everything pending when empty."""
+    return ["sudo", UPDATE_BIN, "apply"] + ([ident] if ident else [])
+
+
+def request_apply(ident: str = "") -> None:
+    """Arm through the shim and let it reboot. Raises UpdateError with apt's reason."""
+    _run(apply_command(ident))
 
 
 def default_state_file() -> Path:
