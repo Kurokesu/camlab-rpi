@@ -59,24 +59,18 @@ def compose(logo: np.ndarray, width: int, height: int) -> np.ndarray:
     return canvas
 
 
-def draw_bar(canvas: np.ndarray, box: tuple[int, int, int, int], fraction: float) -> int:
-    """Fill a thin bar under the logo, return its bottom edge."""
-    _, y, w, h = box
-    bar_w = int(w * 0.55)
-    bar_h = min(BAR_H, canvas.shape[0])
-    x = (canvas.shape[1] - bar_w) // 2
-    top = min(y + h + int(h * 0.3), canvas.shape[0] - bar_h)
-    canvas[top : top + bar_h, x : x + bar_w] = TRACK
-    canvas[top : top + bar_h, x : x + int(bar_w * min(max(fraction, 0.0), 1.0))] = INK
-    return top + bar_h
+def block_top(box: tuple[int, int, int, int]) -> int:
+    """Status block clears the wordmark by half its height."""
+    _, y, _, h = box
+    return y + h + h // 2
 
 
-def draw_label(canvas: np.ndarray, box: tuple[int, int, int, int], top: int, text: str) -> None:
-    """Status line centered under the bar, blended so glyph edges stay smooth."""
+def draw_label(canvas: np.ndarray, box: tuple[int, int, int, int], top: int, text: str) -> int:
+    """Status line centered at top, blended so glyph edges stay smooth. Returns its bottom."""
     size = max(10, int(box[3] * 0.2))
     mask = Image.new("L", canvas.shape[1::-1], 0)
     ImageDraw.Draw(mask).text(
-        (canvas.shape[1] // 2, top + size),
+        (canvas.shape[1] // 2, top),
         text,
         font=ImageFont.truetype(FONT, size),
         fill=255,
@@ -86,6 +80,17 @@ def draw_label(canvas: np.ndarray, box: tuple[int, int, int, int], top: int, tex
     np.copyto(
         canvas, (canvas * (1.0 - alpha) + np.asarray(INK, np.float32) * alpha).astype(np.uint8)
     )
+    return top + 2 * size
+
+
+def draw_bar(canvas: np.ndarray, box: tuple[int, int, int, int], top: int, fraction: float) -> None:
+    """Fill a thin bar at top, width taken from the wordmark."""
+    bar_w = int(box[2] * 0.55)
+    bar_h = min(BAR_H, canvas.shape[0])
+    x = (canvas.shape[1] - bar_w) // 2
+    top = min(top, canvas.shape[0] - bar_h)
+    canvas[top : top + bar_h, x : x + bar_w] = TRACK
+    canvas[top : top + bar_h, x : x + int(bar_w * min(max(fraction, 0.0), 1.0))] = INK
 
 
 def render(
@@ -95,9 +100,10 @@ def render(
     if fraction is None:
         return canvas
     box = place(logo, width, height)
-    bottom = draw_bar(canvas, box, fraction)
+    top = block_top(box)
     if label:
-        draw_label(canvas, box, bottom, label)
+        top = draw_label(canvas, box, top, label)
+    draw_bar(canvas, box, top, fraction)
     return canvas
 
 
