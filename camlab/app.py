@@ -65,8 +65,8 @@ def main(argv: list[str] | None = None) -> int:
     _setup_logging()
 
     # Splice stderr before libcamera/Picamera2 init so IPA child inherits it.
-    capture = NullCapture() if os.environ.get("CAMLAB_NO_CAPTURE") else StderrCapture()
     classifier = LogClassifier()
+    capture = NullCapture() if os.environ.get("CAMLAB_NO_CAPTURE") else StderrCapture(classifier)
 
     registry = SensorRegistry.load()
     panels = PanelRegistry.load()
