@@ -323,15 +323,54 @@ def disarm() -> None:
     plan_file().unlink(missing_ok=True)
 
 
-def _paint(fraction: float) -> None:
+def _paint(fraction: float, label: str) -> None:
     """Progress bar on every framebuffer. A dark screen must not stop an update."""
     if not FBSPLASH.is_file():
         return
     for fb in sorted(Path("/dev").glob("fb[0-9]*")):
         subprocess.run(
-            [sys.executable, str(FBSPLASH), str(fb), "--progress", f"{fraction:.2f}"],
+            [
+                sys.executable,
+                str(FBSPLASH),
+                str(fb),
+                "--progress",
+                f"{fraction:.2f}",
+                "--label",
+                label,
+            ],
             check=False,
         )
+
+
+class _Progress:
+    """Splash bar over a phase of the run, phase-local 0..1 mapped onto the whole bar.
+
+    Repaints only on visible movement, a paint costs a process per framebuffer.
+    """
+
+    STEP = 0.02
+
+    def __init__(self) -> None:
+        self._span = (0.0, 1.0)
+        self._label = ""
+        self._painted = -1.0
+
+    def phase(self, start: float, end: float, label: str) -> None:
+        self._span = (start, end)
+        self._show(start, label)
+
+    def step(self, done: float, label: str | None = None) -> None:
+        start, end = self._span
+        self._show(start + (end - start) * min(max(done, 0.0), 1.0), label or self._label)
+
+    def finish(self, label: str) -> None:
+        self._show(1.0, label)
+
+    def _show(self, fraction: float, label: str) -> None:
+        if label == self._label and fraction - self._painted < self.STEP:
+            return
+        self._label, self._painted = label, fraction
+        _paint(fraction, label)
 
 
 def _require_writable_root() -> None:
@@ -340,7 +379,7 @@ def _require_writable_root() -> None:
         raise UpdateError("root filesystem is read-only, cannot install")
 
 
-def _refresh_with_retry(tries: int = 6, delay: int = 10) -> None:
+def _refresh_with_retry(progress: _Progress | None = None, tries: int = 6, delay: int = 10) -> None:
     """Networking comes up alongside this boot, so give the archive a minute."""
     for left in range(tries - 1, -1, -1):
         try:
@@ -349,26 +388,66 @@ def _refresh_with_retry(tries: int = 6, delay: int = 10) -> None:
         except UpdateError:
             if left == 0:
                 raise
+            if progress:
+                progress.step(1.0 - left / tries, "Waiting for network")
             time.sleep(delay)
 
 
-def _install(packages: Sequence[str]) -> None:
-    _run_logged(
-        ["apt-get", "install", "-y", "--only-upgrade", "--no-install-recommends", *packages],
+def _report_apt(line: str, progress: _Progress) -> None:
+    """One apt status line, kind:package:percent:description. Fetching takes the first quarter."""
+    kind, _, rest = line.partition(":")
+    package, _, rest = rest.partition(":")
+    try:
+        done = float(rest.partition(":")[0]) / 100.0
+    except ValueError:
+        return
+    if kind == "dlstatus":
+        progress.step(done * 0.25, "Downloading updates")
+    elif kind == "pmstatus":
+        driver = package.endswith("-dkms")
+        progress.step(
+            0.25 + done * 0.75,
+            "Rebuilding camera drivers" if driver else "Installing updates",
+        )
+
+
+def _install(packages: Sequence[str], progress: _Progress) -> None:
+    """apt on a status pipe, so the splash follows the real work instead of jumping."""
+    read_fd, write_fd = os.pipe()
+    proc = subprocess.Popen(
+        [
+            "apt-get",
+            "install",
+            "-y",
+            "--only-upgrade",
+            "--no-install-recommends",
+            "-o",
+            f"APT::Status-Fd={write_fd}",
+            *packages,
+        ],
         env={**os.environ, "DEBIAN_FRONTEND": "noninteractive"},
+        pass_fds=(write_fd,),
     )
+    os.close(write_fd)
+    with open(read_fd, encoding="utf-8", errors="replace") as status:
+        for line in status:
+            _report_apt(line, progress)
+    if proc.wait() != 0:
+        raise UpdateError(f"apt-get failed (exit {proc.returncode}), see the journal")
 
 
 def installed_version(package: str) -> str:
     return _run(["dpkg-query", "-W", "-f", "${Version}", package]).strip()
 
 
-def converge() -> bool:
+def converge(progress: _Progress | None = None) -> bool:
     """Reapply setup wiring when the app moved past the version it last ran for."""
     version = installed_version(APP_PACKAGE)
     if CONVERGED.is_file() and CONVERGED.read_text().strip() == version:
         return False
-    for script in CONVERGE_SCRIPTS:
+    for done, script in enumerate(CONVERGE_SCRIPTS):
+        if progress:
+            progress.step(done / len(CONVERGE_SCRIPTS))
         _run_logged([str(SETUP_DIR / script[0]), *script[1:]])
     CONVERGED.parent.mkdir(parents=True, exist_ok=True)
     CONVERGED.write_text(f"{version}\n")
@@ -383,26 +462,26 @@ def run() -> str:
     ids = [str(i) for i in plan.get("ids", [])]
     attempts = int(plan.get("attempts", 0)) + 1
     error = ""
+    progress = _Progress()
     if attempts > MAX_ATTEMPTS:
         error = f"update did not finish in {MAX_ATTEMPTS} boots"
     else:
         # Counted before the work, so a power cut counts as an attempt too.
         _write_json(plan_file(), {**plan, "attempts": attempts})
         try:
-            _paint(0.0)
+            progress.phase(0.0, 0.10, "Checking for updates")
             _require_writable_root()
-            _refresh_with_retry()
-            _paint(0.25)
-            _install(sorted({p for i in ids for p in resolve(i).packages}))
-            _paint(0.5)
-            converge()
-            _paint(0.75)
+            _refresh_with_retry(progress)
+            progress.phase(0.10, 0.70, "Downloading updates")
+            _install(sorted({p for i in ids for p in resolve(i).packages}), progress)
+            progress.phase(0.70, 0.95, "Applying settings")
+            converge(progress)
         except UpdateError as exc:
             error = str(exc)
     disarm()
     relock()
     _record_run(ids, error)
-    _paint(1.0)
+    progress.finish("Restarting")
     return error
 
 
