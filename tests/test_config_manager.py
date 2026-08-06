@@ -132,6 +132,20 @@ class TestDisplayBlock:
         assert cm.get_current()["overlay"] == "ar0234"
         assert cm.get_current_display()["overlay"] == PANEL
 
+    def test_repeated_rewrites_keep_file_size(self, cm):
+        cm.config_path.write_text("arm_boost=1\n")
+
+        def apply(dsi0: bool) -> str:
+            # Panel on DISP0 claims cam0, so the camera takes the other port.
+            cm._rewrite_display_in_place(f"{PANEL},dsi0" if dsi0 else PANEL)
+            cm._rewrite_in_place("ar0234", "cam1" if dsi0 else "cam0", [])
+            return cm.config_path.read_text()
+
+        apply(True)
+        first = apply(False)
+        assert apply(True) == apply(True)
+        assert len(apply(False).splitlines()) == len(first.splitlines())
+
 
 class TestPortArbitration:
     def test_camera_rejected_on_claimed_port(self, cm):

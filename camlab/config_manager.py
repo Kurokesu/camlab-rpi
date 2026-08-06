@@ -234,11 +234,8 @@ class ConfigManager:
                 f"(is the driver installed?)"
             )
         self._require_free_port(port)
-        text = self.config_path.read_text() if self.config_path.is_file() else ""
-        lines = text.splitlines()
-        kept = self._strip_block(lines)
         # Append last so block sits under [all] context.
-        body = "\n".join(kept).rstrip("\n")
+        body = self._body_without()
         block = self._render_block(token, port, options)
         new_text = (body + "\n\n" if body else "") + block + "\n"
         self._atomic_write(new_text)
@@ -268,9 +265,7 @@ class ConfigManager:
                     f"overlay '{token}.dtbo' not found in {self.overlays_dir} "
                     f"(is the OS image complete?)"
                 )
-        text = self.config_path.read_text() if self.config_path.is_file() else ""
-        kept = self._strip_block(text.splitlines(), DISPLAY_BEGIN, DISPLAY_END)
-        body = "\n".join(kept).rstrip("\n")
+        body = self._body_without(DISPLAY_BEGIN, DISPLAY_END)
         new_text = body + "\n" if body else ""
         if raw_overlay is not None:
             block = "\n".join(
@@ -306,6 +301,12 @@ class ConfigManager:
         if j <= i:
             return None
         return lines[i + 1 : j]
+
+    def _body_without(self, begin: str = BEGIN, end: str = END) -> str:
+        """Config text minus one managed block. Collapses blank runs."""
+        text = self.config_path.read_text() if self.config_path.is_file() else ""
+        kept = "\n".join(self._strip_block(text.splitlines(), begin, end))
+        return re.sub(r"\n{3,}", "\n\n", kept).rstrip("\n")
 
     @staticmethod
     def _strip_block(lines: list[str], begin: str = BEGIN, end: str = END) -> list[str]:
