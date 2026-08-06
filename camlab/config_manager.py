@@ -288,8 +288,13 @@ class ConfigManager:
 
     def _atomic_write(self, text: str) -> None:
         tmp = self.config_path.with_suffix(self.config_path.suffix + ".camlab-tmp")
-        tmp.write_text(text)
-        os.replace(tmp, self.config_path)
+        try:
+            tmp.write_text(text)
+            os.replace(tmp, self.config_path)
+        except OSError:
+            # Never strand a half-written temp file next to config.txt.
+            tmp.unlink(missing_ok=True)
+            raise
 
     # helpers
     @staticmethod
@@ -383,5 +388,9 @@ if __name__ == "__main__":
         code = _main()
     except ConfigError as exc:
         print(f"error: {exc}", file=sys.stderr)
+        code = 2
+    except OSError as exc:
+        # GUI shows this line verbatim, so name the file and skip the traceback.
+        print(f"error: cannot write {CONFIG_PATH}: {exc.strerror or exc}", file=sys.stderr)
         code = 2
     raise SystemExit(code)
