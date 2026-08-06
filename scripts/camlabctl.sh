@@ -41,13 +41,15 @@ cmd_restart() { sudo systemctl restart "$SERVICE"; }
 cmd_status()  { systemctl status "$SERVICE" --no-pager; }
 
 cmd_logs() {
-    local args=(-u "$SERVICE" -t camlab --no-pager)
+    local args=(--no-pager)
     if [ "$#" -eq 0 ]; then
         args+=(-n 200)
     else
         args+=("$@")
     fi
-    journalctl "${args[@]}"
+    # PAMName puts the app in its own session scope, so unit alone misses every
+    # app line. Match the identifier too, unit keeps systemd start/stop/crash.
+    journalctl "${args[@]}" _SYSTEMD_UNIT="$SERVICE" + SYSLOG_IDENTIFIER=camlab
 }
 
 cmd_log_level() {
