@@ -49,7 +49,9 @@ CATEGORY_SEVERITY: dict[str, str] = {
 # libcamera prefixes each line with a level word (e.g. "... ERROR RPI ...").
 _LEVEL_RE = re.compile(r"\b(ERROR|FATAL|WARN(?:ING)?)\b")
 
-# Own records, as _setup_logging formats them: "HH:MM:SS LEVEL name: message".
+# Own records: _setup_logging formats them, the regex below parses them back.
+LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
+LOG_DATEFMT = "%H:%M:%S"
 _APP_LEVEL_RE = re.compile(r"^\d\d:\d\d:\d\d (DEBUG|INFO|WARNING|ERROR|CRITICAL) ")
 
 # journald parses a leading <N>. Syslog: 2 crit, 3 err, 4 warning, 6 info, 7 debug.

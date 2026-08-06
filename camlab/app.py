@@ -16,7 +16,7 @@ from .dsi_panels import PanelRegistry
 from .gl_viewfinder import install_gles_format
 from .gui.main_window import MainWindow
 from .gui.style import profile_for_screen
-from .integrity import LogClassifier, NullCapture, StderrCapture
+from .integrity import LOG_DATEFMT, LOG_FORMAT, LogClassifier, NullCapture, StderrCapture
 from .modes import resolve_initial_mode
 from .qt import QtWidgets
 from .sensors import SensorRegistry
@@ -53,12 +53,7 @@ _LEVELS = {
 
 def _setup_logging() -> None:
     level = _LEVELS.get(os.environ.get("CAMLAB_LOG_LEVEL", "info").lower(), logging.INFO)
-    logging.basicConfig(
-        level=level,
-        stream=sys.stderr,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
-    )
+    logging.basicConfig(level=level, stream=sys.stderr, format=LOG_FORMAT, datefmt=LOG_DATEFMT)
 
 
 def main(argv: list[str] | None = None) -> int:
