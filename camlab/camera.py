@@ -217,6 +217,7 @@ class CameraEngine:
         fps_fixed: bool = True,
         main_size=None,
         raw: bool = False,
+        reset_telemetry: bool = True,
     ) -> None:
         """Reconfigure to a new mode/fps while running (stop, configure, start)."""
         was_started = self._started
@@ -224,7 +225,7 @@ class CameraEngine:
             self.stop()
         self.configure_mode(mode, fps, avail_size, fps_fixed, main_size=main_size, raw=raw)
         if was_started:
-            self.start()
+            self.start(reset_telemetry=reset_telemetry)
 
     def refit_lores(self, avail_size) -> bool:
         """Refit lores stream to new screen size. No-op if unchanged."""
@@ -233,6 +234,7 @@ class CameraEngine:
         planned = plan_lores_size(self._main_size, tuple(avail_size))
         if planned == tuple(self.size):
             return False
+        # Same run at a new preview size, so keep the snapshot
         self.apply_mode(
             self.current_mode,
             self.fps_current,
@@ -240,6 +242,7 @@ class CameraEngine:
             self.fps_fixed,
             main_size=self._main_size,
             raw=self._raw,
+            reset_telemetry=False,
         )
         return True
 
