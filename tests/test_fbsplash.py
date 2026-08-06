@@ -36,7 +36,7 @@ def canvas() -> np.ndarray:
 
 def fill_pixels(fbsplash, canvas: np.ndarray, box, fraction: float) -> int:
     canvas[:] = 0
-    fbsplash.draw_bar(canvas, box, fraction)
+    fbsplash.draw_bar(canvas, box, fbsplash.block_top(box), fraction)
     return int(np.all(canvas == fbsplash.INK, axis=2).sum())
 
 
@@ -49,7 +49,8 @@ def test_fill_follows_the_fraction(fbsplash, canvas, logo):
 
 
 def test_empty_bar_still_shows_its_track(fbsplash, canvas, logo):
-    fbsplash.draw_bar(canvas, fbsplash.place(logo, 800, 600), 0.0)
+    box = fbsplash.place(logo, 800, 600)
+    fbsplash.draw_bar(canvas, box, fbsplash.block_top(box), 0.0)
     assert np.any(np.all(canvas == fbsplash.TRACK, axis=2))
 
 
@@ -62,12 +63,22 @@ def test_fraction_out_of_range_is_clamped(fbsplash, canvas, logo):
 def test_bar_stays_on_a_short_framebuffer(fbsplash, logo):
     """A rotated panel leaves few rows, the bar must still land inside them."""
     canvas = np.zeros((32, 64, 3), np.uint8)
-    fbsplash.draw_bar(canvas, fbsplash.place(logo, 64, 32), 1.0)
+    box = fbsplash.place(logo, 64, 32)
+    fbsplash.draw_bar(canvas, box, fbsplash.block_top(box), 1.0)
     assert np.any(np.all(canvas == fbsplash.INK, axis=2))
 
 
-def test_label_sits_under_the_bar(fbsplash, canvas, logo):
+def test_label_sits_above_the_bar(fbsplash, canvas, logo):
+    """Reading order is wordmark, then what is happening, then how far along it is."""
     box = fbsplash.place(logo, 800, 600)
-    bottom = fbsplash.draw_bar(canvas, box, 0.5)
-    fbsplash.draw_label(canvas, box, bottom, "Installing updates")
-    assert np.any(np.all(canvas[bottom:] == fbsplash.INK, axis=2))
+    label_top = fbsplash.block_top(box)
+    bar_top = fbsplash.draw_label(canvas, box, label_top, "Installing updates")
+    fbsplash.draw_bar(canvas, box, bar_top, 1.0)
+    ink_rows = np.flatnonzero(np.any(np.all(canvas == fbsplash.INK, axis=2), axis=1))
+    assert ink_rows[0] >= label_top
+    assert ink_rows[-1] >= bar_top
+
+
+def test_status_block_clears_the_wordmark(fbsplash, logo):
+    box = fbsplash.place(logo, 800, 600)
+    assert fbsplash.block_top(box) - (box[1] + box[3]) == box[3] // 2
