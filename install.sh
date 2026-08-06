@@ -103,6 +103,7 @@ if [ -n "$DISPLAY_OVERLAY" ]; then
     "$APP_DIR/scripts/setup/display.sh" --overlay "$DISPLAY_OVERLAY"
 fi
 "$APP_DIR/scripts/setup/config.sh"
+"$APP_DIR/scripts/setup/update.sh"
 "$APP_DIR/scripts/setup/journald.sh"
 "$APP_DIR/scripts/setup/boot.sh"
 "$APP_DIR/scripts/setup/splash.sh"

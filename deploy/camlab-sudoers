@@ -5,10 +5,12 @@
 # CAMLAB_USER, validates with visudo -c). Minimal NOPASSWD rights for the
 # kiosk GUI, exact commands only:
 #   - config-write shim (managed block in config.txt)
+#   - update check shim (refreshes the archive index, installs nothing)
 #   - poweroff (both a sensor swap and operator shutdown power the box off)
 #   - networking toggle (Settings dialog)
 
 CAMLAB_USER ALL=(root) NOPASSWD: /usr/local/bin/camlab-apply
+CAMLAB_USER ALL=(root) NOPASSWD: /usr/local/bin/camlab-update check
 CAMLAB_USER ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff --no-wall
 CAMLAB_USER ALL=(root) NOPASSWD: /usr/local/bin/camlabctl net on
 CAMLAB_USER ALL=(root) NOPASSWD: /usr/local/bin/camlabctl net off
