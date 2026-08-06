@@ -13,7 +13,8 @@ permissions:
 
 jobs:
   release:
-    name: Build and publish
+    # Bare id would render "Release / release", name the artifact instead.
+    name: assets
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

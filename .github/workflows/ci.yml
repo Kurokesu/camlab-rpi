@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# Fast hardware-free checks
 name: CI
 
 on:
@@ -10,33 +9,16 @@ on:
   pull_request:
 
 jobs:
-  checks:
-    name: Checks
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
-      - name: Compile python
-        run: python3 -m compileall -q camlab
-
-      # Catches import-time failures compileall cannot, e.g. a NameError
-      # from an annotation evaluated at class definition.
-      - name: Import hardware-free modules
-        run: |
-          pip install pyyaml
-          python3 -c "import camlab.modes, camlab.sensors, camlab.settings, camlab.network, camlab.config_manager, camlab.dsi_panels, camlab.drm, camlab.stats"
-
-      # Hardware-free unit tests (config.txt blocks, DRM port mapping).
-      - name: Pytest
-        run: |
-          pip install pytest
-          pytest
-
       - name: Ruff
         run: |
           pip install ruff
-          ruff check camlab tests
-          ruff format --check camlab tests
+          ruff check camlab tests deploy
+          ruff format --check camlab tests deploy
 
       - name: Shellcheck
         run: git ls-files '*.sh' | xargs shellcheck
@@ -44,8 +26,21 @@ jobs:
       - name: REUSE lint
         uses: fsfe/reuse-action@v6
 
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install test deps
+        run: pip install pytest pyyaml
+
+      - name: Compile python
+        run: python3 -m compileall -q camlab deploy
+
       - name: Parse registry yaml
         run: |
-          pip install pyyaml
           python3 -c "import yaml; yaml.safe_load(open('camlab/data/sensors.yaml'))"
           python3 -c "import yaml; yaml.safe_load(open('camlab/data/dsi_panels.yaml'))"
+
+      - name: Pytest
+        run: pytest
