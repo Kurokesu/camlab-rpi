@@ -138,7 +138,7 @@ jobs:
           for path in \
             ./opt/camlab/camlab/__main__.py \
             ./opt/camlab/camlab/__init__.py \
-            ./opt/camlab/camlab/sensors.yaml \
+            ./opt/camlab/camlab/data/sensors.yaml \
             ./opt/camlab/scripts/camlabctl.sh \
             ./opt/camlab/deploy/camlab.service \
             ./opt/camlab/install.sh; do
