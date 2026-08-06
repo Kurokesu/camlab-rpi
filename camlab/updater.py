@@ -35,7 +35,7 @@ import tempfile
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .sensors import SensorRegistry
@@ -96,7 +96,7 @@ def _run_logged(cmd: list[str], env: dict[str, str] | None = None) -> None:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 def _newer(candidate: str, installed: str) -> bool:
