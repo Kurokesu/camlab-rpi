@@ -7,19 +7,24 @@ Kernel logo only reaches firmware framebuffer. DRM fbdevs register after boot
 logo data is freed, so fbcon leaves them black. udev starts camlab-splash@fbN
 when fbdev appears. Logo centered, border filled from top-left pixel.
 
---progress adds a bar under the logo, repainted per step by camlab.updater on an
-update boot, where no compositor runs yet.
+--progress and --label add a bar and a status line under the logo, repainted per
+step by camlab.updater on an update boot, where no compositor runs yet. Bar
+proportions follow the cinepi plymouth theme.
 
-Usage: fbsplash.py /dev/fbN [logo.tga] [--progress 0..1]
+Usage: fbsplash.py /dev/fbN [logo.tga] [--progress 0..1] [--label TEXT]
 """
 
 import sys
 from pathlib import Path
 
 import numpy as np
+from PIL import Image, ImageDraw, ImageFont
 
 LOGO = "/lib/firmware/logo.tga"
-BAR_COLOR = (202, 32, 49)  # Kurokesu red
+FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+TRACK = (51, 51, 51)
+INK = (255, 255, 255)
+BAR_H = 6
 
 
 def load_tga(path: str) -> np.ndarray:
@@ -36,27 +41,64 @@ def load_tga(path: str) -> np.ndarray:
     return pixels[:, :, ::-1]  # BGR to RGB
 
 
+def place(logo: np.ndarray, width: int, height: int) -> tuple[int, int, int, int]:
+    """Centered logo box as x, y, w, h, clipped to the canvas."""
+    lh, lw = logo.shape[:2]
+    h, w = min(lh, height), min(lw, width)
+    return (width - w) // 2, (height - h) // 2, w, h
+
+
 def compose(logo: np.ndarray, width: int, height: int) -> np.ndarray:
     """Center logo on a canvas filled with its corner color, clip overflow."""
     canvas = np.empty((height, width, 3), np.uint8)
     canvas[:] = logo[0, 0]
+    x, y, w, h = place(logo, width, height)
     lh, lw = logo.shape[:2]
-    ch, cw = min(lh, height), min(lw, width)
-    src = logo[(lh - ch) // 2 : (lh - ch) // 2 + ch, (lw - cw) // 2 : (lw - cw) // 2 + cw]
-    y, x = (height - ch) // 2, (width - cw) // 2
-    canvas[y : y + ch, x : x + cw] = src
+    top, left = (lh - h) // 2, (lw - w) // 2
+    canvas[y : y + h, x : x + w] = logo[top : top + h, left : left + w]
     return canvas
 
 
-def draw_bar(canvas: np.ndarray, fraction: float) -> None:
-    """Outline a bar under the logo and fill it left to right, in place."""
-    height, width = canvas.shape[:2]
-    bar_w, bar_h = width // 3, max(8, height // 60)
-    x, y = (width - bar_w) // 2, min(int(height * 0.78), height - bar_h)
-    canvas[y : y + bar_h, x : x + bar_w] = BAR_COLOR
-    inner = canvas[y + 2 : y + bar_h - 2, x + 2 : x + bar_w - 2]
-    inner[:] = canvas[0, 0]
-    inner[:, : int(inner.shape[1] * min(max(fraction, 0.0), 1.0))] = BAR_COLOR
+def draw_bar(canvas: np.ndarray, box: tuple[int, int, int, int], fraction: float) -> int:
+    """Fill a thin bar under the logo, return its bottom edge."""
+    _, y, w, h = box
+    bar_w = int(w * 0.55)
+    bar_h = min(BAR_H, canvas.shape[0])
+    x = (canvas.shape[1] - bar_w) // 2
+    top = min(y + h + int(h * 0.3), canvas.shape[0] - bar_h)
+    canvas[top : top + bar_h, x : x + bar_w] = TRACK
+    canvas[top : top + bar_h, x : x + int(bar_w * min(max(fraction, 0.0), 1.0))] = INK
+    return top + bar_h
+
+
+def draw_label(canvas: np.ndarray, box: tuple[int, int, int, int], top: int, text: str) -> None:
+    """Status line centered under the bar, blended so glyph edges stay smooth."""
+    size = max(10, int(box[3] * 0.2))
+    mask = Image.new("L", canvas.shape[1::-1], 0)
+    ImageDraw.Draw(mask).text(
+        (canvas.shape[1] // 2, top + size),
+        text,
+        font=ImageFont.truetype(FONT, size),
+        fill=255,
+        anchor="ma",
+    )
+    alpha = np.asarray(mask, np.float32)[..., None] / 255.0
+    np.copyto(
+        canvas, (canvas * (1.0 - alpha) + np.asarray(INK, np.float32) * alpha).astype(np.uint8)
+    )
+
+
+def render(
+    logo: np.ndarray, width: int, height: int, fraction: float | None, label: str
+) -> np.ndarray:
+    canvas = compose(logo, width, height)
+    if fraction is None:
+        return canvas
+    box = place(logo, width, height)
+    bottom = draw_bar(canvas, box, fraction)
+    if label:
+        draw_label(canvas, box, bottom, label)
+    return canvas
 
 
 def pack(canvas: np.ndarray, bpp: int) -> bytes:
@@ -73,13 +115,19 @@ def pack(canvas: np.ndarray, bpp: int) -> bytes:
     sys.exit(f"unsupported bits_per_pixel: {bpp}")
 
 
+def _take(args: list[str], flag: str) -> str | None:
+    if flag not in args:
+        return None
+    i = args.index(flag)
+    value = args[i + 1]
+    del args[i : i + 2]
+    return value
+
+
 def main() -> None:
     args = sys.argv[1:]
-    fraction = None
-    if "--progress" in args:
-        i = args.index("--progress")
-        fraction = float(args[i + 1])
-        del args[i : i + 2]
+    progress = _take(args, "--progress")
+    label = _take(args, "--label") or ""
     fbdev = args[0]
     logo = load_tga(args[1] if len(args) > 1 else LOGO)
 
@@ -88,9 +136,7 @@ def main() -> None:
     bpp = int((sys_dir / "bits_per_pixel").read_text())
     stride = int((sys_dir / "stride").read_text())
 
-    canvas = compose(logo, width, height)
-    if fraction is not None:
-        draw_bar(canvas, fraction)
+    canvas = render(logo, width, height, float(progress) if progress else None, label)
     data = pack(canvas, bpp)
     row_len = width * bpp // 8
     with open(fbdev, "wb") as fb:

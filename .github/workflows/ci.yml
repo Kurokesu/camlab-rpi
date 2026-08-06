@@ -34,8 +34,9 @@ jobs:
       - name: Install test deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libxkbcommon0
-          pip install pytest pyyaml numpy PyQt6
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 libgl1 libxkbcommon0 fonts-dejavu-core
+          pip install pytest pyyaml numpy pillow PyQt6
 
       - name: Compile python
         run: python3 -m compileall -q camlab deploy

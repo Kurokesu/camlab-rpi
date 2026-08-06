@@ -312,11 +312,13 @@ class TestRun:
         monkeypatch.setattr(updater, "FBSPLASH", tmp_path / "absent")
         monkeypatch.setattr(updater, "resolve", fake_resolve)
         monkeypatch.setattr(updater.os, "access", lambda path, mode: True)
-        monkeypatch.setattr(updater, "_refresh_with_retry", lambda: None)
-        monkeypatch.setattr(updater, "converge", lambda: True)
+        monkeypatch.setattr(updater, "_refresh_with_retry", lambda progress=None: None)
+        monkeypatch.setattr(updater, "converge", lambda progress=None: True)
         monkeypatch.setattr(updater, "survey", lambda reg=None: {"version": 1, "components": []})
         self.installed = []
-        monkeypatch.setattr(updater, "_install", lambda packages: self.installed.append(packages))
+        monkeypatch.setattr(
+            updater, "_install", lambda packages, progress=None: self.installed.append(packages)
+        )
 
     def arm(self, attempts: int = 0) -> None:
         plan = {"version": 1, "ids": ["app"], "attempts": attempts, "armed": "now"}
@@ -348,7 +350,9 @@ class TestRun:
     def test_attempt_is_counted_before_the_work(self, monkeypatch):
         seen = []
         monkeypatch.setattr(
-            updater, "_install", lambda packages: seen.append(updater.read_plan()["attempts"])
+            updater,
+            "_install",
+            lambda packages, progress=None: seen.append(updater.read_plan()["attempts"]),
         )
         self.arm()
         updater.run()
@@ -364,6 +368,56 @@ class TestRun:
         monkeypatch.setattr(updater.os, "access", lambda path, mode: False)
         assert "read-only" in updater.run()
         assert self.installed == []
+
+
+class TestSplashProgress:
+    @pytest.fixture(autouse=True)
+    def painter(self, monkeypatch):
+        self.paints: list[tuple[float, str]] = []
+        monkeypatch.setattr(
+            updater,
+            "_paint",
+            lambda fraction, label: self.paints.append((round(fraction, 3), label)),
+        )
+
+    def test_phase_maps_onto_its_slice(self):
+        progress = updater._Progress()
+        progress.phase(0.10, 0.70, "Downloading updates")
+        progress.step(0.5)
+        assert self.paints == [(0.10, "Downloading updates"), (0.40, "Downloading updates")]
+
+    def test_small_movement_does_not_repaint(self):
+        """Every paint spawns a process per framebuffer, so apt chatter must not drive it."""
+        progress = updater._Progress()
+        progress.phase(0.0, 1.0, "Installing updates")
+        progress.step(0.001)
+        assert self.paints == [(0.0, "Installing updates")]
+
+    def test_new_label_always_repaints(self):
+        progress = updater._Progress()
+        progress.phase(0.0, 1.0, "Installing updates")
+        progress.step(0.001, "Rebuilding camera drivers")
+        assert [label for _, label in self.paints] == [
+            "Installing updates",
+            "Rebuilding camera drivers",
+        ]
+
+    def test_fetch_and_install_split_the_phase(self):
+        progress = updater._Progress()
+        progress.phase(0.0, 1.0, "start")
+        updater._report_apt("dlstatus:camlab:100:Retrieved\n", progress)
+        updater._report_apt("pmstatus:camlab:0:Unpacking\n", progress)
+        assert self.paints[1:] == [(0.25, "Downloading updates"), (0.25, "Installing updates")]
+
+    def test_driver_configure_names_the_rebuild(self):
+        progress = updater._Progress()
+        progress.phase(0.0, 1.0, "start")
+        updater._report_apt("pmstatus:ar0822-rpi-dkms:40:Setting up\n", progress)
+        assert self.paints[-1] == (0.55, "Rebuilding camera drivers")
+
+    def test_line_without_a_percentage_is_ignored(self):
+        updater._report_apt("nonsense\n", updater._Progress())
+        assert self.paints == []
 
 
 class TestRefreshRetry:
