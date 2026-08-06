@@ -1,3 +1,12 @@
+camlab (1.0.0~beta.4-1) unstable; urgency=medium
+
+  * New upstream release. Notes:
+    https://github.com/Kurokesu/camlab-rpi/releases/tag/v1.0.0-beta.4
+  * Add wlr-randr, camlab uses it to settle HDMI against a DSI touch
+    panel before the window opens.
+
+ -- Danius Kalvaitis <danius@kurokesu.com>  Thu, 06 Aug 2026 13:39:00 +0300
+
 camlab (1.0.0~beta.3-1) unstable; urgency=medium
 
   * Initial release as a Debian package.
