@@ -15,6 +15,23 @@ FIELDS = ("cpu", "gpu", "ram", "soc", "rp1")
 # Complement of the CPU/GPU pair the compact strip keeps on screen.
 CARD_FIELDS = ("ram", "soc", "rp1")
 
+# Placeholders keep the cluster fully formed from birth, samples fill in at 1 Hz.
+PLACEHOLDER_TEXTS = {
+    "cpu": "CPU --%",
+    "gpu": "GPU --%",
+    "ram": "RAM --",
+    "soc": "SoC --\u00b0C",
+    "rp1": "RP1 --\u00b0C",
+}
+# Digit-widest renders, pin_width measures these so live data never widens a view.
+_SAMPLE_TEXTS = {
+    "cpu": "CPU 99%",
+    "gpu": "GPU 99%",
+    "ram": "RAM 88.8/88.8GB",
+    "soc": "SoC 88\u00b0C",
+    "rp1": "RP1 88\u00b0C",
+}
+
 
 def _pad(text: str, width: int) -> str:
     """Pad with trailing figure spaces to width chars.
@@ -54,7 +71,6 @@ class RpiStatsView(QtWidgets.QWidget):
         super().__init__(parent)
         self._fields = fields
         self._labels: dict[str, QtWidgets.QLabel] = {}
-        self._seps: dict[str, QtWidgets.QFrame] = {}
         row = QtWidgets.QHBoxLayout(self)
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(10)
@@ -64,34 +80,33 @@ class RpiStatsView(QtWidgets.QWidget):
                 sep.setObjectName("vsep")
                 sep.setFixedSize(1, 11)
                 row.addWidget(sep, 0, Qt.AlignmentFlag.AlignVCenter)
-                self._seps[field] = sep
             lbl = QtWidgets.QLabel(self)
             lbl.setObjectName("rpiStats")
             row.addWidget(lbl)
             self._labels[field] = lbl
-        self._has_data = False
-        self.setVisible(False)
-
-    @property
-    def has_data(self) -> bool:
-        """True once at least one field rendered, hide empty cluster."""
-        return self._has_data
+        self._texts = {f: PLACEHOLDER_TEXTS[f] for f in fields}
+        self._render(self._texts)
 
     def set_texts(self, texts: dict[str, str | None]) -> None:
-        """Render field_texts. Missing source drops field and leading hairline."""
-        shown_any = False
+        """Render field_texts. Missing source keeps last value, else the field blinks out."""
         for field in self._fields:
             text = texts.get(field)
-            visible = text is not None
-            lbl = self._labels[field]
-            lbl.setVisible(visible)
-            if visible:
-                lbl.setText(text)
-            sep = self._seps.get(field)
-            if sep is not None:
-                sep.setVisible(visible and shown_any)
-            shown_any = shown_any or visible
-        self._has_data = shown_any
+            if text is not None:
+                self._texts[field] = text
+        self._render(self._texts)
+
+    def _render(self, texts: dict[str, str]) -> None:
+        for field, lbl in self._labels.items():
+            if lbl.text() != texts[field]:
+                lbl.setText(texts[field])
+
+    def pin_width(self) -> None:
+        """Pin minimum width to a digit-widest render so live data cannot move the strip."""
+        for lbl in self._labels.values():
+            lbl.ensurePolished()  # sizeHint must measure with the QSS font
+        self._render(_SAMPLE_TEXTS)
+        self.setMinimumWidth(self.sizeHint().width())
+        self._render(self._texts)
 
 
 class RpiStatsCard(QtWidgets.QWidget):
@@ -108,17 +123,16 @@ class RpiStatsCard(QtWidgets.QWidget):
         col.setSpacing(4)
         self._labels: dict[str, QtWidgets.QLabel] = {}
         for field in CARD_FIELDS:
-            lbl = QtWidgets.QLabel(self)
+            lbl = QtWidgets.QLabel(PLACEHOLDER_TEXTS[field], self)
             lbl.setObjectName("statsCard")
             col.addWidget(lbl)
             self._labels[field] = lbl
 
     def set_texts(self, texts: dict[str, str | None]) -> None:
-        """Render field_texts. Missing source drops field."""
+        """Render field_texts. Missing source keeps last value, so the card holds its size."""
         for field, lbl in self._labels.items():
-            text = texts[field]
-            lbl.setVisible(text is not None)
-            if text is not None:
+            text = texts.get(field)
+            if text is not None and text != lbl.text():
                 lbl.setText(text)
 
     def paintEvent(self, _event) -> None:
