@@ -9,7 +9,7 @@ import logging
 from collections.abc import Callable
 from typing import ClassVar, NamedTuple
 
-from .. import network
+from .. import network, updater
 from ..camera import CameraEngine
 from ..config_manager import ConfigManager, poweroff
 from ..display import Backlight, DisplayManager
@@ -32,6 +32,7 @@ from .sensor_dialog import SensorCard
 from .settings_dialog import SettingsCard
 from .status_strip import StatusStrip
 from .style import SEV_COLOR, UiProfile, build_stylesheet, profile_for_screen
+from .updates_dialog import UpdatesCard
 from .viewfinder_area import ViewfinderArea
 from .widgets import repolish, vline
 
@@ -773,6 +774,7 @@ class MainWindow(QtWidgets.QMainWindow):
         backlight_pct = None
         if self._profile.compact and self._backlight is not None and self._backlight.available:
             backlight_pct = self._backlight.get_percent()
+        state = updater.read_state()
         card = SettingsCard(
             histogram_on=self._histogram_on,
             backlight_pct=backlight_pct,
@@ -780,8 +782,45 @@ class MainWindow(QtWidgets.QMainWindow):
             on_apply_histogram=self._apply_histogram,
             on_backlight=self._on_backlight,
             on_cancel=self._close_modal,
+            on_updates=None if state.get("blocked") else self._open_updates,
+            updates_pending=len(updater.pending_ids(state)),
         )
         self._open_modal(card)
+
+    def _open_updates(self) -> None:
+        # Drills in from Settings, so the card it came from goes away with it.
+        self._close_modal()
+        self._open_modal(
+            UpdatesCard(
+                updater.read_state(),
+                on_apply=self._confirm_update,
+                on_close=self._close_modal,
+                compact=self._profile.compact,
+            )
+        )
+
+    def _confirm_update(self, ident: str, label: str) -> None:
+        self._close_modal()
+        self._open_modal(
+            message_card(
+                f"Update {label}?",
+                "The box reboots, installs with a progress bar on screen and comes back on its "
+                "own. The camera is off until it does, which takes a few minutes.",
+                [
+                    ("Cancel", "", self._close_modal),
+                    ("Update", "danger", lambda: self._apply_update(ident)),
+                ],
+            )
+        )
+
+    def _apply_update(self, ident: str) -> None:
+        self._close_modal()
+        self._flush_pending_persist()
+        try:
+            updater.request_apply(ident)
+        except Exception as exc:  # noqa: BLE001 surface the failure, the box stays up
+            log.error("update apply failed: %s", exc)
+            self._show_message("Update failed", str(exc))
 
     def _on_backlight(self, pct: int) -> bool:
         """Live during drag: the panel itself is the feedback."""
