@@ -18,6 +18,10 @@ camlabctl ro                   # boot read-only next time
 
 Network toggle (GUI Settings or `camlabctl net`) persists across reboots. Turning it off drops Wi-Fi immediately, Ethernet on next reboot (an SSH session over Ethernet survives as a grace period). Reverse from console or GUI.
 
+## Installing from a clone
+
+`sudo ./install.sh` from a checkout copies that tree to `/opt/camlab` and runs the same wiring as `camlab-setup`, no package needed. Add `--no-readonly` to keep root writable. Where the package is installed, the copy sits on top of package files until the next update restores them, and `dpkg -V camlab-rpi` lists what drifted.
+
 ## Running the app
 
 Run directly under a Cage session with `python3 -m camlab`. Sensors are defined in `camlab/data/sensors.yaml`. CSI port is set in a managed block in `/boot/firmware/config.txt`. Boot is tuned by `scripts/setup/boot.sh` (run during install, `--revert` undoes it). Each script under `scripts/setup/` is self-documenting (`--help`) and safe to re-run.
