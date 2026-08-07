@@ -59,8 +59,13 @@ stage_logo() {
         return
     fi
     log "Stage: kernel boot logo"
+    if cmp -s "$SPLASH_SRC/logo.tga" "$LOGO_TGA" && cmp -s "$SPLASH_SRC/initramfs-hook" "$INITRAMFS_HOOK"; then
+        log "logo.tga already in initramfs"
+        return
+    fi
     install -m 0644 "$SPLASH_SRC/logo.tga" "$LOGO_TGA"
     install -m 0755 "$SPLASH_SRC/initramfs-hook" "$INITRAMFS_HOOK"
+    # Costs 4 s, so only when the logo or the hook actually moved.
     update-initramfs -u >/dev/null
     log "logo.tga bundled into initramfs"
 }
