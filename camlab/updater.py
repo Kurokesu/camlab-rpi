@@ -465,8 +465,10 @@ def broken_packages() -> list[str]:
     return [f[1] for f in fields if len(f) > 1 and f[0] in BROKEN_STATES]
 
 
-def configure_pending() -> None:
+def configure_pending(progress: _Progress | None = None) -> None:
     """Finish what dpkg started. Offline, so it heals a box this boot cannot update."""
+    if progress and broken_packages():
+        progress.step(0.0, "Finishing last update")
     subprocess.run(["dpkg", "--configure", "-a"], check=False)
 
 
@@ -562,7 +564,7 @@ def run() -> str:
         try:
             progress.phase(0.0, 0.10, "Checking for updates")
             _require_writable_root()
-            configure_pending()
+            configure_pending(progress)
             _refresh_with_retry(progress)
             repair(progress)
             progress.phase(0.10, 0.70, "Downloading updates")

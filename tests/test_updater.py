@@ -348,7 +348,7 @@ class TestRun:
         mounts.write_text("/dev/mmcblk0p2 / ext4 rw,relatime 0 0\n")
         monkeypatch.setattr(updater, "MOUNTS", mounts)
         monkeypatch.setattr(updater, "_save_log", lambda: None)
-        monkeypatch.setattr(updater, "configure_pending", lambda: None)
+        monkeypatch.setattr(updater, "configure_pending", lambda progress=None: None)
         monkeypatch.setattr(updater, "repair", lambda progress=None: [])
         monkeypatch.setattr(updater, "_refresh_with_retry", lambda progress=None: None)
         monkeypatch.setattr(updater, "converge", lambda progress=None: True)
@@ -483,6 +483,21 @@ class TestRepair:
         """Before the refresh, so it heals a box that cannot reach the archive either."""
         updater.configure_pending()
         assert self.ran == [["dpkg", "--configure", "-a"]]
+
+    def test_splash_says_so_while_dpkg_works(self, monkeypatch):
+        """dpkg finishes the common case on its own, under a label about checking for updates."""
+        painted = []
+        progress = updater._Progress()
+        monkeypatch.setattr(progress, "step", lambda done, label=None: painted.append(label))
+        self.feed(monkeypatch, "unpacked ar0822-rpi-dkms\n")
+        updater.configure_pending(progress)
+        assert painted == ["Finishing last update"]
+
+    def test_clean_box_paints_nothing(self, monkeypatch):
+        progress = updater._Progress()
+        monkeypatch.setattr(progress, "step", lambda done, label=None: pytest.fail("painted"))
+        self.feed(monkeypatch, "installed camlab\n")
+        updater.configure_pending(progress)
 
 
 class TestLogCopy:
