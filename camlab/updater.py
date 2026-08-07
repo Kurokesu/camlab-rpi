@@ -74,6 +74,9 @@ FBSPLASH = Path(os.environ.get("CAMLAB_FBSPLASH", "/usr/local/lib/camlab/fbsplas
 # A power cut mid-update retries once, then the update gives up.
 MAX_ATTEMPTS = 2
 
+# dpkg states that mean an install never finished. Anything else apt can work with.
+BROKEN_STATES = frozenset({"half-installed", "unpacked", "half-configured"})
+
 _STATE_VERSION = 1
 
 
@@ -237,6 +240,20 @@ def update_path(states: dict[str, PackageState] | None = None) -> str:
     if not state.from_archive:
         return f"installed {APP_PACKAGE} {state.installed} did not come from {ARCHIVE_URL}"
     return ""
+
+
+def drop_lists() -> int:
+    """Delete this archive's cached index. A power cut can leave a file apt cannot parse."""
+    prefix = _archive_key().replace("/", "_")
+    gone = 0
+    for directory in (APT_LISTS, APT_LISTS / "partial"):
+        for path in directory.glob(f"{prefix}*"):
+            try:
+                path.unlink()
+                gone += 1
+            except OSError:
+                pass
+    return gone
 
 
 def refresh() -> None:
@@ -415,10 +432,40 @@ def _refresh_with_retry(progress: _Progress | None = None, tries: int = 6, delay
             return
         except UpdateError:
             if left == 0:
+                # One retry on a clean index, an unparsable one fails the same way forever.
+                if drop_lists():
+                    refresh()
+                    return
                 raise
             if progress:
                 progress.step(1.0 - left / tries, "Waiting for network")
             time.sleep(delay)
+
+
+def broken_packages() -> list[str]:
+    """Packages dpkg left mid-install, the wreckage a power cut leaves behind."""
+    lines = _run(["dpkg-query", "-Wf", r"${db:Status-Status} ${Package}\n"]).splitlines()
+    fields = (line.split() for line in lines)
+    return [f[1] for f in fields if len(f) > 1 and f[0] in BROKEN_STATES]
+
+
+def configure_pending() -> None:
+    """Finish what dpkg started. Offline, so it heals a box this boot cannot update."""
+    subprocess.run(["dpkg", "--configure", "-a"], check=False)
+
+
+def repair(progress: _Progress | None = None) -> list[str]:
+    """Reinstall what dpkg could not finish, else apt refuses every later update."""
+    broken = broken_packages()
+    if not broken:
+        return []
+    if progress:
+        progress.step(0.0, "Finishing last update")
+    _run_logged(
+        ["apt-get", "install", "-y", "--reinstall", *broken],
+        env={**os.environ, "DEBIAN_FRONTEND": "noninteractive"},
+    )
+    return broken
 
 
 def _report_apt(line: str, progress: _Progress) -> None:
@@ -499,7 +546,9 @@ def run() -> str:
         try:
             progress.phase(0.0, 0.10, "Checking for updates")
             _require_writable_root()
+            configure_pending()
             _refresh_with_retry(progress)
+            repair(progress)
             progress.phase(0.10, 0.70, "Downloading updates")
             _install(sorted({p for i in ids for p in resolve(i).packages}), progress)
             progress.phase(0.70, 0.95, "Applying settings")

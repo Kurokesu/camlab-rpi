@@ -329,6 +329,8 @@ class TestRun:
         mounts.write_text("/dev/mmcblk0p2 / ext4 rw,relatime 0 0\n")
         monkeypatch.setattr(updater, "MOUNTS", mounts)
         monkeypatch.setattr(updater, "_save_log", lambda: None)
+        monkeypatch.setattr(updater, "configure_pending", lambda: None)
+        monkeypatch.setattr(updater, "repair", lambda progress=None: [])
         monkeypatch.setattr(updater, "_refresh_with_retry", lambda progress=None: None)
         monkeypatch.setattr(updater, "converge", lambda progress=None: True)
         monkeypatch.setattr(updater, "survey", lambda reg=None: {"version": 1, "components": []})
@@ -412,6 +414,54 @@ class TestRun:
         monkeypatch.setattr(updater, "relock", raiser("cmdline.txt missing"))
         assert "cmdline.txt missing" in updater.run()
         assert "cmdline.txt missing" in updater.read_state()["last_run"]["error"]
+
+    def test_the_last_install_is_finished_before_this_one(self, monkeypatch):
+        """A power cut leaves dpkg mid-install, and apt then refuses every later update."""
+        order = []
+        monkeypatch.setattr(updater, "configure_pending", lambda: order.append("dpkg"))
+        monkeypatch.setattr(updater, "repair", lambda progress=None: order.append("repair"))
+        monkeypatch.setattr(
+            updater, "_install", lambda packages, progress=None: order.append("install")
+        )
+        self.arm()
+        updater.run()
+        assert order == ["dpkg", "repair", "install"]
+
+
+class TestRepair:
+    """What a power cut during an install leaves behind."""
+
+    @pytest.fixture(autouse=True)
+    def dpkg(self, monkeypatch):
+        self.ran: list[list[str]] = []
+        monkeypatch.setattr(updater.subprocess, "run", lambda cmd, check: self.ran.append(cmd))
+        monkeypatch.setattr(updater, "_run_logged", lambda cmd, env=None: self.ran.append(cmd[:4]))
+
+    def feed(self, monkeypatch, text: str) -> None:
+        monkeypatch.setattr(updater, "_run", lambda cmd, env=None: text)
+
+    def test_half_installed_packages_are_named(self, monkeypatch):
+        self.feed(
+            monkeypatch,
+            "installed camlab\nhalf-installed ar0822-rpi-dkms\nconfig-files old-thing\n"
+            "unpacked imx585-rpi-dkms\nnot-installed never-here\n",
+        )
+        assert updater.broken_packages() == ["ar0822-rpi-dkms", "imx585-rpi-dkms"]
+
+    def test_reinstall_covers_them(self, monkeypatch):
+        self.feed(monkeypatch, "half-configured ar0822-rpi-dkms\n")
+        assert updater.repair() == ["ar0822-rpi-dkms"]
+        assert self.ran == [["apt-get", "install", "-y", "--reinstall"]]
+
+    def test_a_clean_box_reinstalls_nothing(self, monkeypatch):
+        self.feed(monkeypatch, "installed camlab\n")
+        assert updater.repair() == []
+        assert self.ran == []
+
+    def test_pending_configure_runs_offline(self):
+        """Before the refresh, so it heals a box that cannot reach the archive either."""
+        updater.configure_pending()
+        assert self.ran == [["dpkg", "--configure", "-a"]]
 
 
 class TestLogCopy:
@@ -498,8 +548,43 @@ class TestRefreshRetry:
 
     def test_gives_up_with_apt_own_reason(self, monkeypatch):
         monkeypatch.setattr(updater, "refresh", raiser("could not resolve host"))
+        monkeypatch.setattr(updater, "drop_lists", lambda: 0)
         with pytest.raises(UpdateError, match="could not resolve host"):
             updater._refresh_with_retry(tries=2, delay=0)
+
+    def test_an_unparsable_index_is_dropped_and_fetched_again(self, monkeypatch):
+        """A power cut can truncate a cached Release, and apt then fails the same way forever."""
+        calls = []
+        monkeypatch.setattr(updater, "drop_lists", lambda: 1)
+
+        def flaky() -> None:
+            calls.append(1)
+            if len(calls) < 3:
+                raise UpdateError("The package lists could not be parsed")
+
+        monkeypatch.setattr(updater, "refresh", flaky)
+        updater._refresh_with_retry(tries=2, delay=0)
+        assert len(calls) == 3
+
+
+class TestDropLists:
+    def test_only_this_archive_loses_its_index(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setattr(updater, "APT_LISTS", tmp_path)
+        (tmp_path / "partial").mkdir()
+        for name in (
+            "apt.kurokesu.com_dists_trixie_InRelease",
+            "partial/apt.kurokesu.com_dists_trixie_Release",
+            "deb.debian.org_dists_trixie_InRelease",
+        ):
+            (tmp_path / name).write_text("")
+        assert updater.drop_lists() == 2
+        assert [p.name for p in tmp_path.glob("*_InRelease")] == [
+            "deb.debian.org_dists_trixie_InRelease"
+        ]
+
+    def test_nothing_cached_drops_nothing(self, tmp_path: Path, monkeypatch):
+        monkeypatch.setattr(updater, "APT_LISTS", tmp_path / "gone")
+        assert updater.drop_lists() == 0
 
 
 class TestConverge:
