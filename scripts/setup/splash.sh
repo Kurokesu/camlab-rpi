@@ -41,6 +41,7 @@ CMDLINE_TXT="$FW_DIR/cmdline.txt"
 LOGO_TGA="/lib/firmware/logo.tga"
 INITRAMFS_HOOK="/etc/initramfs-tools/hooks/camlab-splash"
 FBSPLASH_BIN="/usr/local/lib/camlab/fbsplash.py"
+FBSPLASH_FONT="/usr/local/lib/camlab/Roboto-Regular.ttf"
 FBSPLASH_UNIT="/etc/systemd/system/camlab-splash@.service"
 FBSPLASH_RULE="/etc/udev/rules.d/99-camlab-splash.rules"
 
@@ -66,7 +67,7 @@ stage_logo() {
 
 stage_fbsplash() {
     if [ "$REVERT" -eq 1 ]; then
-        rm -f "$FBSPLASH_BIN" "$FBSPLASH_UNIT" "$FBSPLASH_RULE"
+        rm -f "$FBSPLASH_BIN" "$FBSPLASH_FONT" "$FBSPLASH_UNIT" "$FBSPLASH_RULE"
         systemctl daemon-reload
         udevadm control --reload-rules 2>/dev/null || true
         log "removed fbdev splash writer"
@@ -74,6 +75,8 @@ stage_fbsplash() {
     fi
     log "Stage: fbdev splash writer"
     install -D -m 0755 "$SPLASH_SRC/fbsplash.py" "$FBSPLASH_BIN"
+    # Status line runs before any compositor, so it reads the face off disk.
+    install -m 0644 "$REPO_DIR/camlab/assets/Roboto-Regular.ttf" "$FBSPLASH_FONT"
     install -m 0644 "$SPLASH_SRC/camlab-splash@.service" "$FBSPLASH_UNIT"
     install -m 0644 "$SPLASH_SRC/99-camlab-splash.rules" "$FBSPLASH_RULE"
     systemctl daemon-reload

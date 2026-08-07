@@ -79,6 +79,21 @@ def test_label_sits_above_the_bar(fbsplash, canvas, logo):
     assert ink_rows[-1] >= bar_top
 
 
+def test_bundled_face_is_found_from_a_checkout(fbsplash):
+    """Installed it sits beside the script. Here it is the asset the GUI loads."""
+    assert fbsplash.font_file() is not None
+
+
+def test_missing_font_drops_the_label_not_the_bar(fbsplash, canvas, logo, monkeypatch):
+    """A splash without text is poor. One without progress reads as a dead box."""
+    monkeypatch.setattr(fbsplash, "FONT_DIRS", ())
+    box = fbsplash.place(logo, 800, 600)
+    top = fbsplash.block_top(box)
+    assert fbsplash.draw_label(canvas, box, top, "Installing updates") == top
+    fbsplash.draw_bar(canvas, box, top, 1.0)
+    assert np.any(np.all(canvas == fbsplash.INK, axis=2))
+
+
 def test_status_block_clears_the_wordmark(fbsplash, logo):
     box = fbsplash.place(logo, 800, 600)
     assert fbsplash.block_top(box) - (box[1] + box[3]) == box[3] // 2
