@@ -700,7 +700,8 @@ def _main(argv: list[str] | None = None) -> int:
         if not _require_root(args.cmd):
             return 2
         refresh()
-        state = {**survey(), "checked": _now()}
+        # Merged, so a check does not erase the last update's outcome.
+        state = {**read_state(), **survey(), "checked": _now()}
         write_state(state)
         if state["blocked"]:
             print(f"no update path: {state['blocked']}")
