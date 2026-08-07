@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Rendered to /etc/sudoers.d/camlab by scripts/setup/config.sh (substitutes
+# Rendered to /etc/sudoers.d/camlab by scripts/setup/shims.sh (substitutes
 # CAMLAB_USER, validates with visudo -c). Minimal NOPASSWD rights for the
 # kiosk GUI, exact commands only:
 #   - config-write shim (managed block in config.txt)
