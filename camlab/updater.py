@@ -602,8 +602,8 @@ def _save_log() -> None:
         text = _run(["journalctl", "-b", "-u", "camlab-update.service", "--no-pager"])
         path.write_text(text, encoding="utf-8", errors="replace")
         path.chmod(0o644)
-    except Exception:  # noqa: BLE001 a missing log must not fail an otherwise good update
-        pass
+    except Exception as exc:  # noqa: BLE001 a missing log must not fail a good update
+        print(f"could not copy the journal: {exc}", file=sys.stderr)
 
 
 # survey and state file
