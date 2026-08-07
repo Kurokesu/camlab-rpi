@@ -23,7 +23,7 @@ class UpdatesCard(QtWidgets.QFrame):
     def __init__(
         self,
         state: dict,
-        on_apply: Callable[[list[str], str], None],
+        on_apply: Callable[[list[str], list[str]], None],
         on_close: Callable[[], None],
         compact: bool = False,
     ):
@@ -106,7 +106,7 @@ class UpdatesCard(QtWidgets.QFrame):
             button = QtWidgets.QPushButton("Update")
             button.setEnabled(bool(available))
             button.clicked.connect(
-                lambda _checked, c=component: self._on_apply([c["id"]], c["label"])
+                lambda _checked, c=component: self._on_apply([c["id"]], [c["label"]])
             )
             self._grid.addWidget(label, row, 0)
             self._grid.addWidget(version, row, 1)
@@ -115,7 +115,8 @@ class UpdatesCard(QtWidgets.QFrame):
 
     def _apply_all(self) -> None:
         pending = updater.pending_ids(self._state)
-        self._on_apply(pending, f"{len(pending)} components")
+        labels = {c["id"]: c["label"] for c in self._state.get("components") or []}
+        self._on_apply(pending, [labels.get(i, i) for i in pending])
 
     @staticmethod
     def _note(text: str) -> QtWidgets.QLabel:
@@ -133,9 +134,9 @@ class UpdatesCard(QtWidgets.QFrame):
             parts.append(f"Checked {stamp.replace('T', ' ')} UTC.")
         if checked and not updater.pending_ids(self._state):
             parts.append("Everything is up to date.")
-        error = (self._state.get("last_run") or {}).get("error")
-        if error:
-            parts.append(f"Last update failed: {error}")
+        if (self._state.get("last_run") or {}).get("error"):
+            # Apt's own wording is unreadable here, update.log keeps it.
+            parts.append("Last update failed.")
         return " ".join(parts)
 
     def _check(self) -> None:
