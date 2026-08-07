@@ -30,6 +30,8 @@ class SettingsCard(QtWidgets.QFrame):
         on_apply_histogram: Callable[[bool], None],
         on_backlight: Callable[[int], bool],
         on_cancel: Callable[[], None],
+        on_updates: Callable[[], None] | None = None,
+        updates_pending: int = 0,
     ):
         super().__init__()
         self.setObjectName("modalCard")
@@ -95,6 +97,21 @@ class SettingsCard(QtWidgets.QFrame):
             bl_row.addWidget(self.backlight_slider, 1)
             bl_row.addWidget(self.backlight_lbl)
             form.addRow("Brightness:", bl_row)
+
+        # None hides row: updates are unmanaged here (tarball install or a fork).
+        if on_updates is not None:
+            upd_label = QtWidgets.QLabel()
+            upd_label.setPixmap(icons.pixmap("update", _ICON_PX, "#8a909b"))
+            upd_row = QtWidgets.QHBoxLayout()
+            upd_row.setSpacing(8)
+            self.updates_btn = QtWidgets.QPushButton(
+                f"{updates_pending} available" if updates_pending else "Check"
+            )
+            self.updates_btn.clicked.connect(on_updates)
+            upd_row.addWidget(upd_label)
+            upd_row.addWidget(self.updates_btn)
+            upd_row.addStretch(1)
+            form.addRow("Updates:", upd_row)
 
         buttons = QtWidgets.QHBoxLayout()
         cancel_btn = QtWidgets.QPushButton("Cancel")
