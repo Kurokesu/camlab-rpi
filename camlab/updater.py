@@ -251,7 +251,12 @@ def update_path(states: dict[str, PackageState] | None = None) -> str:
 
 def _unreadable_index(error: str) -> bool:
     """apt's wording for a cached index it cannot read, what a power cut leaves."""
-    return any(s in error.lower() for s in ("could not be parsed", "could not be opened"))
+    low = error.lower()
+    if "could not be parsed" in low or "could not be opened" in low:
+        return True
+    # "Unable to parse package file X" also fires for dpkg's status file, which
+    # dropping an index cannot fix, so it has to name one of ours.
+    return "unable to parse" in low and _archive_key().replace("/", "_").lower() in low
 
 
 def drop_lists() -> int:
