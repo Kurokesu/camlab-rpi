@@ -14,6 +14,7 @@ from .config_manager import ConfigManager
 from .display import Backlight, CursorPolicy, DisplayManager, enforce_output_policy
 from .dsi_panels import PanelRegistry
 from .gl_viewfinder import install_gles_format
+from .gui import fonts
 from .gui.main_window import MainWindow
 from .gui.style import profile_for_screen
 from .integrity import LOG_DATEFMT, LOG_FORMAT, LogClassifier, NullCapture, StderrCapture
@@ -98,6 +99,7 @@ def main(argv: list[str] | None = None) -> int:
     # Viewfinder needs a GLES context (samplerExternalOES), set before QApplication.
     install_gles_format()
     app = QtWidgets.QApplication(argv if argv is not None else sys.argv)
+    fonts.apply(app)
 
     avail = _avail_size(app)
 

@@ -137,7 +137,7 @@ QPushButton[sev="warning"] { border-color: #7f6a3d; }
 QPushButton[sev="error"] { border-color: #803126; }
 QFrame#controlSheet { background: transparent; }
 QFrame#controlSheet QWidget { background: transparent; }
-QLabel#sheetTitle { color: #aeb4bf; font-weight: 600; }
+QLabel#sheetTitle { color: #aeb4bf; font-weight: 500; }
 QLabel#sheetCaption { color: #8a909b; }
 QLabel#sheetValue { color: #e8eaed; }
 QLabel#sheetCaption[dim="true"] { color: #565c66; }
@@ -157,7 +157,7 @@ QTextEdit#logView QScrollBar::add-line:vertical,
 QTextEdit#logView QScrollBar::sub-line:vertical { height: 0; }
 QTextEdit#logView QScrollBar::add-page:vertical,
 QTextEdit#logView QScrollBar::sub-page:vertical { background: transparent; }
-QLabel#logTitle { color: #8a909b; font-weight: 600; }
+QLabel#logTitle { color: #8a909b; font-weight: 500; }
 QLabel#dialogNote { color: #8a909b; }
 QFrame#modalCard QWidget { background: transparent; }
 QFrame#modalCard QFrame#hsep { background: #3a3f4b; }
@@ -170,7 +170,7 @@ QFrame#modalCard QPushButton#segment:checked { background: #3d4858; }
 QFrame#modalCard QPushButton#segment:checked:disabled { background: #2f3540; }
 QFrame#modalCard QPushButton#segment:focus { background: #2f3949; }
 QFrame#modalCard QPushButton#segment:checked:focus { background: #45526a; }
-QLabel#modalTitle { font-weight: 600; color: #e8eaed; }
+QLabel#modalTitle { font-weight: 500; color: #e8eaed; }
 QLabel#modalText { color: #aeb4bf; }
 QLabel#modalHint { color: #9aa1ac; }
 """
