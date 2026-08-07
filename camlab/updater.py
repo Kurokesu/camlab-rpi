@@ -45,6 +45,7 @@ ARCHIVE_SOURCES = Path(
     os.environ.get("CAMLAB_ARCHIVE_SOURCES", "/etc/apt/sources.list.d/kurokesu.sources")
 )
 APT_LISTS = Path(os.environ.get("CAMLAB_APT_LISTS", "/var/lib/apt/lists"))
+MOUNTS = Path(os.environ.get("CAMLAB_MOUNTS", "/proc/self/mounts"))
 
 APP_PACKAGE = "camlab"
 
@@ -116,7 +117,12 @@ def archive_packages() -> set[str]:
     prefix = _archive_key().replace("/", "_")
     names: set[str] = set()
     for path in APT_LISTS.glob(f"{prefix}*_Packages"):
-        for line in path.read_text(errors="replace").splitlines():
+        try:
+            text = path.read_text(errors="replace")
+        except OSError:
+            # An index that vanished between glob and read is one apt never fetched.
+            continue
+        for line in text.splitlines():
             if line.startswith("Package: "):
                 names.add(line.split(":", 1)[1].strip())
     return names
@@ -315,7 +321,12 @@ def arm(ids: Sequence[str]) -> list[Component]:
             "armed": _now(),
         },
     )
-    unlock_next_boot()
+    try:
+        unlock_next_boot()
+    except Exception:
+        # A plan without a writable boot only costs the operator a reboot to learn that.
+        disarm()
+        raise
     return chosen
 
 
@@ -373,8 +384,21 @@ class _Progress:
         _paint(fraction, label)
 
 
+def _root_fstype() -> str:
+    try:
+        for line in MOUNTS.read_text(errors="replace").splitlines():
+            fields = line.split()
+            if len(fields) > 2 and fields[1] == "/":
+                return fields[2]
+    except OSError:
+        pass
+    return ""
+
+
 def _require_writable_root() -> None:
-    """Fail here rather than deep inside dpkg if the boot came up read-only anyway."""
+    """A locked root writes to a tmpfs upper, so only the mount type gives it away."""
+    if _root_fstype() == "overlay":
+        raise UpdateError("root is still the overlay, the writable boot did not happen")
     if not os.access("/usr", os.W_OK):
         raise UpdateError("root filesystem is read-only, cannot install")
 
@@ -476,11 +500,15 @@ def run() -> str:
             _install(sorted({p for i in ids for p in resolve(i).packages}), progress)
             progress.phase(0.70, 0.95, "Applying settings")
             converge(progress)
-        except UpdateError as exc:
-            error = str(exc)
+        except Exception as exc:  # noqa: BLE001 whatever broke, the box still relocks
+            error = str(exc) or type(exc).__name__
     disarm()
-    relock()
+    try:
+        relock()
+    except Exception as exc:  # noqa: BLE001 ExecStopPost retries it, but say so in the record
+        error = error or f"relock failed: {exc}"
     _record_run(ids, error)
+    _save_log()
     progress.finish("Restarting")
     return error
 
@@ -489,11 +517,22 @@ def _record_run(ids: Sequence[str], error: str) -> None:
     """Leave the outcome where the GUI finds it after the reboot."""
     try:
         state = survey()
-    except UpdateError:
+    except Exception:  # noqa: BLE001 a failed run is exactly when the survey cannot run
         state = {"version": _STATE_VERSION, "blocked": "", "components": []}
     state["checked"] = _now()
     state["last_run"] = {"finished": _now(), "components": list(ids), "error": error}
     write_state(state)
+
+
+def _save_log() -> None:
+    """The journal of a locked boot lives in RAM, so keep a copy beside the record."""
+    path = default_state_file().parent / "update.log"
+    try:
+        text = _run(["journalctl", "-b", "-u", "camlab-update.service", "--no-pager"])
+        path.write_text(text, encoding="utf-8", errors="replace")
+        path.chmod(0o644)
+    except Exception:  # noqa: BLE001 a missing log must not fail an otherwise good update
+        pass
 
 
 # survey and state file

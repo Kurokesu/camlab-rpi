@@ -54,9 +54,9 @@ def fake_resolve(ident: str, registry: SensorRegistry | None = None) -> Componen
     return Component(ident, ident, (f"{ident}-pkg",))
 
 
-def raiser(message: str):
+def raiser(message: str, kind: type[Exception] = UpdateError):
     def fail(*args, **kwargs):
-        raise UpdateError(message)
+        raise kind(message)
 
     return fail
 
@@ -166,6 +166,12 @@ class TestArchivePackages:
             "Package: camlab\nVersion: 1.0.0\n"
         )
         assert updater.archive_packages() == {"camlab"}
+
+    def test_unreadable_index_is_skipped(self, tmp_path: Path, monkeypatch):
+        """An index apt never fetched must not take the whole survey down with it."""
+        monkeypatch.setattr(updater, "APT_LISTS", tmp_path)
+        (tmp_path / "apt.kurokesu.com_dists_trixie_main_binary-arm64_Packages").mkdir()
+        assert updater.archive_packages() == set()
 
 
 class TestComponents:
@@ -302,6 +308,13 @@ class TestArm:
         updater.disarm()
         assert updater.read_plan() == {}
 
+    def test_a_plan_without_a_writable_boot_is_dropped(self, monkeypatch):
+        """Otherwise the next boot runs an update it cannot install and says so."""
+        monkeypatch.setattr(updater, "unlock_next_boot", raiser("cmdline.txt missing"))
+        with pytest.raises(UpdateError):
+            updater.arm(["app"])
+        assert updater.read_plan() == {}
+
 
 class TestRun:
     @pytest.fixture(autouse=True)
@@ -312,6 +325,10 @@ class TestRun:
         monkeypatch.setattr(updater, "FBSPLASH", tmp_path / "absent")
         monkeypatch.setattr(updater, "resolve", fake_resolve)
         monkeypatch.setattr(updater.os, "access", lambda path, mode: True)
+        mounts = tmp_path / "mounts"
+        mounts.write_text("/dev/mmcblk0p2 / ext4 rw,relatime 0 0\n")
+        monkeypatch.setattr(updater, "MOUNTS", mounts)
+        monkeypatch.setattr(updater, "_save_log", lambda: None)
         monkeypatch.setattr(updater, "_refresh_with_retry", lambda progress=None: None)
         monkeypatch.setattr(updater, "converge", lambda progress=None: True)
         monkeypatch.setattr(updater, "survey", lambda reg=None: {"version": 1, "components": []})
@@ -368,6 +385,52 @@ class TestRun:
         monkeypatch.setattr(updater.os, "access", lambda path, mode: False)
         assert "read-only" in updater.run()
         assert self.installed == []
+
+    def test_overlay_root_stops_before_apt(self, tmp_path: Path):
+        """A locked root is writable through a tmpfs upper, so only its type gives it away."""
+        self.arm()
+        (tmp_path / "mounts").write_text("overlayroot / overlay rw,relatime,lowerdir=/ 0 0\n")
+        assert "overlay" in updater.run()
+        assert self.installed == []
+
+    def test_any_failure_is_recorded(self, monkeypatch):
+        """Not just UpdateError. A bare crash told the operator the update had worked."""
+        self.arm()
+        monkeypatch.setattr(updater, "converge", raiser("boom", ValueError))
+        assert updater.run() == "boom"
+        assert updater.read_plan() == {}
+        assert updater.read_state()["last_run"]["error"] == "boom"
+
+    def test_failure_without_a_message_still_names_itself(self, monkeypatch):
+        self.arm()
+        monkeypatch.setattr(updater, "converge", raiser("", FileNotFoundError))
+        assert updater.run() == "FileNotFoundError"
+
+    def test_relock_failure_reaches_the_record(self, monkeypatch):
+        """A box left writable is the one failure the reboot cannot fix by itself."""
+        self.arm()
+        monkeypatch.setattr(updater, "relock", raiser("cmdline.txt missing"))
+        assert "cmdline.txt missing" in updater.run()
+        assert "cmdline.txt missing" in updater.read_state()["last_run"]["error"]
+
+
+class TestLogCopy:
+    """A boot that comes up locked keeps its journal in RAM, so the record needs a copy."""
+
+    @pytest.fixture(autouse=True)
+    def data_mount(self, tmp_path: Path, monkeypatch) -> Path:
+        monkeypatch.setenv("CAMLAB_UPDATE_FILE", str(tmp_path / "update.json"))
+        return tmp_path
+
+    def test_journal_lands_beside_the_record(self, data_mount: Path, monkeypatch):
+        monkeypatch.setattr(updater, "_run", lambda cmd, env=None: "journal text\n")
+        updater._save_log()
+        assert (data_mount / "update.log").read_text() == "journal text\n"
+
+    def test_missing_journal_is_not_a_failure(self, data_mount: Path, monkeypatch):
+        monkeypatch.setattr(updater, "_run", raiser("no journal"))
+        updater._save_log()
+        assert not (data_mount / "update.log").exists()
 
 
 class TestSplashProgress:
