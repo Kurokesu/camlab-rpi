@@ -23,7 +23,7 @@ class UpdatesCard(QtWidgets.QFrame):
     def __init__(
         self,
         state: dict,
-        on_apply: Callable[[str, str], None],
+        on_apply: Callable[[list[str], str], None],
         on_close: Callable[[], None],
         compact: bool = False,
     ):
@@ -49,12 +49,16 @@ class UpdatesCard(QtWidgets.QFrame):
 
         self.check_btn = QtWidgets.QPushButton("Check")
         self.check_btn.clicked.connect(self._check)
+        # One boot installs the lot, so sending them together saves a second reboot.
+        self.all_btn = QtWidgets.QPushButton("Update all")
+        self.all_btn.clicked.connect(self._apply_all)
         close_btn = QtWidgets.QPushButton("Close")
         close_btn.clicked.connect(on_close)
         # Every other button here reboots the box, so Enter lands on Close.
         self.primary_button = close_btn
         buttons = QtWidgets.QHBoxLayout()
         buttons.addWidget(self.check_btn)
+        buttons.addWidget(self.all_btn)
         buttons.addStretch(1)
         buttons.addWidget(close_btn)
 
@@ -77,10 +81,15 @@ class UpdatesCard(QtWidgets.QFrame):
             if widget is not None:
                 widget.deleteLater()
 
+        pending = updater.pending_ids(self._state)
+        # Only worth its own button when it saves a reboot.
+        self.all_btn.setVisible(len(pending) > 1)
+
         blocked = self._state.get("blocked")
         if blocked:
             self._grid.addWidget(self._note(f"Updates are not available here: {blocked}."), 0, 0)
             self.check_btn.setEnabled(False)
+            self.all_btn.setVisible(False)
             self.status_lbl.setText("")
             return
 
@@ -97,12 +106,16 @@ class UpdatesCard(QtWidgets.QFrame):
             button = QtWidgets.QPushButton("Update")
             button.setEnabled(bool(available))
             button.clicked.connect(
-                lambda _checked, c=component: self._on_apply(c["id"], c["label"])
+                lambda _checked, c=component: self._on_apply([c["id"]], c["label"])
             )
             self._grid.addWidget(label, row, 0)
             self._grid.addWidget(version, row, 1)
             self._grid.addWidget(button, row, 2)
         self.status_lbl.setText(self._status_text())
+
+    def _apply_all(self) -> None:
+        pending = updater.pending_ids(self._state)
+        self._on_apply(pending, f"{len(pending)} components")
 
     @staticmethod
     def _note(text: str) -> QtWidgets.QLabel:
