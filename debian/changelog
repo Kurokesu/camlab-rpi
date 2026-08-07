@@ -1,3 +1,15 @@
+camlab-rpi (1.0.0-1) unstable; urgency=medium
+
+  * New upstream release. Notes:
+    https://github.com/Kurokesu/camlab-rpi/releases/tag/v1.0.0
+  * Rename source and binary package to camlab-rpi. Suite names an OS
+    release and architecture names a CPU, neither names a board, so a
+    port to another arm64 board has nowhere to go.
+  * Install /usr/bin/camlab-setup, symlinked to install.sh in the
+    payload.
+
+ -- Danius Kalvaitis <danius@kurokesu.com>  Fri, 07 Aug 2026 18:45:00 +0300
+
 camlab (1.0.0~beta.4-1) unstable; urgency=medium
 
   * New upstream release. Notes:
