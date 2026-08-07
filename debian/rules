@@ -29,6 +29,6 @@ override_dh_auto_install:
 			exit 1; \
 		} ;; \
 	esac
-	mkdir -p debian/camlab/opt/camlab
+	mkdir -p debian/camlab-rpi/opt/camlab
 	tar -cf - --exclude=./debian --exclude=./.pc . \
-		| tar -xf - -C debian/camlab/opt/camlab
+		| tar -xf - -C debian/camlab-rpi/opt/camlab

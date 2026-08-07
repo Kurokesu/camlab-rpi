@@ -1,7 +1,7 @@
 Packaging layout and release procedure
 =======================================
 
-Packaging branch for camlab, kept separate from app source under a
+Packaging branch for camlab-rpi, kept separate from app source under a
 DEP-14 layout:
 
  * main - app source (camlab/, scripts/, deploy/, install.sh).
@@ -33,7 +33,7 @@ reusable workflow.
 Publish semantics also differ from the driver repos: deb assets land
 on the existing v-tag source release, next to the README-pinned
 camlab-rpi-<version>.tar.gz. The publish step deletes only assets it
-owns (SHA256SUMS* and camlab_*.tar.gz bundles), never the source
+owns (SHA256SUMS* and camlab-rpi_*.tar.gz bundles), never the source
 tarball, and touches no release flags or notes. The Kurokesu/apt
 manifest PR is what gates the archive.
 
@@ -62,10 +62,22 @@ A packaging-only rebuild (1.0.0-1 to 1.0.0-2) is a new changelog entry
 and a new packaging tag. The source tag is reused, not retagged, and
 the publish step replaces the previous revision's bundle.
 
-Release assets: a tarball camlab_<version>.tar.gz carrying the .deb
+Release assets: a tarball camlab-rpi_<version>.tar.gz carrying the .deb
 plus the build's .changes and .buildinfo, alongside SHA256SUMS and a
 detached SHA256SUMS.asc signed with the archive key. A source package
 stays in workflow-run artifacts only.
+
+Setting up a box
+----------------
+
+The package owns /opt/camlab and /usr/bin/camlab-setup, a symlink to
+install.sh in the payload. Everything outside /opt, the service, boot
+config, sudoers and the read-only overlay, is camlab-setup's, run once
+after install. That work asks the operator questions and writes
+/usr/local, neither of which belongs in a postinst.
+
+install.sh skips its copy step when it runs from /opt/camlab, so the
+same script serves both the package and a clone.
 
 Migrating from an install.sh install
 ------------------------------------
@@ -81,8 +93,8 @@ policy keeps packages out of /usr/local.
 Forks
 -----
 
-Updates only apply where the installed camlab came from the configured
-archive origin, so a git fork or a tarball install gets no update path.
-A fork wanting its own updates either renames the package, declaring
-Conflicts and Replaces on camlab since both own /opt/camlab, or serves
-camlab from its own archive.
+Updates only apply where the installed camlab-rpi came from the
+configured archive origin, so a git fork or a tarball install gets no
+update path. A fork wanting its own updates either renames the package,
+declaring Conflicts and Replaces on camlab-rpi since both own
+/opt/camlab, or serves camlab-rpi from its own archive.

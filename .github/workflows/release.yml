@@ -230,11 +230,12 @@ jobs:
           # Delete only assets this workflow owns: signed checksums and
           # deb bundles. A packaging rebuild (-1 to -2) must not leave
           # the old revision's bundle beside checksums that no longer
-          # list it. Source tarball names (camlab-rpi-*.tar.gz) never
-          # match these patterns.
+          # list it. The source tarball is camlab-rpi-<version>.tar.gz,
+          # one dash away from the bundle, so the underscore is load
+          # bearing here.
           gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
             --json assets --jq '.assets[].name' > existing.txt
-          grep -E '^SHA256SUMS|^camlab_.*\.tar\.gz$' existing.txt > owned.txt || true
+          grep -E '^SHA256SUMS|^camlab-rpi_.*\.tar\.gz$' existing.txt > owned.txt || true
           xargs -r -I{} gh release delete-asset "$TAG" {} --yes \
             --repo "$GITHUB_REPOSITORY" < owned.txt
 

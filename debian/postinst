@@ -12,7 +12,7 @@ case "$1" in
         # not own. User data is kept in /var/lib/camlab, never here.
         owned=$(mktemp)
         present=$(mktemp)
-        dpkg-query -L camlab | sort -u > "$owned"
+        dpkg-query -L camlab-rpi | sort -u > "$owned"
         find "$APP_DIR" \( -type f -o -type l \) | sort -u > "$present"
         comm -13 "$owned" "$present" | while IFS= read -r f; do
             rm -f "$f"
@@ -27,7 +27,7 @@ case "$1" in
         # /var/lib/camlab data mount, which outlives a reflash and would
         # fake convergence on a fresh root.
         mkdir -p "$STAMP_DIR"
-        dpkg-query -W -f '${Version}\n' camlab > "$STAMP_DIR/version"
+        dpkg-query -W -f '${Version}\n' camlab-rpi > "$STAMP_DIR/version"
 
         # Pick up the new tree if the app is running. Never fails the
         # install: a broken app is the service's problem (it restarts

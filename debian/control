@@ -1,4 +1,4 @@
-Source: camlab
+Source: camlab-rpi
 Section: video
 Priority: optional
 Maintainer: Kurokesu <info@kurokesu.com>
@@ -7,7 +7,7 @@ Standards-Version: 4.7.0
 Homepage: https://github.com/Kurokesu/camlab-rpi
 Rules-Requires-Root: no
 
-Package: camlab
+Package: camlab-rpi
 Architecture: all
 # Mirrors what scripts/setup/deps.sh and drivers.sh install on main.
 # Sync on every release. Version floors (>=) go on Kurokesu stack
@@ -34,4 +34,4 @@ Description: Kurokesu camera test bench tool for Raspberry Pi
  .
  Installs the application tree to /opt/camlab and restarts a running
  camlab.service. Service wiring, boot tuning and the read-only overlay
- stay with the repo install script for now.
+ stay with camlab-setup, which the operator runs once after install.
