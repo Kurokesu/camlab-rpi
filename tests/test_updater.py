@@ -17,7 +17,7 @@ from camlab.updater import Component, PackageState, UpdateError
 ARCHIVE = "https://apt.kurokesu.com"
 
 FROM_ARCHIVE = """\
-camlab:
+camlab-rpi:
   Installed: 1.0.0
   Candidate: 1.0.1
   Version table:
@@ -29,7 +29,7 @@ camlab:
 """
 
 HAND_INSTALLED = """\
-camlab:
+camlab-rpi:
   Installed: 1.0.0+fork
   Candidate: 1.0.1
   Version table:
@@ -40,7 +40,7 @@ camlab:
 """
 
 NOT_INSTALLED = """\
-camlab:
+camlab-rpi:
   Installed: (none)
   Candidate: 1.0.1
   Version table:
@@ -122,41 +122,41 @@ class TestReason:
 class TestPolicy:
     def test_reads_installed_and_candidate(self, policy):
         policy(FROM_ARCHIVE)
-        state = updater.package_states(["camlab"])["camlab"]
+        state = updater.package_states(["camlab-rpi"])["camlab-rpi"]
         assert (state.installed, state.candidate) == ("1.0.0", "1.0.1")
 
     def test_uninstalled_reads_as_none(self, policy):
         policy(NOT_INSTALLED)
-        assert updater.package_states(["camlab"])["camlab"].installed is None
+        assert updater.package_states(["camlab-rpi"])["camlab-rpi"].installed is None
 
     def test_archive_version_is_flagged(self, policy):
         policy(FROM_ARCHIVE)
-        assert updater.package_states(["camlab"])["camlab"].from_archive
+        assert updater.package_states(["camlab-rpi"])["camlab-rpi"].from_archive
 
     def test_hand_installed_version_is_not(self, policy):
         """Only dpkg offers it, so the archive did not put it there."""
         policy(HAND_INSTALLED)
-        assert not updater.package_states(["camlab"])["camlab"].from_archive
+        assert not updater.package_states(["camlab-rpi"])["camlab-rpi"].from_archive
 
     def test_staging_archive_on_disk_counts(self, policy, monkeypatch):
         """apt prints file: URLs with one slash, validation runs against such an archive."""
         monkeypatch.setattr(updater, "ARCHIVE_URL", "file:///srv/camlab-staging")
         policy(FROM_ARCHIVE.replace("https://apt.kurokesu.com", "file:/srv/camlab-staging"))
-        assert updater.package_states(["camlab"])["camlab"].from_archive
+        assert updater.package_states(["camlab-rpi"])["camlab-rpi"].from_archive
 
     def test_newer_candidate_is_pending(self, policy):
         policy(FROM_ARCHIVE)
-        assert updater.package_states(["camlab"])["camlab"].pending == "1.0.1"
+        assert updater.package_states(["camlab-rpi"])["camlab-rpi"].pending == "1.0.1"
 
     def test_same_version_is_not_pending(self, policy, monkeypatch):
         policy(FROM_ARCHIVE)
         monkeypatch.setattr(updater, "_newer", lambda cand, inst: False)
-        assert updater.package_states(["camlab"])["camlab"].pending == ""
+        assert updater.package_states(["camlab-rpi"])["camlab-rpi"].pending == ""
 
     def test_unknown_package_is_absent(self, policy):
         """apt-cache prints nothing for a name it does not know."""
         policy("")
-        assert updater.package_states(["camlab"]) == {}
+        assert updater.package_states(["camlab-rpi"]) == {}
 
     def test_no_names_skips_apt(self, monkeypatch):
         monkeypatch.setattr(updater, "_run", lambda cmd: pytest.fail("apt-cache called"))
@@ -167,12 +167,12 @@ class TestArchivePackages:
     def test_reads_the_archive_index_only(self, tmp_path: Path, monkeypatch):
         monkeypatch.setattr(updater, "APT_LISTS", tmp_path)
         (tmp_path / "apt.kurokesu.com_dists_trixie_main_binary-arm64_Packages").write_text(
-            "Package: camlab\nVersion: 1.0.0\n\nPackage: libcamera0.7\nVersion: 1:0.7.1\n"
+            "Package: camlab-rpi\nVersion: 1.0.0\n\nPackage: libcamera0.7\nVersion: 1:0.7.1\n"
         )
         (tmp_path / "deb.debian.org_debian_dists_trixie_main_binary-arm64_Packages").write_text(
             "Package: coreutils\nVersion: 9.4\n"
         )
-        assert updater.archive_packages() == {"camlab", "libcamera0.7"}
+        assert updater.archive_packages() == {"camlab-rpi", "libcamera0.7"}
 
     def test_missing_index_reads_as_empty(self, tmp_path: Path, monkeypatch):
         monkeypatch.setattr(updater, "APT_LISTS", tmp_path / "gone")
@@ -182,9 +182,9 @@ class TestArchivePackages:
         monkeypatch.setattr(updater, "APT_LISTS", tmp_path)
         monkeypatch.setattr(updater, "ARCHIVE_URL", "file:///srv/camlab-staging")
         (tmp_path / "_srv_camlab-staging_dists_trixie_main_binary-arm64_Packages").write_text(
-            "Package: camlab\nVersion: 1.0.0\n"
+            "Package: camlab-rpi\nVersion: 1.0.0\n"
         )
-        assert updater.archive_packages() == {"camlab"}
+        assert updater.archive_packages() == {"camlab-rpi"}
 
     def test_unreadable_index_is_skipped(self, tmp_path: Path, monkeypatch):
         """An index apt never fetched must not take the whole survey down with it."""
@@ -195,8 +195,8 @@ class TestArchivePackages:
 
 class TestComponents:
     def test_app_comes_first(self, registry, inventory):
-        inventory({"camlab"}, {"camlab"})
-        assert updater.components(registry)[0] == Component("app", "camlab", ("camlab",))
+        inventory({"camlab-rpi"}, {"camlab-rpi"})
+        assert updater.components(registry)[0] == Component("app", "camlab-rpi", ("camlab-rpi",))
 
     def test_driver_ids_follow_the_registry(self, registry, inventory):
         inventory(set(), set())
@@ -209,14 +209,14 @@ class TestComponents:
 
     def test_stack_takes_the_rest_of_the_archive(self, registry, inventory):
         inventory(
-            {"camlab", "ar0234-rpi-dkms", "libcamera0.7", "python3-libcamera"},
-            {"camlab", "ar0234-rpi-dkms", "libcamera0.7", "python3-libcamera", "coreutils"},
+            {"camlab-rpi", "ar0234-rpi-dkms", "libcamera0.7", "python3-libcamera"},
+            {"camlab-rpi", "ar0234-rpi-dkms", "libcamera0.7", "python3-libcamera", "coreutils"},
         )
         stack = [c for c in updater.components(registry) if c.id == "stack"]
         assert stack[0].packages == ("libcamera0.7", "python3-libcamera")
 
     def test_stack_skips_uninstalled_archive_packages(self, registry, inventory):
-        inventory({"camlab", "libcamera0.7"}, {"camlab"})
+        inventory({"camlab-rpi", "libcamera0.7"}, {"camlab-rpi"})
         assert "stack" not in [c.id for c in updater.components(registry)]
 
     def test_resolve_maps_an_id_to_packages(self, registry, inventory):
@@ -249,7 +249,7 @@ class TestSurvey:
     def one_pending_driver(self, monkeypatch, inventory):
         inventory(set(), set())
         states = {
-            "camlab": PackageState("camlab", "1.0.0", "1.0.0", True, ""),
+            "camlab-rpi": PackageState("camlab-rpi", "1.0.0", "1.0.0", True, ""),
             "ar0234-rpi-dkms": PackageState("ar0234-rpi-dkms", "0.1.0", "0.2.0", True, "0.2.0"),
         }
         monkeypatch.setattr(updater, "package_states", lambda names: states)

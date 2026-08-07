@@ -61,13 +61,22 @@ sudo reboot
 
 ### Install camlab
 
-- Download latest [release](https://github.com/Kurokesu/camlab-rpi/releases) and install:
+- Enable [Kurokesu apt archive](https://apt.kurokesu.com):
 
 ```bash
-curl -fLO https://github.com/Kurokesu/camlab-rpi/releases/download/v1.0.0-beta.4/camlab-rpi-1.0.0-beta.4.tar.gz
-tar -xzf camlab-rpi-1.0.0-beta.4.tar.gz && cd camlab-rpi-1.0.0-beta.4
-sudo ./install.sh
+curl -fsSLO https://apt.kurokesu.com/setup.sh
+sudo sh setup.sh --update
 ```
+
+- Install camlab and set up kiosk:
+
+```bash
+sudo apt install camlab-rpi
+sudo camlab-setup
+```
+
+> [!NOTE]
+> Installing from apt is what makes in-app updates work. A copy unpacked by hand gets none.
 
 - Start **camlab** when install finishes:
 
@@ -86,13 +95,12 @@ sudo systemctl start camlab
 
 ## Install details
 
-By default `install.sh`:
+By default `camlab-setup`:
 
 - Enables [Kurokesu apt archive](https://apt.kurokesu.com)
 - Installs Kurokesu libcamera fork
 - Installs Kurokesu sensor drivers
 - Removes unused packages (rpicam-apps stack, sibling kernel flavor)
-- Copies app to `/opt/camlab`
 - Enables kiosk service
 - Locks root read-only on next reboot
 

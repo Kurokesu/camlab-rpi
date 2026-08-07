@@ -6,12 +6,12 @@
 Component ids map to package names here, so the shim never takes a package
 name from its caller:
 
-    app             camlab
+    app             camlab-rpi
     driver:<name>   driver_package from data/sensors.yaml
     stack           installed archive packages that are neither of the above
 
-Only a camlab that came from the archive gets updates, so tarball installs and
-forks get none (update_path()).
+Only a camlab-rpi that came from the archive gets updates, so hand-unpacked
+copies and forks get none (update_path()).
 
 Surveying is unprivileged. Installing needs root via the sudo shim
 (deploy/camlab-sudoers):
@@ -47,7 +47,7 @@ ARCHIVE_SOURCES = Path(
 APT_LISTS = Path(os.environ.get("CAMLAB_APT_LISTS", "/var/lib/apt/lists"))
 MOUNTS = Path(os.environ.get("CAMLAB_MOUNTS", "/proc/self/mounts"))
 
-APP_PACKAGE = "camlab"
+APP_PACKAGE = "camlab-rpi"
 
 FW_DIR = Path(os.environ.get("CAMLAB_FW_DIR", "/boot/firmware"))
 CMDLINE = FW_DIR / "cmdline.txt"
