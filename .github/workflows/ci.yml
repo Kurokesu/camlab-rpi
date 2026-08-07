@@ -16,7 +16,7 @@ jobs:
 
       - name: Ruff
         run: |
-          pip install ruff
+          pip install ruff==0.16.1
           ruff check camlab tests deploy
           ruff format --check camlab tests deploy
 
