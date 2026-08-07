@@ -21,7 +21,9 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 LOGO = "/lib/firmware/logo.tga"
-FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+# splash.sh installs the face beside this script. Second is a repo checkout.
+FONT_DIRS = (Path(__file__).resolve().parent, Path(__file__).resolve().parents[2] / "camlab/assets")
+FONT_NAME = "Roboto-Regular.ttf"
 TRACK = (51, 51, 51)
 INK = (255, 255, 255)
 BAR_H = 6
@@ -65,14 +67,24 @@ def block_top(box: tuple[int, int, int, int]) -> int:
     return y + h + h // 2
 
 
+def font_file() -> Path | None:
+    return next((d / FONT_NAME for d in FONT_DIRS if (d / FONT_NAME).is_file()), None)
+
+
 def draw_label(canvas: np.ndarray, box: tuple[int, int, int, int], top: int, text: str) -> int:
-    """Status line centered at top, blended so glyph edges stay smooth. Returns its bottom."""
+    """Status line centered at top, blended so glyph edges stay smooth. Returns its bottom.
+
+    No font drops the line and leaves the bar in its place.
+    """
+    path = font_file()
+    if path is None:
+        return top
     size = max(10, int(box[3] * 0.2))
     mask = Image.new("L", canvas.shape[1::-1], 0)
     ImageDraw.Draw(mask).text(
         (canvas.shape[1] // 2, top),
         text,
-        font=ImageFont.truetype(FONT, size),
+        font=ImageFont.truetype(str(path), size),
         fill=255,
         anchor="ma",
     )

@@ -41,13 +41,13 @@ apt-get install -y eatmydata
 
 # One pass, recommends off. picamera2 pulls +krks libcamera fork.
 # Pinned recommends: python3-opengl, qt6-wayland, awb-nn. wlr-randr for HDMI/DSI switch.
-# python3-pil and fonts-dejavu-core draw the boot splash text.
+# python3-pil draws boot splash text.
 log "Installing packages..."
 apt_get install -y --no-install-recommends \
     python3-picamera2 \
     python3-pyqt6 python3-opengl \
     python3-yaml python3-pil \
-    cage wlr-randr fonts-dejavu-core \
+    cage wlr-randr \
     qt6-wayland awb-nn
 
 # camlab never runs rpicam-* CLI. Purge only installed names (set -e safe).
