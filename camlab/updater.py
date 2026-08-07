@@ -17,7 +17,7 @@ Surveying is unprivileged. Installing needs root via the sudo shim
 (deploy/camlab-sudoers):
 
     sudo /usr/local/bin/camlab-update check
-    sudo /usr/local/bin/camlab-update apply driver ar0234
+    sudo /usr/local/bin/camlab-update apply driver:ar0234
 
 apply writes a plan and flips the next boot writable, where
 camlab-update.service installs, reapplies setup wiring, relocks and reboots.
@@ -621,9 +621,9 @@ def _main(argv: list[str] | None = None) -> int:
     sub.add_parser("status", help="print components and versions as JSON")
     sub.add_parser("check", help="refresh the archive index and stamp the state file (root)")
     p_show = sub.add_parser("show", help="print the packages a component id resolves to")
-    p_show.add_argument("component", nargs="+", help="component id, e.g. app or driver ar0234")
+    p_show.add_argument("component", help="component id, e.g. app or driver:ar0234")
     p_apply = sub.add_parser("apply", help="arm an update boot and reboot into it (root)")
-    p_apply.add_argument("component", nargs="*", help="component id, default everything pending")
+    p_apply.add_argument("component", nargs="*", help="component ids, default everything pending")
     p_apply.add_argument("--no-reboot", action="store_true", help="arm only, reboot by hand")
     sub.add_parser("run", help="install the armed plan, for the update boot only (root)")
     sub.add_parser("relock", help="drop the writable boot token (root)")
@@ -633,7 +633,7 @@ def _main(argv: list[str] | None = None) -> int:
         print(json.dumps({**survey(), "checked": read_state().get("checked", "")}, indent=2))
         return 0
     if args.cmd == "show":
-        component = resolve(":".join(args.component))
+        component = resolve(args.component)
         print(f"{component.id}: {' '.join(component.packages)}")
         return 0
     if args.cmd == "check":
@@ -651,10 +651,7 @@ def _main(argv: list[str] | None = None) -> int:
     if args.cmd == "apply":
         if not _require_root(args.cmd):
             return 2
-        if args.component:
-            ids = [":".join(args.component)]
-        else:
-            ids = [c["id"] for c in survey()["components"] if c["pending"]]
+        ids = list(args.component) or [c["id"] for c in survey()["components"] if c["pending"]]
         if not ids:
             print("nothing to update")
             return 0
