@@ -89,7 +89,11 @@ stage_config() {
         return
     fi
     block_write "$CONFIG_TXT" "$BEGIN" "$END" $'dtoverlay=disable-bt\ndisable_splash=1'
-    log "config.txt: wrote managed block (disable-bt, disable_splash)"
+    if [ "$CAMLAB_WROTE" -eq 1 ]; then
+        log "config.txt: wrote managed block (disable-bt, disable_splash)"
+    else
+        log "config.txt: managed block already in place"
+    fi
 }
 
 stage_systemd() {
