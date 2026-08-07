@@ -61,13 +61,17 @@ sudo reboot
 
 ### Install camlab
 
-- Download latest [release](https://github.com/Kurokesu/camlab-rpi/releases) and install:
+- Enable the [Kurokesu apt archive](https://apt.kurokesu.com), install the package, then set up the kiosk:
 
 ```bash
-curl -fLO https://github.com/Kurokesu/camlab-rpi/releases/download/v1.0.0-beta.4/camlab-rpi-1.0.0-beta.4.tar.gz
-tar -xzf camlab-rpi-1.0.0-beta.4.tar.gz && cd camlab-rpi-1.0.0-beta.4
-sudo ./install.sh
+curl -fsSLO https://apt.kurokesu.com/setup.sh
+sudo sh setup.sh --update
+sudo apt install camlab
+sudo /opt/camlab/install.sh
 ```
+
+> [!NOTE]
+> Installing from apt is what makes in-app updates work. A copy unpacked by hand gets none.
 
 - Start **camlab** when install finishes:
 
@@ -92,9 +96,12 @@ By default `install.sh`:
 - Installs Kurokesu libcamera fork
 - Installs Kurokesu sensor drivers
 - Removes unused packages (rpicam-apps stack, sibling kernel flavor)
-- Copies app to `/opt/camlab`
 - Enables kiosk service
 - Locks root read-only on next reboot
+
+The `camlab` package owns `/opt/camlab` and nothing else. Everything outside it, the service, boot
+config, splash and read-only root, belongs to `install.sh`, which is why both steps are needed.
+Run it from a clone and it copies that clone over the package files, which is a dev install.
 
 Optional flags:
 
