@@ -100,6 +100,25 @@ def inventory(monkeypatch: pytest.MonkeyPatch):
     return build
 
 
+class TestReason:
+    """A failure is recorded as one line, so it should be the one naming the problem."""
+
+    def test_the_first_error_wins_over_apt_summary(self):
+        text = (
+            "Err:1 https://apt.kurokesu.com trixie InRelease\n"
+            "  Could not connect to apt.kurokesu.com\n"
+            "E: Failed to fetch https://apt.kurokesu.com/dists/trixie/InRelease\n"
+            "E: Some index files failed to download.\n"
+        )
+        assert updater._reason(text).startswith("E: Failed to fetch")
+
+    def test_without_an_error_line_the_last_one_stands(self):
+        assert updater._reason("dpkg: warning\nsomething went wrong\n") == "something went wrong"
+
+    def test_no_output_reads_as_empty(self):
+        assert updater._reason("") == ""
+
+
 class TestPolicy:
     def test_reads_installed_and_candidate(self, policy):
         policy(FROM_ARCHIVE)

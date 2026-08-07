@@ -85,12 +85,19 @@ class UpdateError(Exception):
 
 
 def _run(cmd: list[str], env: dict[str, str] | None = None) -> str:
-    """Stdout of cmd. Failure raises with the tool's own last line as reason."""
+    """Stdout of cmd. Failure raises with the tool's own words as reason."""
     proc = subprocess.run(cmd, capture_output=True, text=True, check=False, env=env)
     if proc.returncode != 0:
-        lines = (proc.stderr or proc.stdout).strip().splitlines()
-        raise UpdateError(lines[-1] if lines else f"{cmd[0]} exited {proc.returncode}")
+        raise UpdateError(
+            _reason(proc.stderr or proc.stdout) or f"{cmd[0]} exited {proc.returncode}"
+        )
     return proc.stdout
+
+
+def _reason(output: str) -> str:
+    """First error apt printed. Its last line is the summary of them all."""
+    lines = output.strip().splitlines()
+    return next((line for line in lines if line.startswith("E:")), lines[-1] if lines else "")
 
 
 def _run_logged(cmd: list[str], env: dict[str, str] | None = None) -> None:
