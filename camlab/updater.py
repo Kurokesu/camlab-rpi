@@ -249,6 +249,11 @@ def update_path(states: dict[str, PackageState] | None = None) -> str:
     return ""
 
 
+def _unreadable_index(error: str) -> bool:
+    """apt's wording for a cached index it cannot read, what a power cut leaves."""
+    return any(s in error.lower() for s in ("could not be parsed", "could not be opened"))
+
+
 def drop_lists() -> int:
     """Delete this archive's cached index. A power cut can leave a file apt cannot parse."""
     prefix = _archive_key().replace("/", "_")
@@ -433,19 +438,23 @@ def _require_writable_root() -> None:
 
 def _refresh_with_retry(progress: _Progress | None = None, tries: int = 6, delay: int = 10) -> None:
     """Networking comes up alongside this boot, so give the archive a minute."""
-    for left in range(tries - 1, -1, -1):
+    dropped, attempt = False, 0
+    while True:
         try:
             refresh()
             return
-        except UpdateError:
-            if left == 0:
-                # One retry on a clean index, an unparsable one fails the same way forever.
+        except UpdateError as exc:
+            attempt += 1
+            print(f"refresh attempt {attempt} failed: {exc}", file=sys.stderr)
+            # An index apt cannot read fails the same way however long we wait for it.
+            if not dropped and (_unreadable_index(str(exc)) or attempt >= tries):
+                dropped = True
                 if drop_lists():
-                    refresh()
-                    return
+                    continue
+            if attempt >= tries:
                 raise
             if progress:
-                progress.step(1.0 - left / tries, "Waiting for network")
+                progress.step(attempt / tries, "Waiting for network")
             time.sleep(delay)
 
 
