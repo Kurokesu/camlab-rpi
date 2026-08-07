@@ -87,8 +87,12 @@ apt_get() {
 # Write via a temp file in the same dir, so readers never see a half-written
 # boot-critical file. Mode of an existing file is preserved. An unchanged file is
 # left alone, convergence runs this over config.txt on the FAT partition.
+# 1 when the last atomic_write changed the file, for callers that log about it.
+CAMLAB_WROTE=0
+
 atomic_write() {
     local path="$1" content="$2" tmp
+    CAMLAB_WROTE=0
     if [ -f "$path" ] && printf '%s' "$content" | cmp -s - "$path"; then
         return 0
     fi
@@ -96,6 +100,8 @@ atomic_write() {
     printf '%s' "$content" > "$tmp"
     if [ -f "$path" ]; then chmod --reference="$path" "$tmp" 2>/dev/null || true; fi
     mv -f "$tmp" "$path"
+    # shellcheck disable=SC2034 # read by sourcing scripts
+    CAMLAB_WROTE=1
 }
 
 # Managed-block editing. Each setup script owns a marker pair, so edits to shared
