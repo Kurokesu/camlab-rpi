@@ -25,12 +25,32 @@ fi
 # Primitives set CAMLAB_TAG before sourcing, else fall back to "camlab".
 : "${CAMLAB_TAG:=camlab}"
 
-# camlab owner: whoever ran sudo, else current user.
-if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
-    CAMLAB_USER="$SUDO_USER"
-else
-    CAMLAB_USER="$(whoami)"
-fi
+# camlab owner. An update boot runs as root with no SUDO_USER, so the stamp and
+# the installed unit are what keep convergence from re-rendering a root kiosk.
+CAMLAB_USER_FILE="${CAMLAB_USER_FILE:-/var/lib/camlab-setup/user}"
+CAMLAB_UNIT="${CAMLAB_UNIT:-/etc/systemd/system/camlab.service}"
+
+_camlab_user() {
+    local user
+    if [ -n "${CAMLAB_USER:-}" ]; then echo "$CAMLAB_USER"; return; fi
+    if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then echo "$SUDO_USER"; return; fi
+    user="$(head -n1 "$CAMLAB_USER_FILE" 2>/dev/null | tr -d '[:space:]')"
+    if [ -z "$user" ]; then
+        user="$(sed -n 's/^User=//p' "$CAMLAB_UNIT" 2>/dev/null | head -n1)"
+    fi
+    echo "${user:-$(whoami)}"
+}
+
+CAMLAB_USER="$(_camlab_user)"
+
+# Remember the owner for later root-only runs. Callers that render CAMLAB_USER
+# into a file call this once they know it is not root.
+save_camlab_user() {
+    [ "$(id -u)" -eq 0 ] || return 0
+    [ "$CAMLAB_USER" != "root" ] || return 0
+    mkdir -p "$(dirname "$CAMLAB_USER_FILE")"
+    printf '%s\n' "$CAMLAB_USER" > "$CAMLAB_USER_FILE"
+}
 
 # shellcheck disable=SC2034  # read by sourcing scripts
 CAMLAB_UID="$(id -u "$CAMLAB_USER")"

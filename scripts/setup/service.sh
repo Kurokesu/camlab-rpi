@@ -30,6 +30,11 @@ done
 
 require_root
 
+# An update boot converges as root with no SUDO_USER. Rendering User=root would
+# hand the kiosk root and leave the operator's own state unreadable.
+[ "$CAMLAB_USER" != "root" ] || die "Cannot tell who owns the kiosk. Re-run under sudo from that account."
+save_camlab_user
+
 REPO_DIR="$(resolve_repo_dir)"
 
 header "Installing camlab.service"
