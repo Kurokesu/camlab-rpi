@@ -802,13 +802,19 @@ class MainWindow(QtWidgets.QMainWindow):
             )
         )
 
-    def _confirm_update(self, ids: list[str], label: str) -> None:
+    def _confirm_update(self, ids: list[str], labels: list[str]) -> None:
         self._close_modal()
+        note = "Installs on reboot, takes a few minutes."
+        if len(labels) > 1:
+            # Names go in the body, an unwrapped title would stretch the card.
+            title = f"Update {len(labels)} components?"
+            note = f"{', '.join(labels)}. {note}"
+        else:
+            title = f"Update {labels[0]}?"
         self._open_modal(
             message_card(
-                f"Update {label}?",
-                "The box reboots, installs with a progress bar on screen and comes back on its "
-                "own. The camera is off until it does, which takes a few minutes.",
+                title,
+                note,
                 [
                     ("Cancel", "", self._close_modal),
                     ("Update", "danger", lambda: self._apply_update(ids)),
@@ -819,7 +825,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _apply_update(self, ids: list[str]) -> None:
         self._close_modal()
         self._flush_pending_persist()
-        self._open_modal(message_card("Starting the update", "The box reboots in a moment.", []))
+        self._open_modal(message_card("Starting the update", "", []))
         # Painted first: arming surveys apt and then reboots, all of it blocking.
         QtCore.QTimer.singleShot(_PAINT_MS, lambda: self._arm_update(ids))
 
