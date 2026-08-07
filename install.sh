@@ -6,11 +6,11 @@
 # Installs to /opt/camlab as boot kiosk (camlab.service).
 # Partial reconfig: run individual scripts/setup/ scripts.
 #
-# Usage:
-#   sudo ./install.sh                                # full install
-#   sudo ./install.sh --no-readonly                  # keep root fs writable (dev install)
-#   sudo ./install.sh --display vc4-kms-dsi-7inch    # CM5 DSI panel (Pi 5 auto-detects)
-#   ./install.sh --help                              # this message
+# Usage, as camlab-setup after an apt install or as ./install.sh from a clone:
+#   sudo camlab-setup                                # full install
+#   sudo camlab-setup --no-readonly                  # keep root fs writable (dev install)
+#   sudo camlab-setup --display vc4-kms-dsi-7inch    # CM5 DSI panel (Pi 5 auto-detects)
+#   camlab-setup --help                              # this message
 #
 # Requirements:
 #   - Raspberry Pi CM5 + IO board, or a Pi 5
@@ -19,7 +19,8 @@
 
 set -euo pipefail
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# realpath: the package installs /usr/bin/camlab-setup as a symlink to this.
+REPO_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
 LOG_FILE="/var/log/camlab-install.log"
 # shellcheck disable=SC2034  # log tag read by common.sh
 CAMLAB_TAG="install"
