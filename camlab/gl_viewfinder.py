@@ -342,12 +342,15 @@ class _Buffer:
 class GlViewfinder(QOpenGLWidget):
     """In-scene zero-copy viewfinder widget driving the picamera2 event loop."""
 
-    def __init__(self, picam2, parent=None, transform: int = 0):
+    def __init__(self, picam2, parent=None, transform: int = 0, mirror: bool = False):
         super().__init__(parent)
         self.picamera2 = picam2
         if transform not in (0, 90, 180, 270):
             raise ValueError(f"transform must be 0, 90, 180 or 270 (got {transform})")
         self._transform = transform
+        # Preview only, captures are untouched. A booth wants a mirror to frame
+        # against, not flipped stills.
+        self._mirror = bool(mirror)
         # Pure black pillarboxes: picture reads as natural focus target, blend into dark bench.
         self._bg = (0.0, 0.0, 0.0, 1.0)
         self.current_request = None
@@ -462,11 +465,17 @@ class GlViewfinder(QOpenGLWidget):
         return prog
 
     def _rotate_matrix(self):
-        """Column-major mat2 turns centred texcoord by -transform, picture turns by +transform."""
+        """Column-major mat2 turns centred texcoord by -transform, picture turns by +transform.
+
+        Mirror negates the first column, reflecting the picture left to right as
+        shown. Folded in here rather than into the turn so the axis is the
+        screen's at any transform, and the determinant goes negative.
+        """
         angle = math.radians(-self._transform)
         c, s = math.cos(angle), math.sin(angle)
+        flip = -1.0 if self._mirror else 1.0
         # glUniformMatrix2fv with transpose=FALSE reads column-major: [m00, m10, m01, m11].
-        return (ctypes.c_float * 4)(c, s, -s, c)
+        return (ctypes.c_float * 4)(c * flip, s * flip, -s, c)
 
     def _displayed(self, iw: int, ih: int) -> tuple[int, int]:
         """Size as shown: a quarter turn presents stored height as width."""
