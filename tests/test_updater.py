@@ -691,3 +691,12 @@ class TestCli:
     def test_show_takes_one_id(self, capsys):
         updater._main(["show", "driver:ar0234"])
         assert capsys.readouterr().out.startswith("driver:ar0234: driver:ar0234-pkg")
+
+    def test_check_keeps_the_last_update_outcome(self, tmp_path: Path, monkeypatch):
+        """The GUI checks on its own, and used to wipe the record of the update it ran."""
+        monkeypatch.setenv("CAMLAB_UPDATE_FILE", str(tmp_path / "update.json"))
+        monkeypatch.setattr(updater, "refresh", lambda: None)
+        monkeypatch.setattr(updater, "survey", lambda: {"blocked": "", "components": []})
+        updater.write_state({"version": 1, "last_run": {"error": "no dns"}})
+        updater._main(["check"])
+        assert updater.read_state()["last_run"] == {"error": "no dns"}
