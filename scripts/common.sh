@@ -85,9 +85,13 @@ apt_get() {
 }
 
 # Write via a temp file in the same dir, so readers never see a half-written
-# boot-critical file. Mode of an existing file is preserved.
+# boot-critical file. Mode of an existing file is preserved. An unchanged file is
+# left alone, convergence runs this over config.txt on the FAT partition.
 atomic_write() {
     local path="$1" content="$2" tmp
+    if [ -f "$path" ] && printf '%s' "$content" | cmp -s - "$path"; then
+        return 0
+    fi
     tmp="$(mktemp "${path}.camlab-XXXXXX")"
     printf '%s' "$content" > "$tmp"
     if [ -f "$path" ]; then chmod --reference="$path" "$tmp" 2>/dev/null || true; fi
@@ -106,11 +110,11 @@ block_strip() {
     atomic_write "$path" "${kept}"$'\n'
 }
 
-# Strip any existing copy, then append content wrapped in the markers.
+# Strip any existing copy, then append content wrapped in the markers. One write,
+# so an unchanged block leaves the file untouched.
 block_write() {
     local path="$1" begin="$2" end="$3" content="$4" kept block
-    block_strip "$path" "$begin" "$end"
-    kept="$(cat "$path")"
+    kept="$(sed "/^${begin}$/,/^${end}$/d" "$path" 2>/dev/null || true)"
     block="$(printf '%s\n%s\n%s' "$begin" "$content" "$end")"
     atomic_write "$path" "${kept%$'\n'}"$'\n\n'"${block}"$'\n'
 }
