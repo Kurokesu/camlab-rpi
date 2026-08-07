@@ -559,3 +559,31 @@ class TestStateFile:
     def test_gui_user_can_read_what_root_wrote(self, state_file: Path):
         updater.write_state({"version": 1})
         assert state_file.stat().st_mode & 0o044
+
+
+class TestCli:
+    @pytest.fixture(autouse=True)
+    def rooted(self, monkeypatch):
+        # os.geteuid is absent on the dev machines these tests also run on.
+        monkeypatch.setattr(updater, "_require_root", lambda cmd: True)
+        monkeypatch.setattr(updater, "resolve", fake_resolve)
+        self.armed: list[list[str]] = []
+        monkeypatch.setattr(updater, "arm", lambda ids: self.armed.append(list(ids)) or [])
+
+    def test_apply_takes_several_ids(self):
+        """Ids used to be joined with a colon, which made two ids one unknown component."""
+        assert updater._main(["apply", "app", "driver:ar0234", "--no-reboot"]) == 0
+        assert self.armed == [["app", "driver:ar0234"]]
+
+    def test_bare_apply_takes_everything_pending(self, monkeypatch):
+        monkeypatch.setattr(
+            updater,
+            "survey",
+            lambda: {"components": [{"id": "app", "pending": True}, {"id": "stack", "pending": 0}]},
+        )
+        updater._main(["apply", "--no-reboot"])
+        assert self.armed == [["app"]]
+
+    def test_show_takes_one_id(self, capsys):
+        updater._main(["show", "driver:ar0234"])
+        assert capsys.readouterr().out.startswith("driver:ar0234: driver:ar0234-pkg")
