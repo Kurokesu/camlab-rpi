@@ -42,6 +42,9 @@ log = logging.getLogger(__name__)
 _ACCENT_ON = "#e5c07b"
 _ACCENT_OFF = "#d7dae0"
 
+# Long enough for the card to reach the panel before a blocking call starts.
+_PAINT_MS = 80
+
 
 class _ChipSpec(NamedTuple):
     """One camera-control chip: label, icon, metadata source, formatting."""
@@ -799,7 +802,7 @@ class MainWindow(QtWidgets.QMainWindow):
             )
         )
 
-    def _confirm_update(self, ident: str, label: str) -> None:
+    def _confirm_update(self, ids: list[str], label: str) -> None:
         self._close_modal()
         self._open_modal(
             message_card(
@@ -808,16 +811,21 @@ class MainWindow(QtWidgets.QMainWindow):
                 "own. The camera is off until it does, which takes a few minutes.",
                 [
                     ("Cancel", "", self._close_modal),
-                    ("Update", "danger", lambda: self._apply_update(ident)),
+                    ("Update", "danger", lambda: self._apply_update(ids)),
                 ],
             )
         )
 
-    def _apply_update(self, ident: str) -> None:
+    def _apply_update(self, ids: list[str]) -> None:
         self._close_modal()
         self._flush_pending_persist()
+        self._open_modal(message_card("Starting the update", "The box reboots in a moment.", []))
+        # Painted first: arming surveys apt and then reboots, all of it blocking.
+        QtCore.QTimer.singleShot(_PAINT_MS, lambda: self._arm_update(ids))
+
+    def _arm_update(self, ids: list[str]) -> None:
         try:
-            updater.request_apply(ident)
+            updater.request_apply(*ids)
         except Exception as exc:  # noqa: BLE001 surface the failure, the box stays up
             log.error("update apply failed: %s", exc)
             self._show_message("Update failed", str(exc))

@@ -664,14 +664,14 @@ def check_command() -> list[str]:
     return ["sudo", UPDATE_BIN, "check"]
 
 
-def apply_command(ident: str = "") -> list[str]:
-    """Arm an update boot for one component id, or everything pending when empty."""
-    return ["sudo", UPDATE_BIN, "apply"] + ([ident] if ident else [])
+def apply_command(*ids: str) -> list[str]:
+    """Arm an update boot for these component ids, or everything pending when none."""
+    return ["sudo", UPDATE_BIN, "apply", *ids]
 
 
-def request_apply(ident: str = "") -> None:
+def request_apply(*ids: str) -> None:
     """Arm through the shim and let it reboot. Raises UpdateError with apt's reason."""
-    _run(apply_command(ident))
+    _run(apply_command(*ids))
 
 
 def default_state_file() -> Path:

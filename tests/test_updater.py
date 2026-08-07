@@ -819,5 +819,15 @@ class TestGuiHelpers:
             "driver:ar0234",
         ]
 
+    def test_several_ids_arm_one_boot(self):
+        """One update boot installs the lot, and sudoers takes the extra argument."""
+        assert updater.apply_command("app", "driver:ar0234") == [
+            "sudo",
+            updater.UPDATE_BIN,
+            "apply",
+            "app",
+            "driver:ar0234",
+        ]
+
     def test_apply_without_an_id_takes_everything_pending(self):
         assert updater.apply_command() == ["sudo", updater.UPDATE_BIN, "apply"]
