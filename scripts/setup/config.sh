@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Camera overlay in config.txt + scoped privilege shim (camlab-apply, sudoers).
+# Camera overlay in config.txt, then shims.sh for the scoped privilege shims.
 # Safe to re-run. Requires sudo. Reboot for overlay changes.
 #
 # Usage:
@@ -44,23 +44,7 @@ for o in "${OPTIONS[@]:-}"; do [ -n "$o" ] && opt_args+=(--options "$o"); done
 ( cd "$REPO_DIR" && python3 -m camlab.config_manager set \
     --overlay "$SENSOR" --port "$PORT" "${opt_args[@]}" )
 
-# Privilege shim + sudoers rule.
-log "Installing /usr/local/bin/camlab-apply"
-sed -e "s|CAMLAB_REPO_DIR|$REPO_DIR|g" \
-    "$REPO_DIR/scripts/camlab-apply.sh" > /usr/local/bin/camlab-apply
-chmod 0755 /usr/local/bin/camlab-apply
-
-log "Installing /etc/sudoers.d/camlab"
-tmp_sudoers="$(mktemp)"
-sed -e "s|CAMLAB_USER|$CAMLAB_USER|g" \
-    "$REPO_DIR/deploy/camlab-sudoers" > "$tmp_sudoers"
-if visudo -c -f "$tmp_sudoers" >/dev/null; then
-    install -m 0440 "$tmp_sudoers" /etc/sudoers.d/camlab
-    rm -f "$tmp_sudoers"
-    log "sudoers validated and installed"
-else
-    rm -f "$tmp_sudoers"
-    die "generated sudoers failed visudo validation; not installing"
-fi
+# Shims live in their own script because they converge and the overlay above does not.
+"$REPO_DIR/scripts/setup/shims.sh"
 
 log "Done."

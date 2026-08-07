@@ -64,6 +64,7 @@ CONVERGE_SCRIPTS = (
     ("journald.sh",),
     ("boot.sh",),
     ("splash.sh",),
+    ("shims.sh",),
     ("update.sh",),
     ("service.sh", "--enable"),
 )
