@@ -246,6 +246,9 @@ def refresh() -> None:
         [
             "apt-get",
             "update",
+            # Renaming the archive's suite otherwise wedges refresh until someone
+            # clears /var/lib/apt/lists by hand.
+            "--allow-releaseinfo-change",
             "-o",
             f"Dir::Etc::sourcelist={ARCHIVE_SOURCES}",
             "-o",
