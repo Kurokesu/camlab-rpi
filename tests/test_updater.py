@@ -627,6 +627,36 @@ class TestRefreshRetry:
         assert capsys.readouterr().err.count("could not resolve host") == 2
 
 
+class TestUnreadableIndex:
+    """Which apt failures are worth dropping an index for, measured on hardware."""
+
+    def test_apt_names_the_file_it_cannot_parse(self):
+        """The wording a poisoned Packages file gets, and the one that cost 50 s unmatched."""
+        assert updater._unreadable_index(
+            "E: Unable to parse package file "
+            "/var/lib/apt/lists/apt.kurokesu.com_dists_trixie_main_binary-arm64_Packages (1)"
+        )
+
+    def test_the_generic_summary_counts_too(self):
+        """What the round two power cut recorded."""
+        assert updater._unreadable_index("E: The package lists or status file could not be parsed")
+
+    def test_a_broken_dpkg_status_is_not_ours_to_drop(self):
+        """Same wording, but no index we delete can fix it."""
+        assert not updater._unreadable_index(
+            "E: Unable to parse package file /var/lib/dpkg/status (1)"
+        )
+
+    def test_another_archive_is_not_ours_either(self):
+        assert not updater._unreadable_index(
+            "E: Unable to parse package file "
+            "/var/lib/apt/lists/deb.debian.org_dists_trixie_main_binary-arm64_Packages (1)"
+        )
+
+    def test_an_absent_archive_is_not_an_unreadable_one(self):
+        assert not updater._unreadable_index("E: Failed to fetch file:/srv/camlab-staging")
+
+
 class TestDropLists:
     def test_only_this_archive_loses_its_index(self, tmp_path: Path, monkeypatch):
         monkeypatch.setattr(updater, "APT_LISTS", tmp_path)
