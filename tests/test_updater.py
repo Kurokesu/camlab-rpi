@@ -103,7 +103,7 @@ def inventory(monkeypatch: pytest.MonkeyPatch):
 class TestReason:
     """A failure is recorded as one line, so it should be the one naming the problem."""
 
-    def test_the_first_error_wins_over_apt_summary(self):
+    def test_first_error_wins_over_apt_summary(self):
         text = (
             "Err:1 https://apt.kurokesu.com trixie InRelease\n"
             "  Could not connect to apt.kurokesu.com\n"
@@ -327,7 +327,7 @@ class TestArm:
         updater.disarm()
         assert updater.read_plan() == {}
 
-    def test_a_plan_without_a_writable_boot_is_dropped(self, monkeypatch):
+    def test_plan_without_a_writable_boot_is_dropped(self, monkeypatch):
         """Otherwise the next boot runs an update it cannot install and says so."""
         monkeypatch.setattr(updater, "unlock_next_boot", raiser("cmdline.txt missing"))
         with pytest.raises(UpdateError):
@@ -434,10 +434,12 @@ class TestRun:
         assert "cmdline.txt missing" in updater.run()
         assert "cmdline.txt missing" in updater.read_state()["last_run"]["error"]
 
-    def test_the_last_install_is_finished_before_this_one(self, monkeypatch):
+    def test_last_install_is_finished_before_this_one(self, monkeypatch):
         """A power cut leaves dpkg mid-install, and apt then refuses every later update."""
         order = []
-        monkeypatch.setattr(updater, "configure_pending", lambda: order.append("dpkg"))
+        monkeypatch.setattr(
+            updater, "configure_pending", lambda progress=None: order.append("dpkg")
+        )
         monkeypatch.setattr(updater, "repair", lambda progress=None: order.append("repair"))
         monkeypatch.setattr(
             updater, "_install", lambda packages, progress=None: order.append("install")
@@ -472,7 +474,7 @@ class TestRepair:
         assert updater.repair() == ["ar0822-rpi-dkms"]
         assert self.ran == [["apt-get", "install", "-y", "--reinstall"]]
 
-    def test_a_clean_box_reinstalls_nothing(self, monkeypatch):
+    def test_clean_box_reinstalls_nothing(self, monkeypatch):
         self.feed(monkeypatch, "installed camlab\n")
         assert updater.repair() == []
         assert self.ran == []
