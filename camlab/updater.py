@@ -687,6 +687,7 @@ def _main(argv: list[str] | None = None) -> int:
     p_apply.add_argument("--no-reboot", action="store_true", help="arm only, reboot by hand")
     sub.add_parser("run", help="install the armed plan, for the update boot only (root)")
     sub.add_parser("relock", help="drop the writable boot token (root)")
+    sub.add_parser("savelog", help="copy this boot's update journal beside the record (root)")
     args = ap.parse_args(argv)
 
     if args.cmd == "status":
@@ -735,6 +736,11 @@ def _main(argv: list[str] | None = None) -> int:
         if not _require_root(args.cmd):
             return 2
         relock()
+        return 0
+    if args.cmd == "savelog":
+        if not _require_root(args.cmd):
+            return 2
+        _save_log()
         return 0
     return 1
 
