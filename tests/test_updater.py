@@ -573,19 +573,43 @@ class TestRefreshRetry:
         with pytest.raises(UpdateError, match="could not resolve host"):
             updater._refresh_with_retry(tries=2, delay=0)
 
-    def test_an_unparsable_index_is_dropped_and_fetched_again(self, monkeypatch):
-        """A power cut can truncate a cached Release, and apt then fails the same way forever."""
-        calls = []
+    def test_unreadable_index_is_dropped_at_once(self, monkeypatch):
+        """It fails the same way however long we wait, and waiting cost 82 s of a recovery boot."""
+        calls, slept = [], []
         monkeypatch.setattr(updater, "drop_lists", lambda: 1)
+        monkeypatch.setattr(updater.time, "sleep", lambda seconds: slept.append(seconds))
+
+        def flaky() -> None:
+            calls.append(1)
+            if len(calls) < 2:
+                raise UpdateError("E: The package lists could not be parsed or opened")
+
+        monkeypatch.setattr(updater, "refresh", flaky)
+        updater._refresh_with_retry(tries=6, delay=10)
+        assert len(calls) == 2
+        assert slept == []
+
+    def test_absent_network_still_gets_its_minute(self, monkeypatch):
+        """The drop is for a poisoned index, not for an archive that is merely late."""
+        calls = []
+        monkeypatch.setattr(updater, "drop_lists", lambda: pytest.fail("dropped too early"))
 
         def flaky() -> None:
             calls.append(1)
             if len(calls) < 3:
-                raise UpdateError("The package lists could not be parsed")
+                raise UpdateError("Temporary failure resolving apt.kurokesu.com")
 
         monkeypatch.setattr(updater, "refresh", flaky)
-        updater._refresh_with_retry(tries=2, delay=0)
+        updater._refresh_with_retry(tries=6, delay=0)
         assert len(calls) == 3
+
+    def test_failed_attempt_says_why(self, monkeypatch, capsys):
+        """The 82 s above had no explanation in the journal at all."""
+        monkeypatch.setattr(updater, "refresh", raiser("could not resolve host"))
+        monkeypatch.setattr(updater, "drop_lists", lambda: 0)
+        with pytest.raises(UpdateError):
+            updater._refresh_with_retry(tries=2, delay=0)
+        assert capsys.readouterr().err.count("could not resolve host") == 2
 
 
 class TestDropLists:
