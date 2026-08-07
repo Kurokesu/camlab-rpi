@@ -61,13 +61,18 @@ sudo reboot
 
 ### Install camlab
 
-- Enable the [Kurokesu apt archive](https://apt.kurokesu.com), install the package, then set up the kiosk:
+- Enable [Kurokesu apt archive](https://apt.kurokesu.com):
 
 ```bash
 curl -fsSLO https://apt.kurokesu.com/setup.sh
 sudo sh setup.sh --update
-sudo apt install camlab
-sudo /opt/camlab/install.sh
+```
+
+- Install camlab and set up kiosk:
+
+```bash
+sudo apt install camlab-rpi
+sudo camlab-setup
 ```
 
 > [!NOTE]
@@ -90,7 +95,7 @@ sudo systemctl start camlab
 
 ## Install details
 
-By default `install.sh`:
+By default `camlab-setup`:
 
 - Enables [Kurokesu apt archive](https://apt.kurokesu.com)
 - Installs Kurokesu libcamera fork
@@ -98,10 +103,6 @@ By default `install.sh`:
 - Removes unused packages (rpicam-apps stack, sibling kernel flavor)
 - Enables kiosk service
 - Locks root read-only on next reboot
-
-The `camlab` package owns `/opt/camlab` and nothing else. Everything outside it, the service, boot
-config, splash and read-only root, belongs to `install.sh`, which is why both steps are needed.
-Run it from a clone and it copies that clone over the package files, which is a dev install.
 
 Optional flags:
 
