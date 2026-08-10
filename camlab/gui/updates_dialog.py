@@ -1,11 +1,14 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Updates card: one row per component, update them one at a time.
+"""Updates card: one row per component, one press or all of them at once.
 
 Rows come from the last check recorded in update.json, so opening costs a file
 read. Check runs the privileged shim through QProcess, an apt refresh over a
 slow link would otherwise freeze the kiosk for a minute.
+
+Where updates cannot apply the rows stay as a read-only inventory, which is the
+first thing support asks a box that cannot update.
 """
 
 from __future__ import annotations
@@ -81,17 +84,10 @@ class UpdatesCard(QtWidgets.QFrame):
             if widget is not None:
                 widget.deleteLater()
 
-        pending = updater.pending_ids(self._state)
+        blocked = bool(self._state.get("blocked"))
+        pending = [] if blocked else updater.pending_ids(self._state)
         # Only worth its own button when it saves a reboot.
         self.all_btn.setVisible(len(pending) > 1)
-
-        blocked = self._state.get("blocked")
-        if blocked:
-            self._grid.addWidget(self._note(f"Updates are not available here: {blocked}."), 0, 0)
-            self.check_btn.setEnabled(False)
-            self.all_btn.setVisible(False)
-            self.status_lbl.setText("")
-            return
 
         components = self._state.get("components") or []
         if not components:
@@ -100,11 +96,11 @@ class UpdatesCard(QtWidgets.QFrame):
             installed, available = updater.component_summary(component)
             label = QtWidgets.QLabel(component["label"])
             version = QtWidgets.QLabel(
-                f"{installed} \u2192 {available}" if available else installed
+                f"{installed} \u2192 {available}" if available and not blocked else installed
             )
-            version.setObjectName("modalText" if available else "dialogNote")
+            version.setObjectName("modalText" if available and not blocked else "dialogNote")
             button = QtWidgets.QPushButton("Update")
-            button.setEnabled(bool(available))
+            button.setEnabled(bool(available) and not blocked)
             button.clicked.connect(
                 lambda _checked, c=component: self._on_apply([c["id"]], [c["label"]])
             )
@@ -128,11 +124,15 @@ class UpdatesCard(QtWidgets.QFrame):
 
     def _status_text(self) -> str:
         parts = []
+        blocked = self._state.get("blocked")
+        if blocked:
+            # Rows stay as an inventory, support asks what a stuck box runs before why.
+            parts.append(f"Updates are off here: {blocked}.")
         checked = self._state.get("checked") or ""
         if checked:
             stamp = checked[5:16] if self._compact else checked[:16]
             parts.append(f"Checked {stamp.replace('T', ' ')} UTC.")
-        if checked and not updater.pending_ids(self._state):
+        if checked and not blocked and not updater.pending_ids(self._state):
             parts.append("Everything is up to date.")
         if (self._state.get("last_run") or {}).get("error"):
             # Apt's own wording is unreadable here, update.log keeps it.
