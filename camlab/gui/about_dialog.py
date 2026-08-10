@@ -121,6 +121,7 @@ class AboutCard(QtWidgets.QFrame):
         offers = not self._blocked
         # Only worth its own button when it saves a reboot.
         self.all_btn.setVisible(offers and len(pending) > 1)
+        self.all_btn.setEnabled(self._online)
         surveyed = {c["id"]: c for c in self._state.get("components") or []}
 
         for row, item in enumerate(self._rows):
@@ -139,6 +140,7 @@ class AboutCard(QtWidgets.QFrame):
             if waiting and offers:
                 button = QtWidgets.QPushButton("Update")
                 button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
+                button.setEnabled(self._online)
                 button.clicked.connect(
                     lambda _checked, i=item: self._on_apply([i["id"]], [i["label"]])
                 )
@@ -160,7 +162,7 @@ class AboutCard(QtWidgets.QFrame):
         if self._blocked:
             return f"Updates off: {self._blocked}"
         if not self._online:
-            return "Checking needs networking"
+            return "Updates need network"
         # Only a check can tell, so an unchecked box does not claim to be current.
         if self._state.get("checked") and not updater.pending_ids(self._state):
             return "Up to date"
