@@ -22,6 +22,7 @@ from ..sensors import SensorRegistry
 from ..settings import SettingsStore
 from ..stats import RpiStats
 from . import icons
+from .about_dialog import UpdatesCard
 from .control_sheet import ControlSheet, MonitorSheet, fmt_ct, fmt_exposure, fmt_gain
 from .covers import BootCover, SwitchCover
 from .log_panel import LogPanel
@@ -32,7 +33,6 @@ from .sensor_dialog import SensorCard
 from .settings_dialog import SettingsCard
 from .status_strip import StatusStrip
 from .style import SEV_COLOR, UiProfile, build_stylesheet, profile_for_screen
-from .updates_dialog import UpdatesCard
 from .viewfinder_area import ViewfinderArea
 from .widgets import repolish, vline
 
