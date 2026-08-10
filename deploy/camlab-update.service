@@ -17,7 +17,7 @@ ExecStart=/usr/local/bin/camlab-update run
 ExecStopPost=/usr/local/bin/camlab-update relock
 # After ExecStart, so the copy carries the failure that ended it.
 ExecStopPost=/usr/local/bin/camlab-update savelog
-ExecStopPost=/usr/bin/systemctl reboot
+ExecStopPost=/usr/bin/systemctl reboot --no-wall
 # DKMS rebuilds every sensor module against the running kernel.
 TimeoutStartSec=30min
 
