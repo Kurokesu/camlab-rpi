@@ -37,6 +37,22 @@ def vline(parent=None) -> QtWidgets.QFrame:
     return line
 
 
+def kinetic_scroll(viewport: QtWidgets.QWidget) -> None:
+    """Drag-to-scroll on a scroll area viewport, vertical only.
+
+    grabGesture sets WA_AcceptTouchEvents on the viewport, so the widget below
+    stops seeing the mouse events Qt synthesizes from a finger drag.
+    """
+    QtWidgets.QScroller.grabGesture(viewport, QtWidgets.QScroller.ScrollerGestureType.TouchGesture)
+    scroller = QtWidgets.QScroller.scroller(viewport)
+    props = scroller.scrollerProperties()
+    props.setScrollMetric(
+        QtWidgets.QScrollerProperties.ScrollMetric.HorizontalOvershootPolicy,
+        QtWidgets.QScrollerProperties.OvershootPolicy.OvershootAlwaysOff,
+    )
+    scroller.setScrollerProperties(props)
+
+
 class SegmentedSelector(QtWidgets.QWidget):
     """Exclusive button row, dropdown replacement with no popup.
 
