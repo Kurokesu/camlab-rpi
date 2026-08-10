@@ -22,7 +22,7 @@ from ..sensors import SensorRegistry
 from ..settings import SettingsStore
 from ..stats import RpiStats
 from . import icons
-from .about_dialog import UpdatesCard
+from .about_dialog import AboutCard
 from .control_sheet import ControlSheet, MonitorSheet, fmt_ct, fmt_exposure, fmt_gain
 from .covers import BootCover, SwitchCover
 from .log_panel import LogPanel
@@ -127,8 +127,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._wire()
         self._populate_static()
-        # Histogram overlay (beta easter egg), persisted app-wide, default off.
+        # Histogram overlay, persisted app-wide, default off.
         self._histogram_on = settings.get_histogram()
+        self._sheets["monitor"].set_histogram(self._histogram_on)
         if self._histogram_on:
             self.engine.set_stats_output(True)
             self.viewfinder_area.set_histogram_enabled(True)
@@ -162,7 +163,9 @@ class MainWindow(QtWidgets.QMainWindow):
             sheet.apply_profile(self._profile)
         for key in self._CTRL_SPEC:
             self._sheets[key].changed.connect(lambda v, k=key: self._on_control_changed(k, v))
-        self._sheets["monitor"].changed.connect(self._on_monitor_changed)
+        monitor = self._sheets["monitor"]
+        monitor.changed.connect(self._on_monitor_changed)
+        monitor.histogram_changed.connect(self._apply_histogram)
         # Keep open sheet glued to viewfinder bottom edge on resize.
         self.viewfinder_area.installEventFilter(self)
 
@@ -368,25 +371,25 @@ class MainWindow(QtWidgets.QMainWindow):
         detected = self.engine.info.model if self.engine.info is not None else None
         overlay = cur["overlay"]
         if not detected:
-            glyph, color, tip = "error", "#e06c75", "No camera detected by libcamera."
+            glyph, color, tip = "error", "#e06c75", "No camera detected by libcamera"
             # On panel rigs the usual cause is the display taking the configured port.
             blocked = dsi_blocked_ports()
             if cur["port"] in blocked:
-                tip += f" {cur['port']} is claimed by the display overlay, move the camera."
+                tip += f". {cur['port']} is claimed by the display overlay, move the camera"
         elif overlay and detected.lower() == overlay.lower():
             glyph, color, tip = (
                 "check_circle",
                 "#98c379",
-                f"Detected {detected} (matches selection).",
+                f"Detected {detected} (matches selection)",
             )
         elif overlay:
             glyph, color, tip = (
                 "warning",
                 "#e5c07b",
-                f"Detected {detected}, selection is {overlay}.",
+                f"Detected {detected}, selection is {overlay}",
             )
         else:
-            glyph, color, tip = "photo_camera", "#aeb4bf", f"Detected {detected}."
+            glyph, color, tip = "photo_camera", "#aeb4bf", f"Detected {detected}"
         self.sensor_btn.setIcon(icons.icon(glyph, self._profile.icon_px, color))
         self.sensor_btn.setToolTip(tip)
 
@@ -575,8 +578,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _on_monitor_changed(self, peaking: bool, zebra: bool, threshold: float) -> None:
         self.viewfinder_area.set_assists(peaking, zebra, threshold)
-        # Amber chip while any assist draws, same accent as manual control.
-        self._set_chip_accent(self.monitor_btn, "stroke_partial", peaking or zebra)
+        self._refresh_monitor_chip()
+
+    def _refresh_monitor_chip(self) -> None:
+        """Amber chip while anything the sheet owns draws, same accent as manual control."""
+        monitor = self._sheets["monitor"]
+        drawing = monitor.peaking or monitor.zebra or monitor.histogram
+        self._set_chip_accent(self.monitor_btn, "stroke_partial", drawing)
 
     def _on_control_changed(self, key: str, value) -> None:
         # Engine clamps, so reflect what was actually set.
@@ -659,7 +667,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _choose_mode(self) -> None:
         if not self.engine.modes:
-            self._show_message("No modes", "No selectable sensor modes were enumerated.")
+            self._show_message("No modes", "No selectable sensor modes were enumerated")
             return
         # Viewfinder area at open time sizes the new mode's lores stream.
         self._mode_avail = self.viewfinder_area.lores_size()
@@ -680,7 +688,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._close_modal()
         mode = mode_for(self.engine.modes, tuple(size), int(bit_depth))
         if mode is None:  # re-validate at apply time
-            self._show_message("Mode unavailable", "That mode is no longer available.")
+            self._show_message("Mode unavailable", "That mode is no longer available")
             return
         try:
             self.engine.apply_mode(mode, float(fps), self._mode_avail, fps_fixed)
@@ -773,39 +781,38 @@ class MainWindow(QtWidgets.QMainWindow):
         poweroff()
 
     def _open_settings(self) -> None:
+        # Also the way back from About, so drop that card first. No-op from chrome.
+        self._close_modal()
         # Brightness only while touch panel is active display, HDMI would dim dark one.
         backlight_pct = None
         if self._profile.compact and self._backlight is not None and self._backlight.available:
             backlight_pct = self._backlight.get_percent()
-        state = updater.read_state()
         card = SettingsCard(
-            histogram_on=self._histogram_on,
             backlight_pct=backlight_pct,
             on_apply_network=self._apply_network,
-            on_apply_histogram=self._apply_histogram,
             on_backlight=self._on_backlight,
             on_cancel=self._close_modal,
-            on_updates=self._open_updates,
-            # Blocked, the card is an inventory, so it offers nothing to install.
-            updates_pending=0 if state.get("blocked") else len(updater.pending_ids(state)),
+            on_about=self._open_about,
         )
         self._open_modal(card)
 
-    def _open_updates(self) -> None:
+    def _open_about(self) -> None:
         # Drills in from Settings, so the card it came from goes away with it.
         self._close_modal()
         self._open_modal(
-            UpdatesCard(
+            AboutCard(
+                updater.inventory(),
+                updater.update_path(),
                 updater.read_state(),
                 on_apply=self._confirm_update,
-                on_close=self._close_modal,
+                on_back=self._open_settings,
                 compact=self._profile.compact,
             )
         )
 
     def _confirm_update(self, ids: list[str], labels: list[str]) -> None:
         self._close_modal()
-        note = "Installs on reboot, takes a few minutes."
+        note = "Installs on reboot, takes a few minutes"
         if len(labels) > 1:
             # Names go in the body, an unwrapped title would stretch the card.
             title = f"Update {len(labels)} components?"
@@ -856,6 +863,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.engine.set_stats_output(self._histogram_on)
         self.viewfinder_area.set_histogram_enabled(self._histogram_on)
         self.settings.set_histogram(self._histogram_on)
+        self._refresh_monitor_chip()
         log.info("histogram overlay %s", "on" if enabled else "off")
 
     def _apply_network(self, enabled: bool) -> None:
@@ -955,8 +963,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if not profile.compact:
             self.viewfinder_area.set_stats_overlay(False)
         self._populate_static()
-        monitor = self._sheets["monitor"]
-        self._set_chip_accent(self.monitor_btn, "stroke_partial", monitor.peaking or monitor.zebra)
+        self._refresh_monitor_chip()
         self._update_status()
 
     def _refit_lores(self) -> None:
