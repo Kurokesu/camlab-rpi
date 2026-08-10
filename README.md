@@ -71,7 +71,8 @@ sudo sh setup.sh --update
 - Install camlab and set up kiosk:
 
 ```bash
-sudo apt install camlab-rpi
+# skip desktop extras that picamera2 recommends
+sudo apt install --no-install-recommends camlab-rpi
 sudo camlab-setup
 ```
 
