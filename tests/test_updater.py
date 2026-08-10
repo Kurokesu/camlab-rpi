@@ -348,14 +348,24 @@ class TestInventory:
 
     def test_installed_driver_carries_its_version(self, registry):
         row = self.rows(registry)["driver:ar0234"]
-        assert (row["installed"], row["updatable"]) == ("0.1.0-1", True)
+        assert (row["installed"], row["updatable"]) == ("0.1.0", True)
 
     def test_kernel_is_the_running_one_and_never_updatable(self, registry):
         row = self.rows(registry)["kernel"]
         assert (row["installed"], row["updatable"]) == ("6.18.34+rpt-rpi-2712", False)
 
     def test_stack_shipping_in_step_shows_one_version(self, registry):
-        assert self.rows(registry)["stack"]["installed"] == "1:0.7.1+krks1-4"
+        assert self.rows(registry)["stack"]["installed"] == "0.7.1+krks1-4"
+
+    def test_an_epoch_stays_out_of_the_row(self, registry):
+        """An epoch only orders apt's comparisons, so it is noise on a card."""
+        assert ":" not in self.rows(registry)["stack"]["installed"]
+
+    def test_a_first_packaging_revision_stays_out_of_the_row(self, registry):
+        """Revision 1 is the convention for a first build. A later one tells builds apart."""
+        rows = self.rows(registry)
+        assert rows["driver:ar0234"]["installed"] == "0.1.0"
+        assert rows["stack"]["installed"].endswith("-4")
 
     def test_stack_out_of_step_counts_parts_instead(self, registry):
         self.versions["python3-libcamera"] = "1:0.7.0+krks1-1"
@@ -365,7 +375,7 @@ class TestInventory:
         """No update.json at all is the offline case the card exists for."""
         monkeypatch.setenv("CAMLAB_UPDATE_FILE", str(tmp_path / "update.json"))
         assert updater.read_state() == {}
-        assert self.rows(registry)["app"]["installed"] == "1.0.0~beta.11-1"
+        assert self.rows(registry)["app"]["installed"] == "1.0.0~beta.11"
 
 
 class TestCmdline:
@@ -899,11 +909,26 @@ class TestGuiHelpers:
         )
         assert updater.component_summary(component) == (f"{krks}-4", "\u2026-5")
 
+    def test_an_epoch_is_dropped_from_both_sides(self):
+        """Stripped before the shortening, or the shared prefix would not line up."""
+        krks = "0.7.1+rpt20260429+krks1"
+        component = self._component(
+            [{"name": "libcamera0.7", "installed": f"1:{krks}-4", "pending": f"1:{krks}-5"}]
+        )
+        assert updater.component_summary(component) == (f"{krks}-4", "\u2026-5")
+
     def test_short_versions_stay_whole(self):
         component = self._component(
             [{"name": "camlab", "installed": "1.0.0~beta.10-1", "pending": "1.0.0~beta.11-1"}]
         )
-        assert updater.component_summary(component) == ("1.0.0~beta.10-1", "1.0.0~beta.11-1")
+        assert updater.component_summary(component) == ("1.0.0~beta.10", "1.0.0~beta.11")
+
+    def test_a_repackaged_build_still_shows_a_move(self):
+        """Hiding revision 1 must not leave an Update button beside two equal versions."""
+        component = self._component(
+            [{"name": "ar0234-rpi-dkms", "installed": "0.1.0-1", "pending": "0.1.0-2"}]
+        )
+        assert updater.component_summary(component) == ("0.1.0", "0.1.0-2")
 
     def test_many_packages_show_one_move_for_the_component(self):
         component = self._component(
