@@ -199,6 +199,7 @@ class AboutCard(QtWidgets.QFrame):
             self._proc.deleteLater()
         self._proc = None
         self._state = updater.read_state()
+        self._blocked = updater.update_path()
         self._rebuild()
         error = ""
         if code != 0:
