@@ -663,12 +663,24 @@ def survey(registry: SensorRegistry | None = None) -> dict:
     return out
 
 
+def _plain(version: str) -> str:
+    """Version an operator reads. An epoch and revision 1 tell no two installs apart.
+
+    A later revision does, so it stays: often all that moves for the camera stack.
+    """
+    head, sep, tail = version.partition(":")
+    if sep and head.isdigit():
+        version = tail
+    upstream, sep, revision = version.rpartition("-")
+    return upstream if sep and revision == "1" else version
+
+
 def _row(ident: str, label: str, installed: str, updatable: bool = True) -> dict:
     """One About row. Empty installed means dpkg does not carry the package."""
     return {
         "id": ident,
         "label": label,
-        "installed": installed or ABSENT,
+        "installed": _plain(installed) or ABSENT,
         "updatable": updatable and bool(installed),
     }
 
@@ -727,11 +739,11 @@ def component_summary(component: dict) -> tuple[str, str]:
     pending = [p for p in packages if p.get("pending")]
     if not pending:
         if len(packages) == 1:
-            return packages[0].get("installed") or "-", ""
+            return _plain(packages[0].get("installed") or "") or "-", ""
         return f"{len(packages)} packages", ""
     lead = pending[0]
-    installed = lead.get("installed") or "-"
-    return installed, _moves_to(installed, lead["pending"])
+    installed = _plain(lead.get("installed") or "") or "-"
+    return installed, _moves_to(installed, _plain(lead["pending"]))
 
 
 def pending_ids(state: dict) -> list[str]:
