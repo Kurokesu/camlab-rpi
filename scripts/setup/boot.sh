@@ -4,8 +4,8 @@
 #
 # Boot-time tuning: trims power-on to first preview by cutting work the kiosk
 # never needs. Disables Bluetooth in config.txt (managed block) and masks unused
-# systemd units (network-wait, BT, ModemManager, cloud-init). Silences the
-# console for kiosk boot (quiet cmdline, no getty on tty1, no status wall).
+# systemd units (network-wait, BT, ModemManager, cloud-init, apt timers).
+# Silences the console for kiosk boot (quiet cmdline, no getty on tty1, no wall).
 # Deliberately left alone: journald/logind/avahi and networking.
 # Safe to re-run. Requires sudo. Changes take hold after a reboot.
 #
@@ -65,6 +65,8 @@ MASK_UNITS=(
     bluetooth.service
     hciuart.service
     ModemManager.service
+    apt-daily.timer
+    apt-daily-upgrade.timer
 )
 # cloud-init ships on stock RPi OS images and is pure overhead on a fixed appliance.
 CLOUDINIT_UNITS=(
