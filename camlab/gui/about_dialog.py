@@ -1,48 +1,54 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Updates card: one row per component, one press or all of them at once.
+"""About card: versions this box runs, and the updates for them.
 
-Rows come from the last check recorded in update.json, so opening costs a file
-read. Check runs the privileged shim through QProcess, an apt refresh over a
-slow link would otherwise freeze the kiosk for a minute.
-
-Where updates cannot apply the rows stay as a read-only inventory, which is the
-first thing support asks a box that cannot update.
+Rows and blocked reason come from dpkg at open time, so the card works with
+networking off and never repeats what an older check recorded. Checking is a
+manual act and never turns networking on. It runs the privileged shim through
+QProcess, an apt refresh over a slow link would freeze the kiosk for a minute.
 """
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 
 from .. import network, updater
-from ..qt import QtCore, QtWidgets
-from .widgets import hline
+from ..qt import Qt, QtCore, QtWidgets
+from .widgets import hline, kinetic_scroll
+
+log = logging.getLogger(__name__)
 
 _CHECK_TIMEOUT_MS = 120_000
-# Version column: short text stays on one line, long text wraps rather than
-# stretching the card past the panel.
-_VERSION_MIN = 110
+# Version column: one Kurokesu version fits a line, capped so a pair of them
+# wraps instead of widening the card past the panel.
+_VERSION_MIN = 250
 _VERSION_W = 320
 
 
-class UpdatesCard(QtWidgets.QFrame):
+class AboutCard(QtWidgets.QFrame):
     def __init__(
         self,
+        rows: list[dict],
+        blocked: str,
         state: dict,
         on_apply: Callable[[list[str], list[str]], None],
-        on_close: Callable[[], None],
+        on_back: Callable[[], None],
         compact: bool = False,
     ):
         super().__init__()
         self.setObjectName("modalCard")
-        self.setMinimumWidth(440)
+        # Wider than other cards: three columns to line up.
+        self.setMinimumWidth(560)
+        self._rows = rows
+        self._blocked = blocked
         self._state = state
         self._on_apply = on_apply
-        self._compact = compact
+        self._online = network.is_enabled()
         self._proc: QtCore.QProcess | None = None
 
-        title = QtWidgets.QLabel("Updates")
+        title = QtWidgets.QLabel("About")
         title.setObjectName("modalTitle")
 
         self.status_lbl = QtWidgets.QLabel()
@@ -50,32 +56,48 @@ class UpdatesCard(QtWidgets.QFrame):
         self.status_lbl.setWordWrap(True)
 
         self._grid = QtWidgets.QGridLayout()
+        # Right margin keeps Update buttons off the scrollbar.
+        self._grid.setContentsMargins(0, 0, 8, 0)
         self._grid.setHorizontalSpacing(12)
         # Rows of Update buttons, so a thumb needs a gap even where height is tight.
         self._grid.setVerticalSpacing(6 if compact else 8)
-        self._grid.setColumnStretch(0, 1)
+        # Slack goes to versions, labels hug their text.
+        self._grid.setColumnStretch(1, 1)
 
-        self.check_btn = QtWidgets.QPushButton("Check")
+        # Every sensor plus the stack and kernel outgrows the panel, so the list scrolls.
+        body = QtWidgets.QWidget()
+        body.setLayout(self._grid)
+        self._scroll = QtWidgets.QScrollArea()
+        self._scroll.setWidget(body)
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # Tab belongs to the buttons, the list scrolls by drag and wheel.
+        self._scroll.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        kinetic_scroll(self._scroll.viewport())
+
+        self.check_btn = QtWidgets.QPushButton("Check for updates")
         self.check_btn.clicked.connect(self._check)
+        self.check_btn.setEnabled(self._online)
         # One boot installs the lot, so sending them together saves a second reboot.
         self.all_btn = QtWidgets.QPushButton("Update all")
         self.all_btn.clicked.connect(self._apply_all)
-        close_btn = QtWidgets.QPushButton("Close")
-        close_btn.clicked.connect(on_close)
-        # Every other button here reboots the box, so Enter lands on Close.
-        self.primary_button = close_btn
+        # Back, not Close: the setting that gates a check sits one card behind.
+        back_btn = QtWidgets.QPushButton("Back")
+        back_btn.clicked.connect(on_back)
+        # Every other button here reboots the box, so Enter lands on Back.
+        self.primary_button = back_btn
         buttons = QtWidgets.QHBoxLayout()
         buttons.addWidget(self.check_btn)
         buttons.addWidget(self.all_btn)
         buttons.addStretch(1)
-        buttons.addWidget(close_btn)
+        buttons.addWidget(back_btn)
 
         lay = QtWidgets.QVBoxLayout(self)
-        # Five rows plus chrome, so the touch panel needs every pixel it can keep.
         lay.setContentsMargins(*((18, 10, 18, 10) if compact else (22, 20, 22, 18)))
         lay.setSpacing(6 if compact else 14)
         lay.addWidget(title)
-        lay.addLayout(self._grid)
+        lay.addWidget(self._scroll, 1)
         lay.addWidget(self.status_lbl)
         lay.addWidget(hline())
         lay.addLayout(buttons)
@@ -89,78 +111,63 @@ class UpdatesCard(QtWidgets.QFrame):
             if widget is not None:
                 widget.deleteLater()
 
-        blocked = bool(self._state.get("blocked"))
-        pending = [] if blocked else updater.pending_ids(self._state)
+        pending = [] if self._blocked else updater.pending_ids(self._state)
         # Only worth its own button when it saves a reboot.
         self.all_btn.setVisible(len(pending) > 1)
+        surveyed = {c["id"]: c for c in self._state.get("components") or []}
 
-        components = self._state.get("components") or []
-        if not components:
-            self._grid.addWidget(self._note("Nothing checked yet. Check looks for updates."), 0, 0)
-        for row, component in enumerate(components):
-            installed, available = updater.component_summary(component)
-            label = QtWidgets.QLabel(component["label"])
-            version = QtWidgets.QLabel(
-                f"{installed} \u2192 {available}" if available and not blocked else installed
-            )
-            version.setObjectName("modalText" if available and not blocked else "dialogNote")
-            # A Kurokesu version runs 25 characters, so let the row grow down, not out.
+        for row, item in enumerate(self._rows):
+            offered = item["id"] in pending
+            installed, available = item["installed"], ""
+            if offered:
+                # Survey carries the version it moves to, which an inventory row cannot.
+                installed, available = updater.component_summary(surveyed[item["id"]])
+            version = QtWidgets.QLabel(f"{installed} \u2192 {available}" if offered else installed)
+            version.setObjectName("modalText" if item["updatable"] else "dialogNote")
             version.setWordWrap(True)
             version.setMinimumWidth(_VERSION_MIN)
             version.setMaximumWidth(_VERSION_W)
-            button = QtWidgets.QPushButton("Update")
-            button.setEnabled(bool(available) and not blocked)
-            button.clicked.connect(
-                lambda _checked, c=component: self._on_apply([c["id"]], [c["label"]])
-            )
-            self._grid.addWidget(label, row, 0)
+            self._grid.addWidget(QtWidgets.QLabel(item["label"]), row, 0)
             self._grid.addWidget(version, row, 1)
-            self._grid.addWidget(button, row, 2)
-        self.status_lbl.setText(self._status_text())
+            if offered:
+                button = QtWidgets.QPushButton("Update")
+                button.clicked.connect(
+                    lambda _checked, i=item: self._on_apply([i["id"]], [i["label"]])
+                )
+                self._grid.addWidget(button, row, 2)
+        self._set_status(self._status_text())
+
+    def _set_status(self, text: str) -> None:
+        """Nothing to report hides the label, an empty one would still hold a line."""
+        self.status_lbl.setText(text)
+        self.status_lbl.setVisible(bool(text))
 
     def _apply_all(self) -> None:
         pending = updater.pending_ids(self._state)
         labels = {c["id"]: c["label"] for c in self._state.get("components") or []}
         self._on_apply(pending, [labels.get(i, i) for i in pending])
 
-    @staticmethod
-    def _note(text: str) -> QtWidgets.QLabel:
-        note = QtWidgets.QLabel(text)
-        note.setObjectName("dialogNote")
-        note.setWordWrap(True)
-        note.setMaximumWidth(420)
-        return note
-
     def _status_text(self) -> str:
-        parts = []
-        blocked = self._state.get("blocked")
-        if blocked:
-            # Rows stay as an inventory, support asks what a stuck box runs before why.
-            parts.append(f"Updates are off here: {blocked}.")
-        checked = self._state.get("checked") or ""
-        if checked:
-            stamp = checked[5:16] if self._compact else checked[:16]
-            parts.append(f"Checked {stamp.replace('T', ' ')} UTC.")
-        if checked and not blocked and not updater.pending_ids(self._state):
-            parts.append("Everything is up to date.")
+        """One line, whatever stands most in the way. Nothing in the way stays quiet."""
+        if self._blocked:
+            # Nothing to say about networking once no update can land at all.
+            return f"Updates off: {self._blocked}"
+        if not self._online:
+            return "Checking needs networking"
+        # Only a check can tell, so an unchecked box does not claim to be current.
+        if self._state.get("checked") and not updater.pending_ids(self._state):
+            return "Up to date"
         if (self._state.get("last_run") or {}).get("error"):
-            # Apt's own wording is unreadable here, update.log keeps it.
-            parts.append("Last update failed.")
-        return " ".join(parts)
+            # Still pending next to its Update button. update.log carries apt's words.
+            return "Last update failed"
+        return ""
 
     def _check(self) -> None:
         if self._proc is not None:
             return
+        # Label held still, the footer says what is happening.
         self.check_btn.setEnabled(False)
-        self.check_btn.setText("Checking")
-        self.status_lbl.setText("Refreshing the archive index.")
-        try:
-            if not network.is_enabled():
-                network.set_enabled(True)
-                self.status_lbl.setText("Networking turned on, refreshing the archive index.")
-        except Exception as exc:  # noqa: BLE001 a failed toggle is the check's problem to report
-            self._check_done(f"networking would not come up: {exc}")
-            return
+        self._set_status("Checking\u2026")
         self._proc = QtCore.QProcess(self)
         self._proc.setProcessChannelMode(QtCore.QProcess.ProcessChannelMode.MergedChannels)
         self._proc.finished.connect(self._on_finished)
@@ -193,10 +200,11 @@ class UpdatesCard(QtWidgets.QFrame):
 
     def _check_done(self, error: str = "") -> None:
         self._proc = None
-        self.check_btn.setEnabled(True)
-        self.check_btn.setText("Check")
+        self.check_btn.setEnabled(self._online)
         if error:
-            self.status_lbl.setText(f"Check failed: {error.removeprefix('error: ')}")
+            # Card stays short, the log panel carries apt's reason.
+            log.error("update check failed: %s", error.removeprefix("error: "))
+            self._set_status("Check failed")
 
     def hideEvent(self, event) -> None:
         # Dismissing the modal deletes this card, do not leave apt running behind it.

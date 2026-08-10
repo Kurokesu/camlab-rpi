@@ -99,7 +99,7 @@ class StatusStrip(QtWidgets.QFrame):
         self._right.setCursor(
             Qt.CursorShape.PointingHandCursor if self._compact else Qt.CursorShape.ArrowCursor
         )
-        self._right.setToolTip("Toggles the remaining board stats." if self._compact else "")
+        self._right.setToolTip("Toggles the remaining board stats" if self._compact else "")
         self._sync_stats()
         self._render_telemetry()
         self._sync_balance()
