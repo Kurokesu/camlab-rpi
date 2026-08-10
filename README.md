@@ -100,7 +100,7 @@ By default `camlab-setup`:
 - Enables [Kurokesu apt archive](https://apt.kurokesu.com)
 - Installs Kurokesu libcamera fork
 - Installs Kurokesu sensor drivers
-- Removes unused packages (rpicam-apps stack, sibling kernel flavor)
+- Removes sibling kernel flavor, so drivers build once
 - Enables kiosk service
 - Locks root read-only on next reboot
 

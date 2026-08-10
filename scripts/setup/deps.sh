@@ -4,7 +4,6 @@
 #
 # Install camlab APT dependencies: Kurokesu apt archive, Kurokesu libcamera
 # fork, Python preview/GUI stack (picamera2 + PyQt6 + OpenGL) and Cage.
-# Also removes preinstalled rpicam-apps stack camlab never uses.
 # Safe to re-run. Requires sudo.
 #
 # Usage: sudo scripts/setup/deps.sh
@@ -79,16 +78,5 @@ if [ "${#MISSING[@]}" -gt 0 ]; then
 else
     log "Packages already installed."
 fi
-
-# camlab never runs rpicam-* CLI. Purge only installed names (set -e safe).
-log "Removing unused rpicam-apps stack..."
-mapfile -t RPICAM < <(dpkg-query -Wf '${db:Status-Status} ${Package}\n' 'rpicam-apps*' 2>/dev/null \
-    | awk '$1 == "installed" { print $2 }')
-if [ "${#RPICAM[@]}" -gt 0 ]; then
-    apt_get purge -y "${RPICAM[@]}"
-else
-    log "No rpicam-apps packages installed."
-fi
-apt_get autoremove --purge -y
 
 log "Done. All apt dependencies installed."
