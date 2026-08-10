@@ -787,7 +787,20 @@ class TestGuiHelpers:
         component = self._component([{"name": "camlab", "installed": "1.0.0", "pending": "1.0.1"}])
         assert updater.component_summary(component) == ("1.0.0", "1.0.1")
 
-    def test_many_packages_count_instead_of_listing(self):
+    def test_long_versions_show_only_what_differs(self):
+        krks = "0.7.1+rpt20260429+krks1"
+        component = self._component(
+            [{"name": "libcamera0.7", "installed": f"{krks}-4", "pending": f"{krks}-5"}]
+        )
+        assert updater.component_summary(component) == (f"{krks}-4", "\u2026-5")
+
+    def test_short_versions_stay_whole(self):
+        component = self._component(
+            [{"name": "camlab", "installed": "1.0.0~beta.10-1", "pending": "1.0.0~beta.11-1"}]
+        )
+        assert updater.component_summary(component) == ("1.0.0~beta.10-1", "1.0.0~beta.11-1")
+
+    def test_many_packages_name_the_first_with_an_update(self):
         component = self._component(
             [
                 {"name": "libcamera0.7", "installed": "0.7.1", "pending": "0.7.2"},
@@ -795,7 +808,25 @@ class TestGuiHelpers:
                 {"name": "libcamera-tools", "installed": "0.7.1", "pending": ""},
             ]
         )
-        assert updater.component_summary(component) == ("3 packages", "2 updates")
+        assert updater.component_summary(component) == ("libcamera0.7 0.7.1", "0.7.2, +1 more")
+
+    def test_one_pending_among_many_needs_no_count(self):
+        component = self._component(
+            [
+                {"name": "libcamera0.7", "installed": "0.7.1", "pending": ""},
+                {"name": "libcamera-tools", "installed": "0.7.1", "pending": "0.7.2"},
+            ]
+        )
+        assert updater.component_summary(component) == ("libcamera-tools 0.7.1", "0.7.2")
+
+    def test_many_packages_with_nothing_pending_just_count(self):
+        component = self._component(
+            [
+                {"name": "libcamera0.7", "installed": "0.7.1", "pending": ""},
+                {"name": "libcamera-tools", "installed": "0.7.1", "pending": ""},
+            ]
+        )
+        assert updater.component_summary(component) == ("2 packages", "")
 
     def test_pending_ids_are_what_the_card_offers(self):
         state = {

@@ -20,6 +20,10 @@ from ..qt import QtCore, QtWidgets
 from .widgets import hline
 
 _CHECK_TIMEOUT_MS = 120_000
+# Version column: short text stays on one line, long text wraps rather than
+# stretching the card past the panel.
+_VERSION_MIN = 110
+_VERSION_W = 320
 
 
 class UpdatesCard(QtWidgets.QFrame):
@@ -99,6 +103,10 @@ class UpdatesCard(QtWidgets.QFrame):
                 f"{installed} \u2192 {available}" if available and not blocked else installed
             )
             version.setObjectName("modalText" if available and not blocked else "dialogNote")
+            # A Kurokesu version runs 25 characters, so let the row grow down, not out.
+            version.setWordWrap(True)
+            version.setMinimumWidth(_VERSION_MIN)
+            version.setMaximumWidth(_VERSION_W)
             button = QtWidgets.QPushButton("Update")
             button.setEnabled(bool(available) and not blocked)
             button.clicked.connect(
