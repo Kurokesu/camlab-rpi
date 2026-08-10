@@ -642,16 +642,35 @@ def survey(registry: SensorRegistry | None = None) -> dict:
     return out
 
 
+def _moves_to(installed: str, pending: str) -> str:
+    """Pending version, long ones cut back to what differs, ...+krks1-5 to -5."""
+    if len(pending) <= 20:
+        return pending
+    shared = os.path.commonprefix([installed, pending])
+    cut = max(shared.rfind(sep) for sep in ".-+~")
+    return f"\u2026{pending[cut:]}" if cut > 8 else pending
+
+
 def component_summary(component: dict) -> tuple[str, str]:
-    """(installed, available) row text for one surveyed component."""
+    """(installed, available) row text for one surveyed component.
+
+    A component of several packages names the first one with an update, so the row
+    still answers what is about to be installed.
+    """
     packages = component.get("packages") or []
-    pending = [p["pending"] for p in packages if p.get("pending")]
-    installed = (packages[0].get("installed") or "-") if len(packages) == 1 else ""
-    if not installed:
-        installed = f"{len(packages)} packages"
+    if not packages:
+        return "-", ""
+    pending = [p for p in packages if p.get("pending")]
+    if len(packages) == 1:
+        one = packages[0]
+        installed = one.get("installed") or "-"
+        return installed, _moves_to(installed, one["pending"]) if one.get("pending") else ""
     if not pending:
-        return installed, ""
-    return installed, pending[0] if len(pending) == 1 else f"{len(pending)} updates"
+        return f"{len(packages)} packages", ""
+    lead, rest = pending[0], len(pending) - 1
+    installed = lead.get("installed") or "-"
+    more = f", +{rest} more" if rest else ""
+    return f"{lead['name']} {installed}", f"{_moves_to(installed, lead['pending'])}{more}"
 
 
 def pending_ids(state: dict) -> list[str]:
