@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -90,7 +91,7 @@ def policy(monkeypatch: pytest.MonkeyPatch):
 
 
 @pytest.fixture
-def inventory(monkeypatch: pytest.MonkeyPatch):
+def package_sets(monkeypatch: pytest.MonkeyPatch):
     """Stub the two package inventories components() builds on."""
 
     def build(served: set[str], installed: set[str]) -> None:
@@ -194,38 +195,38 @@ class TestArchivePackages:
 
 
 class TestComponents:
-    def test_app_comes_first(self, registry, inventory):
-        inventory({"camlab"}, {"camlab"})
+    def test_app_comes_first(self, registry, package_sets):
+        package_sets({"camlab"}, {"camlab"})
         assert updater.components(registry)[0] == Component("app", "camlab", ("camlab",))
 
-    def test_driver_ids_follow_the_registry(self, registry, inventory):
-        inventory(set(), set())
+    def test_driver_ids_follow_the_registry(self, registry, package_sets):
+        package_sets(set(), set())
         ids = [c.id for c in updater.components(registry)]
         assert ids == ["app", "driver:ar0234", "driver:imx585"]
 
-    def test_sensor_without_a_package_gets_no_component(self, registry, inventory):
-        inventory(set(), set())
+    def test_sensor_without_a_package_gets_no_component(self, registry, package_sets):
+        package_sets(set(), set())
         assert "driver:ov5647" not in [c.id for c in updater.components(registry)]
 
-    def test_stack_takes_the_rest_of_the_archive(self, registry, inventory):
-        inventory(
+    def test_stack_takes_the_rest_of_the_archive(self, registry, package_sets):
+        package_sets(
             {"camlab", "ar0234-rpi-dkms", "libcamera0.7", "python3-libcamera"},
             {"camlab", "ar0234-rpi-dkms", "libcamera0.7", "python3-libcamera", "coreutils"},
         )
         stack = [c for c in updater.components(registry) if c.id == "stack"]
         assert stack[0].packages == ("libcamera0.7", "python3-libcamera")
 
-    def test_stack_skips_uninstalled_archive_packages(self, registry, inventory):
-        inventory({"camlab", "libcamera0.7"}, {"camlab"})
+    def test_stack_skips_uninstalled_archive_packages(self, registry, package_sets):
+        package_sets({"camlab", "libcamera0.7"}, {"camlab"})
         assert "stack" not in [c.id for c in updater.components(registry)]
 
-    def test_resolve_maps_an_id_to_packages(self, registry, inventory):
-        inventory(set(), set())
+    def test_resolve_maps_an_id_to_packages(self, registry, package_sets):
+        package_sets(set(), set())
         assert updater.resolve("driver:ar0234", registry).packages == ("ar0234-rpi-dkms",)
 
-    def test_resolve_rejects_anything_else(self, registry, inventory):
+    def test_resolve_rejects_anything_else(self, registry, package_sets):
         """The shim takes ids, never package names, so an unknown id installs nothing."""
-        inventory(set(), set())
+        package_sets(set(), set())
         with pytest.raises(UpdateError, match="unknown component"):
             updater.resolve("libcamera0.7", registry)
 
@@ -237,17 +238,18 @@ class TestGate:
 
     def test_tarball_install_gets_none(self, policy):
         policy("")
-        assert "not installed as a package" in updater.update_path()
+        assert updater.update_path() == "camlab was not installed as a package"
 
     def test_foreign_build_gets_none(self, policy):
+        """The reason names the archive it should have come from, the card prints it as is."""
         policy(HAND_INSTALLED)
-        assert ARCHIVE in updater.update_path()
+        assert updater.update_path() == "camlab was not installed from apt.kurokesu.com"
 
 
 class TestSurvey:
     @pytest.fixture(autouse=True)
-    def one_pending_driver(self, monkeypatch, inventory):
-        inventory(set(), set())
+    def one_pending_driver(self, monkeypatch, package_sets):
+        package_sets(set(), set())
         states = {
             "camlab": PackageState("camlab", "1.0.0", "1.0.0", True, ""),
             "ar0234-rpi-dkms": PackageState("ar0234-rpi-dkms", "0.1.0", "0.2.0", True, "0.2.0"),
@@ -261,6 +263,105 @@ class TestSurvey:
 
     def test_uninstalled_component_is_left_out(self, registry):
         assert "driver:imx585" not in [c["id"] for c in updater.survey(registry)["components"]]
+
+
+class TestInstalledVersions:
+    def feed(self, monkeypatch, stdout: str) -> None:
+        monkeypatch.setattr(
+            updater.subprocess,
+            "run",
+            lambda cmd, **kwargs: SimpleNamespace(stdout=stdout, returncode=0),
+        )
+
+    def test_version_comes_back_per_package(self, monkeypatch):
+        self.feed(monkeypatch, "installed camlab 1.0.0-1\ninstalled libcamera0.7 1:0.7.1-4\n")
+        assert updater.installed_versions(["camlab", "libcamera0.7"]) == {
+            "camlab": "1.0.0-1",
+            "libcamera0.7": "1:0.7.1-4",
+        }
+
+    def test_unknown_name_keeps_the_rest(self, monkeypatch):
+        """dpkg-query exits 1 over a name it does not know, having printed the ones it does."""
+        self.feed(monkeypatch, "installed camlab 1.0.0-1\n")
+        assert updater.installed_versions(["camlab", "never-heard-of-it"]) == {"camlab": "1.0.0-1"}
+
+    def test_removed_but_configured_is_not_installed(self, monkeypatch):
+        self.feed(monkeypatch, "config-files ar0822-rpi-dkms 0.1.0-1\n")
+        assert updater.installed_versions(["ar0822-rpi-dkms"]) == {}
+
+    def test_no_names_skips_dpkg(self, monkeypatch):
+        monkeypatch.setattr(
+            updater.subprocess, "run", lambda *a, **k: pytest.fail("dpkg-query called")
+        )
+        assert updater.installed_versions([]) == {}
+
+
+class TestInventory:
+    """What About shows with networking off, so dpkg and uname are all it may ask."""
+
+    @pytest.fixture(autouse=True)
+    def box(self, monkeypatch, package_sets):
+        package_sets(
+            {"camlab", "ar0234-rpi-dkms", "imx585-rpi-dkms", "libcamera0.7", "python3-libcamera"},
+            {"camlab", "ar0234-rpi-dkms", "libcamera0.7", "python3-libcamera"},
+        )
+        monkeypatch.setattr(
+            updater.os, "uname", lambda: SimpleNamespace(release="6.18.34+rpt-rpi-2712")
+        )
+        self.versions = {
+            "camlab": "1.0.0~beta.11-1",
+            "ar0234-rpi-dkms": "0.1.0-1",
+            "libcamera0.7": "1:0.7.1+krks1-4",
+            "python3-libcamera": "1:0.7.1+krks1-4",
+        }
+        monkeypatch.setattr(
+            updater,
+            "installed_versions",
+            lambda packages: {k: v for k, v in self.versions.items() if k in packages},
+        )
+
+    def rows(self, registry) -> dict[str, dict]:
+        return {r["id"]: r for r in updater.inventory(registry)}
+
+    def test_every_sensor_gets_a_row(self, registry):
+        """Three driver rows and three missing sensors would read as three missing drivers."""
+        assert [r["id"] for r in updater.inventory(registry)] == [
+            "app",
+            "driver:ar0234",
+            "driver:imx585",
+            "driver:ov5647",
+            "stack",
+            "kernel",
+        ]
+
+    def test_mainline_sensor_names_itself(self, registry):
+        row = self.rows(registry)["driver:ov5647"]
+        assert (row["installed"], row["updatable"]) == (updater.MAINLINE, False)
+
+    def test_driver_absent_from_the_box_says_so(self, registry):
+        row = self.rows(registry)["driver:imx585"]
+        assert (row["installed"], row["updatable"]) == (updater.ABSENT, False)
+
+    def test_installed_driver_carries_its_version(self, registry):
+        row = self.rows(registry)["driver:ar0234"]
+        assert (row["installed"], row["updatable"]) == ("0.1.0-1", True)
+
+    def test_kernel_is_the_running_one_and_never_updatable(self, registry):
+        row = self.rows(registry)["kernel"]
+        assert (row["installed"], row["updatable"]) == ("6.18.34+rpt-rpi-2712", False)
+
+    def test_stack_shipping_in_step_shows_one_version(self, registry):
+        assert self.rows(registry)["stack"]["installed"] == "1:0.7.1+krks1-4"
+
+    def test_stack_out_of_step_counts_parts_instead(self, registry):
+        self.versions["python3-libcamera"] = "1:0.7.0+krks1-1"
+        assert self.rows(registry)["stack"]["installed"] == "2 packages"
+
+    def test_a_box_that_never_checked_still_answers(self, registry, tmp_path, monkeypatch):
+        """No update.json at all is the offline case the card exists for."""
+        monkeypatch.setenv("CAMLAB_UPDATE_FILE", str(tmp_path / "update.json"))
+        assert updater.read_state() == {}
+        assert self.rows(registry)["app"]["installed"] == "1.0.0~beta.11-1"
 
 
 class TestCmdline:
@@ -800,7 +901,7 @@ class TestGuiHelpers:
         )
         assert updater.component_summary(component) == ("1.0.0~beta.10-1", "1.0.0~beta.11-1")
 
-    def test_many_packages_name_the_first_with_an_update(self):
+    def test_many_packages_show_one_move_for_the_component(self):
         component = self._component(
             [
                 {"name": "libcamera0.7", "installed": "0.7.1", "pending": "0.7.2"},
@@ -808,16 +909,16 @@ class TestGuiHelpers:
                 {"name": "libcamera-tools", "installed": "0.7.1", "pending": ""},
             ]
         )
-        assert updater.component_summary(component) == ("libcamera0.7 0.7.1", "0.7.2, +1 more")
+        assert updater.component_summary(component) == ("0.7.1", "0.7.2")
 
-    def test_one_pending_among_many_needs_no_count(self):
+    def test_move_comes_from_the_part_that_has_one(self):
         component = self._component(
             [
                 {"name": "libcamera0.7", "installed": "0.7.1", "pending": ""},
                 {"name": "libcamera-tools", "installed": "0.7.1", "pending": "0.7.2"},
             ]
         )
-        assert updater.component_summary(component) == ("libcamera-tools 0.7.1", "0.7.2")
+        assert updater.component_summary(component) == ("0.7.1", "0.7.2")
 
     def test_many_packages_with_nothing_pending_just_count(self):
         component = self._component(

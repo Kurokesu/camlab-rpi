@@ -80,6 +80,10 @@ BROKEN_STATES = frozenset({"half-installed", "unpacked", "half-configured"})
 
 _STATE_VERSION = 1
 
+# About row values standing in for a version.
+MAINLINE = "mainline"  # driver and overlay ship with RPi OS
+ABSENT = "not installed"
+
 
 class UpdateError(Exception):
     pass
@@ -145,6 +149,23 @@ def installed_packages() -> set[str]:
     fmt = r"${db:Status-Status} ${Package}\n"
     lines = _run(["dpkg-query", "-Wf", fmt]).splitlines()
     return {parts[1] for parts in (line.split() for line in lines) if parts[:1] == ["installed"]}
+
+
+def installed_versions(packages: Sequence[str]) -> dict[str, str]:
+    """Version per installed package. Names dpkg does not carry are left out."""
+    if not packages:
+        return {}
+    fmt = r"${db:Status-Status} ${Package} ${Version}\n"
+    # dpkg-query exits 1 for any name it does not know while still printing the rest.
+    proc = subprocess.run(
+        ["dpkg-query", "-Wf", fmt, *packages], capture_output=True, text=True, check=False
+    )
+    out: dict[str, str] = {}
+    for line in proc.stdout.splitlines():
+        parts = line.split()
+        if len(parts) == 3 and parts[0] == "installed":
+            out[parts[1]] = parts[2]
+    return out
 
 
 @dataclass(frozen=True)
@@ -244,9 +265,9 @@ def update_path(states: dict[str, PackageState] | None = None) -> str:
     """Empty when updates apply, else the reason they do not."""
     state = (states if states is not None else package_states([APP_PACKAGE])).get(APP_PACKAGE)
     if state is None or state.installed is None:
-        return f"{APP_PACKAGE} is not installed as a package"
+        return f"{APP_PACKAGE} was not installed as a package"
     if not state.from_archive:
-        return f"installed {APP_PACKAGE} {state.installed} did not come from {ARCHIVE_URL}"
+        return f"{APP_PACKAGE} was not installed from {_archive_key()}"
     return ""
 
 
@@ -642,6 +663,49 @@ def survey(registry: SensorRegistry | None = None) -> dict:
     return out
 
 
+def _row(ident: str, label: str, installed: str, updatable: bool = True) -> dict:
+    """One About row. Empty installed means dpkg does not carry the package."""
+    return {
+        "id": ident,
+        "label": label,
+        "installed": installed or ABSENT,
+        "updatable": updatable and bool(installed),
+    }
+
+
+def _stack_version(packages: Sequence[str], found: dict[str, str]) -> str:
+    """One version while a source package ships in step, else how many parts it has."""
+    versions = {found[p] for p in packages if p in found}
+    return versions.pop() if len(versions) == 1 else f"{len(versions)} packages"
+
+
+def inventory(registry: SensorRegistry | None = None) -> list[dict]:
+    """Every row About shows, from dpkg and uname alone, so it answers offline.
+
+    Not updatable where no press could change the version: a mainline sensor, a
+    driver this box does not carry, the kernel that kernel.sh holds.
+    """
+    reg = registry or SensorRegistry.load()
+    stack = next((c for c in components(reg) if c.id == "stack"), None)
+    drivers = {s.overlay: s.driver_package for s in reg if s.driver_package}
+    found = installed_versions([APP_PACKAGE, *drivers.values(), *(stack.packages if stack else ())])
+
+    rows = [_row("app", APP_PACKAGE, found.get(APP_PACKAGE, ""))]
+    # Every sensor, not only packaged ones, or the card leaves half of them unexplained.
+    for sensor in sorted(reg, key=lambda s: s.overlay):
+        ident, label = f"driver:{sensor.overlay}", f"{sensor.overlay} driver"
+        package = drivers.get(sensor.overlay)
+        if package is None:
+            rows.append(_row(ident, label, MAINLINE, updatable=False))
+        else:
+            rows.append(_row(ident, label, found.get(package, "")))
+    if stack:
+        rows.append(_row(stack.id, stack.label, _stack_version(stack.packages, found)))
+    # Running kernel, not the held package version, which sits a step ahead until a reboot.
+    rows.append(_row("kernel", "kernel", os.uname().release, updatable=False))
+    return rows
+
+
 def _moves_to(installed: str, pending: str) -> str:
     """Pending version, long ones cut back to what differs, ...+krks1-5 to -5."""
     if len(pending) <= 20:
@@ -654,23 +718,20 @@ def _moves_to(installed: str, pending: str) -> str:
 def component_summary(component: dict) -> tuple[str, str]:
     """(installed, available) row text for one surveyed component.
 
-    A component of several packages names the first one with an update, so the row
-    still answers what is about to be installed.
+    Parts share a source and a version, so one move stands for all of them and
+    the row never names or counts them.
     """
     packages = component.get("packages") or []
     if not packages:
         return "-", ""
     pending = [p for p in packages if p.get("pending")]
-    if len(packages) == 1:
-        one = packages[0]
-        installed = one.get("installed") or "-"
-        return installed, _moves_to(installed, one["pending"]) if one.get("pending") else ""
     if not pending:
+        if len(packages) == 1:
+            return packages[0].get("installed") or "-", ""
         return f"{len(packages)} packages", ""
-    lead, rest = pending[0], len(pending) - 1
+    lead = pending[0]
     installed = lead.get("installed") or "-"
-    more = f", +{rest} more" if rest else ""
-    return f"{lead['name']} {installed}", f"{_moves_to(installed, lead['pending'])}{more}"
+    return installed, _moves_to(installed, lead["pending"])
 
 
 def pending_ids(state: dict) -> list[str]:
