@@ -7,7 +7,7 @@
 ![Platform](https://img.shields.io/badge/platform-Pi%205%20%7C%20CM5-blue?logo=raspberrypi&logoColor=white)
 ![GUI](https://img.shields.io/badge/GUI-PyQt6-blue?logo=qt&logoColor=white)
 [![libcamera](https://img.shields.io/badge/libcamera-Kurokesu%20fork-blue)](https://github.com/Kurokesu/libcamera)
-[![picamera2](https://img.shields.io/badge/picamera2-0.3.36-blue)](https://github.com/raspberrypi/picamera2)
+[![picamera2](https://img.shields.io/badge/picamera2-0.3.37-blue)](https://github.com/raspberrypi/picamera2)
 ![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
 
 Kiosk app for live preview and testing MIPI CSI camera modules on Raspberry Pi.
