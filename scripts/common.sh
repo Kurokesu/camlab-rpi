@@ -84,6 +84,16 @@ apt_get() {
     fi
 }
 
+# Presence only, no upgrades: lets callers skip apt, which rescans all of dpkg.
+missing_packages() {
+    local pkg
+    for pkg in "$@"; do
+        if [ "$(dpkg-query -Wf '${db:Status-Status}' "$pkg" 2>/dev/null)" != "installed" ]; then
+            printf '%s\n' "$pkg"
+        fi
+    done
+}
+
 # Write via a temp file in the same dir, so readers never see a half-written
 # boot-critical file. Mode of an existing file is preserved. An unchanged file is
 # left alone, convergence runs this over config.txt on the FAT partition.

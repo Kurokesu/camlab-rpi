@@ -90,8 +90,15 @@ for sensor in "${SENSORS[@]}"; do
     PACKAGES+=("$package")
 done
 
-log "Installing: ${PACKAGES[*]}"
-apt_get install -y "${PACKAGES[@]}"
+# dkms only recommends gcc and recommends are off here.
+mapfile -t MISSING < <(missing_packages gcc "${PACKAGES[@]}")
+
+if [ "${#MISSING[@]}" -gt 0 ]; then
+    log "Installing: ${MISSING[*]}"
+    apt_get install -y "${MISSING[@]}"
+else
+    log "Drivers already installed: ${PACKAGES[*]}"
+fi
 
 for sensor in "${SENSORS[@]}"; do
     if [ -f "$FW_OVERLAYS/${sensor}.dtbo" ]; then
