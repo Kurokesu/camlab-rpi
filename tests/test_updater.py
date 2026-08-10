@@ -305,8 +305,12 @@ class TestInventory:
             {"camlab", "ar0234-rpi-dkms", "imx585-rpi-dkms", "libcamera0.7", "python3-libcamera"},
             {"camlab", "ar0234-rpi-dkms", "libcamera0.7", "python3-libcamera"},
         )
+        # raising=False: os.uname is Linux only, and the suite runs on Windows too.
         monkeypatch.setattr(
-            updater.os, "uname", lambda: SimpleNamespace(release="6.18.34+rpt-rpi-2712")
+            updater.os,
+            "uname",
+            lambda: SimpleNamespace(release="6.18.34+rpt-rpi-2712"),
+            raising=False,
         )
         self.versions = {
             "camlab": "1.0.0~beta.11-1",
