@@ -72,7 +72,7 @@ class SettingsCard(QtWidgets.QFrame):
         self.net_sel.changed.connect(self._refresh_apply)
         net_row.addWidget(net_label)
         net_row.addWidget(self.net_sel, 1)
-        form.addRow("Networking:", net_row)
+        form.addRow("Network:", net_row)
 
         note = QtWidgets.QLabel('"Off" boots faster, Ethernet stays up until reboot')
         note.setObjectName("dialogNote")
