@@ -85,6 +85,10 @@ class AboutCard(QtWidgets.QFrame):
         # Back, not Close: the setting that gates a check sits one card behind.
         back_btn = QtWidgets.QPushButton("Back")
         back_btn.clicked.connect(on_back)
+        # TabFocus keeps a press from leaving a focus ring, and keeps the ring off
+        # the next button when Check disables itself mid-check.
+        for btn in (self.check_btn, self.all_btn, back_btn):
+            btn.setFocusPolicy(Qt.FocusPolicy.TabFocus)
         # Every other button here reboots the box, so Enter lands on Back.
         self.primary_button = back_btn
         buttons = QtWidgets.QHBoxLayout()
@@ -111,26 +115,30 @@ class AboutCard(QtWidgets.QFrame):
             if widget is not None:
                 widget.deleteLater()
 
-        pending = [] if self._blocked else updater.pending_ids(self._state)
+        pending = updater.pending_ids(self._state)
+        # A blocked box surveys like any other, so it shows what waits upstream and
+        # leaves the operator to install it from outside camlab.
+        offers = not self._blocked
         # Only worth its own button when it saves a reboot.
-        self.all_btn.setVisible(len(pending) > 1)
+        self.all_btn.setVisible(offers and len(pending) > 1)
         surveyed = {c["id"]: c for c in self._state.get("components") or []}
 
         for row, item in enumerate(self._rows):
-            offered = item["id"] in pending
+            waiting = item["id"] in pending
             installed, available = item["installed"], ""
-            if offered:
+            if waiting:
                 # Survey carries the version it moves to, which an inventory row cannot.
                 installed, available = updater.component_summary(surveyed[item["id"]])
-            version = QtWidgets.QLabel(f"{installed} \u2192 {available}" if offered else installed)
+            version = QtWidgets.QLabel(f"{installed} \u2192 {available}" if waiting else installed)
             version.setObjectName("modalText" if item["updatable"] else "dialogNote")
             version.setWordWrap(True)
             version.setMinimumWidth(_VERSION_MIN)
             version.setMaximumWidth(_VERSION_W)
             self._grid.addWidget(QtWidgets.QLabel(item["label"]), row, 0)
             self._grid.addWidget(version, row, 1)
-            if offered:
+            if waiting and offers:
                 button = QtWidgets.QPushButton("Update")
+                button.setFocusPolicy(Qt.FocusPolicy.TabFocus)
                 button.clicked.connect(
                     lambda _checked, i=item: self._on_apply([i["id"]], [i["label"]])
                 )
@@ -150,7 +158,6 @@ class AboutCard(QtWidgets.QFrame):
     def _status_text(self) -> str:
         """One line, whatever stands most in the way. Nothing in the way stays quiet."""
         if self._blocked:
-            # Nothing to say about networking once no update can land at all.
             return f"Updates off: {self._blocked}"
         if not self._online:
             return "Checking needs networking"
