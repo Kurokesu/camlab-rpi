@@ -6,7 +6,7 @@
 # Persistent state on loopback ext4 at /var/lib/camlab (writable boot partition).
 # Stages config only. One-shot finaliser locks down on next boot after settle.
 #
-# Stages: packages, data, overlay, swap, finalise
+# Stages: trim, packages, data, overlay, swap, finalise
 #
 # Safe to re-run. Requires sudo. --revert unlocks on next reboot.
 #
@@ -56,6 +56,21 @@ BEGIN="# >>> camlab readonly (do not edit) >>>"
 END="# <<< camlab readonly <<<"
 
 REPO_DIR="$(resolve_repo_dir)"
+
+# Nothing to trim under an overlay root, and a card that lies about discard can
+# eat the boot files the finaliser writes. Writable boxes keep trimming.
+stage_trim() {
+    log "Stage: fstrim"
+    if [ "$REVERT" -eq 1 ]; then
+        systemctl unmask fstrim.timer >/dev/null 2>&1 || true
+        systemctl enable fstrim.timer >/dev/null 2>&1 || true
+        log "unmasked fstrim.timer (writable root trims again)"
+        return
+    fi
+    systemctl disable --now fstrim.timer >/dev/null 2>&1 || true
+    systemctl mask fstrim.timer >/dev/null 2>&1 || true
+    log "masked fstrim.timer (nothing to trim under overlay root)"
+}
 
 stage_packages() {
     log "Stage: packages"
@@ -245,6 +260,7 @@ else
     header "Read-only root - staging (locks in on next boot)"
 fi
 
+stage_trim
 stage_packages
 stage_data
 stage_overlay

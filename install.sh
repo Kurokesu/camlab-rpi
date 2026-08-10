@@ -55,6 +55,10 @@ systemctl stop apt-daily.timer apt-daily-upgrade.timer \
     apt-daily.service apt-daily-upgrade.service 2>/dev/null || true
 trap 'systemctl start apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true' EXIT
 
+# Fresh images carry a stale trim stamp, so the timer fires minutes into first
+# boot and a lying card can eat the boot files setup writes. Stop, not mask.
+systemctl stop fstrim.timer fstrim.service 2>/dev/null || true
+
 header "Platform check"
 MODEL="$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || true)"
 case "$MODEL" in
