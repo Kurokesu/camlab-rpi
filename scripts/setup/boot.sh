@@ -6,6 +6,7 @@
 # never needs. Disables Bluetooth in config.txt (managed block) and masks unused
 # systemd units (network-wait, BT, ModemManager, cloud-init, apt timers).
 # Silences the console for kiosk boot (quiet cmdline, no getty on tty1, no wall).
+# Turns apt recommends off so upgrades stay lean.
 # Deliberately left alone: journald/logind/avahi and networking.
 # Safe to re-run. Requires sudo. Changes take hold after a reboot.
 #
@@ -37,6 +38,7 @@ FW_DIR="${CAMLAB_FW_DIR:-/boot/firmware}"
 CONFIG_TXT="$FW_DIR/config.txt"
 CMDLINE_TXT="$FW_DIR/cmdline.txt"
 CONSOLE_DROPIN="/etc/systemd/system.conf.d/camlab-console.conf"
+APT_CONF="/etc/apt/apt.conf.d/99camlab"
 
 # Cmdline tokens for a quiet kiosk panel. One token at a time so overlayroot
 # and tokens owned by other scripts survive. quiet and logo.nologo both
@@ -155,6 +157,19 @@ stage_systemd() {
     fi
 }
 
+# Recommends would regrow the lean install on the first upgrade.
+stage_apt() {
+    log "Stage: apt policy"
+    if [ "$REVERT" -eq 1 ]; then
+        rm -f "$APT_CONF"
+        log "apt: recommends back on (removed $APT_CONF)"
+        return
+    fi
+    atomic_write "$APT_CONF" 'APT::Install-Recommends "false";'$'\n'
+    chmod 0644 "$APT_CONF"
+    log "apt: recommends off ($APT_CONF)"
+}
+
 stage_console() {
     log "Stage: console quiet"
     if [ "$REVERT" -eq 1 ]; then
@@ -191,6 +206,7 @@ fi
 
 stage_config
 stage_systemd
+stage_apt
 stage_console
 
 if [ "$REVERT" -eq 1 ]; then
