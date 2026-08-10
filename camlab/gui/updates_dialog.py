@@ -51,7 +51,8 @@ class UpdatesCard(QtWidgets.QFrame):
 
         self._grid = QtWidgets.QGridLayout()
         self._grid.setHorizontalSpacing(12)
-        self._grid.setVerticalSpacing(2 if compact else 8)
+        # Rows of Update buttons, so a thumb needs a gap even where height is tight.
+        self._grid.setVerticalSpacing(6 if compact else 8)
         self._grid.setColumnStretch(0, 1)
 
         self.check_btn = QtWidgets.QPushButton("Check")
@@ -71,8 +72,8 @@ class UpdatesCard(QtWidgets.QFrame):
 
         lay = QtWidgets.QVBoxLayout(self)
         # Five rows plus chrome, so the touch panel needs every pixel it can keep.
-        lay.setContentsMargins(*((18, 12, 18, 12) if compact else (22, 20, 22, 18)))
-        lay.setSpacing(8 if compact else 14)
+        lay.setContentsMargins(*((18, 10, 18, 10) if compact else (22, 20, 22, 18)))
+        lay.setSpacing(6 if compact else 14)
         lay.addWidget(title)
         lay.addLayout(self._grid)
         lay.addWidget(self.status_lbl)
