@@ -663,6 +663,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.centralWidget().setFocus(Qt.FocusReason.OtherFocusReason)
 
     def _show_message(self, title: str, message: str) -> None:
+        self._close_modal()
         self._open_modal(message_card(title, message, [("OK", "", self._close_modal)]))
 
     def _choose_mode(self) -> None:
