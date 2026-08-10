@@ -9,10 +9,10 @@ Rules-Requires-Root: no
 
 Package: camlab-rpi
 Architecture: all
-# Mirrors what scripts/setup/deps.sh and drivers.sh install on main.
-# Sync on every release. Version floors (>=) go on Kurokesu stack
-# packages only when camlab starts requiring a newer piece, noted in
-# the changelog entry adding them.
+# Mirrors what scripts/setup/deps.sh installs on main. Sync on every
+# release. Version floors (>=) go on Kurokesu stack packages only when
+# camlab starts requiring a newer piece, noted in the changelog entry
+# adding them.
 Depends: ${misc:Depends},
  python3,
  python3-picamera2,
@@ -23,8 +23,10 @@ Depends: ${misc:Depends},
  cage,
  wlr-randr,
  qt6-wayland,
- awb-nn,
- ar0234-rpi-dkms,
+ awb-nn
+# camlab-setup installs drivers after kernel.sh prunes the
+# sibling kernel flavor.
+Suggests: ar0234-rpi-dkms,
  ar0822-rpi-dkms,
  imx585-rpi-dkms
 Description: Kurokesu camera test bench tool for Raspberry Pi
@@ -33,5 +35,6 @@ Description: Kurokesu camera test bench tool for Raspberry Pi
  signal-integrity surfacing. Runs fullscreen under a Cage kiosk.
  .
  Installs the application tree to /opt/camlab and restarts a running
- camlab.service. Service wiring, boot tuning and the read-only overlay
- stay with camlab-setup, which the operator runs once after install.
+ camlab.service. Sensor drivers, service wiring, boot tuning and the
+ read-only overlay stay with camlab-setup, which the operator runs once
+ after install.

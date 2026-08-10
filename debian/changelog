@@ -7,8 +7,10 @@ camlab-rpi (1.0.0-1) unstable; urgency=medium
     port to another arm64 board has nowhere to go.
   * Install /usr/bin/camlab-setup, symlinked to install.sh in the
     payload.
+  * Move sensor drivers from Depends to Suggests. camlab-setup installs
+    them after kernel pruning.
 
- -- Danius Kalvaitis <danius@kurokesu.com>  Fri, 07 Aug 2026 18:45:00 +0300
+ -- Danius Kalvaitis <danius@kurokesu.com>  Mon, 10 Aug 2026 19:40:00 +0300
 
 camlab (1.0.0~beta.4-1) unstable; urgency=medium
 
