@@ -63,13 +63,14 @@ stage_packages() {
         log "leaving overlayroot package installed (harmless, removal is manual)"
         return
     fi
-    if dpkg -s overlayroot >/dev/null 2>&1; then
-        log "overlayroot already installed"
+    local missing
+    mapfile -t missing < <(missing_packages overlayroot initramfs-tools busybox-static)
+    if [ "${#missing[@]}" -eq 0 ]; then
+        log "overlayroot + initramfs tooling already installed"
         return
     fi
-    log "installing overlayroot + initramfs tooling"
-    DEBIAN_FRONTEND=noninteractive apt-get install -y \
-        overlayroot initramfs-tools busybox-static >/dev/null
+    log "installing ${missing[*]}"
+    DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing[@]}" >/dev/null
 }
 
 # Loopback data image on writable boot partition. Survives read-only overlay.

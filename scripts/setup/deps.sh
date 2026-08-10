@@ -28,27 +28,57 @@ require_root
 
 header "Installing camlab apt dependencies"
 
-# Official archive setup: signing key, deb822 source, apt refresh.
-log "Enabling Kurokesu apt archive..."
-ARCHIVE_SETUP="$(mktemp)"
-curl -fsSL https://apt.kurokesu.com/setup.sh -o "$ARCHIVE_SETUP"
-sh "$ARCHIVE_SETUP" --update
-rm -f "$ARCHIVE_SETUP"
+# Same path the updater keys provenance off.
+ARCHIVE_SOURCES="/etc/apt/sources.list.d/kurokesu.sources"
+ARCHIVE_KEYRING="/etc/apt/keyrings/kurokesu-archive-keyring.gpg"
+
+# Installing from apt already enabled it, and a refresh costs a full index fetch.
+enable_archive() {
+    if [ ! -f "$ARCHIVE_SOURCES" ] || [ ! -f "$ARCHIVE_KEYRING" ]; then
+        log "Enabling Kurokesu apt archive..."
+        local setup
+        setup="$(mktemp)"
+        curl -fsSL https://apt.kurokesu.com/setup.sh -o "$setup"
+        sh "$setup" --update
+        rm -f "$setup"
+        return
+    fi
+
+    # Enabled but never fetched, so apt cannot see the packages yet.
+    local lists=(/var/lib/apt/lists/apt.kurokesu.com_*_Packages*)
+    if [ ! -e "${lists[0]}" ]; then
+        log "Kurokesu apt archive enabled, fetching index..."
+        apt_get update
+        return
+    fi
+
+    log "Kurokesu apt archive already enabled."
+}
+
+enable_archive
 
 # eatmydata first (plain apt-get) so apt_get can use it below.
-log "Installing eatmydata..."
-apt-get install -y eatmydata
+if ! command -v eatmydata >/dev/null 2>&1; then
+    log "Installing eatmydata..."
+    apt-get install -y eatmydata
+fi
 
 # One pass, recommends off. picamera2 pulls +krks libcamera fork.
 # Pinned recommends: python3-opengl, qt6-wayland, awb-nn. wlr-randr for HDMI/DSI switch.
 # python3-pil draws boot splash text.
-log "Installing packages..."
-apt_get install -y --no-install-recommends \
+mapfile -t MISSING < <(missing_packages \
     python3-picamera2 \
     python3-pyqt6 python3-opengl \
     python3-yaml python3-pil \
     cage wlr-randr \
-    qt6-wayland awb-nn
+    qt6-wayland awb-nn)
+
+if [ "${#MISSING[@]}" -gt 0 ]; then
+    log "Installing packages: ${MISSING[*]}"
+    apt_get install -y --no-install-recommends "${MISSING[@]}"
+else
+    log "Packages already installed."
+fi
 
 # camlab never runs rpicam-* CLI. Purge only installed names (set -e safe).
 log "Removing unused rpicam-apps stack..."
