@@ -785,8 +785,9 @@ class MainWindow(QtWidgets.QMainWindow):
             on_apply_histogram=self._apply_histogram,
             on_backlight=self._on_backlight,
             on_cancel=self._close_modal,
-            on_updates=None if state.get("blocked") else self._open_updates,
-            updates_pending=len(updater.pending_ids(state)),
+            on_updates=self._open_updates,
+            # Blocked, the card is an inventory, so it offers nothing to install.
+            updates_pending=0 if state.get("blocked") else len(updater.pending_ids(state)),
         )
         self._open_modal(card)
 

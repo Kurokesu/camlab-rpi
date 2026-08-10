@@ -98,7 +98,7 @@ class SettingsCard(QtWidgets.QFrame):
             bl_row.addWidget(self.backlight_lbl)
             form.addRow("Brightness:", bl_row)
 
-        # None hides row: updates are unmanaged here (tarball install or a fork).
+        # None hides the row, for a caller with no updater to drill into.
         if on_updates is not None:
             upd_label = QtWidgets.QLabel()
             upd_label.setPixmap(icons.pixmap("update", _ICON_PX, "#8a909b"))
