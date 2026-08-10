@@ -15,7 +15,7 @@ import html
 from ..integrity import IntegrityStats, LogClassifier, breakdown_text
 from ..qt import Qt, QtCore, QtGui, QtWidgets, Signal, Slot
 from .style import SEV_COLOR
-from .widgets import SegmentedSelector, repolish
+from .widgets import SegmentedSelector, kinetic_scroll, repolish
 
 _MAX_LINES = 2000
 _TRIM_SLACK = 256
@@ -56,7 +56,7 @@ class LogPanel(QtWidgets.QWidget):
 
         self.boot_lbl = QtWidgets.QLabel(self)
         self.boot_lbl.setObjectName("bootInfo")
-        self.boot_lbl.setToolTip("Time from power-on to the first captured frame.")
+        self.boot_lbl.setToolTip("Time from power-on to the first captured frame")
 
         self.filter = SegmentedSelector()
         self.filter.set_options(
@@ -98,19 +98,8 @@ class LogPanel(QtWidgets.QWidget):
         font.setStyleHint(QtGui.QFont.StyleHint.Monospace)
         font.setPointSize(9)
         self.view.setFont(font)
-        # Kinetic touch scrolling. grabGesture sets WA_AcceptTouchEvents on viewport,
-        # blocking synthesized mouse drag-select.
         viewport = self.view.viewport()
-        QtWidgets.QScroller.grabGesture(
-            viewport, QtWidgets.QScroller.ScrollerGestureType.TouchGesture
-        )
-        scroller = QtWidgets.QScroller.scroller(viewport)
-        props = scroller.scrollerProperties()
-        props.setScrollMetric(
-            QtWidgets.QScrollerProperties.ScrollMetric.HorizontalOvershootPolicy,
-            QtWidgets.QScrollerProperties.OvershootPolicy.OvershootAlwaysOff,
-        )
-        scroller.setScrollerProperties(props)
+        kinetic_scroll(viewport)
         viewport.installEventFilter(self)
         self.view.verticalScrollBar().valueChanged.connect(self._on_scrolled)
 

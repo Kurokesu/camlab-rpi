@@ -150,13 +150,10 @@ QCheckBox { color: #aeb4bf; spacing: 6px; }
 QCheckBox::indicator { border: 1px solid #4a505c; border-radius: 4px; background: #2c303a; }
 QCheckBox::indicator:checked { border-color: #6a7180; }
 QTextEdit#logView { background: #15171b; border: none; color: #c4c9d2; }
-QTextEdit#logView QScrollBar:vertical { background: transparent; width: 10px; margin: 0; }
-QTextEdit#logView QScrollBar::handle:vertical { background: #3a3f4b; border-radius: 5px;
-                                               min-height: 28px; }
-QTextEdit#logView QScrollBar::add-line:vertical,
-QTextEdit#logView QScrollBar::sub-line:vertical { height: 0; }
-QTextEdit#logView QScrollBar::add-page:vertical,
-QTextEdit#logView QScrollBar::sub-page:vertical { background: transparent; }
+QScrollBar:vertical { background: transparent; width: 10px; margin: 0; }
+QScrollBar::handle:vertical { background: #3a3f4b; border-radius: 5px; min-height: 28px; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
 QLabel#logTitle { color: #8a909b; font-weight: 500; }
 QLabel#dialogNote { color: #8a909b; }
 QFrame#modalCard QWidget { background: transparent; }
@@ -183,7 +180,7 @@ QPushButton#danger:hover { background: #50211a; }
 QPushButton#segment:hover { background: #2f3540; }
 QCheckBox::indicator:hover { border-color: #6a7180; }
 QCheckBox::indicator:checked:hover { border-color: #808998; }
-QTextEdit#logView QScrollBar::handle:vertical:hover { background: #4a505c; }
+QScrollBar::handle:vertical:hover { background: #4a505c; }
 QFrame#modalCard QPushButton:hover { background: #353b47; }
 QFrame#modalCard QPushButton#danger:hover { background: #50211a; }
 QFrame#modalCard QPushButton#segment:hover { background: #2f3540; }
