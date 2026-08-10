@@ -2,18 +2,19 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Purge the kernel flavor the board never boots (RPi OS ships both 2712 and
-# v8. Firmware picks by SoC). Detected from running kernel, so it works
-# on either family. Saves ~38 MB and halves DKMS sensor-module build time.
+# Keep the running kernel alone. Purge the flavor the board never boots (RPi OS
+# ships both 2712 and v8, firmware picks by SoC) and the versions apt keeps as a
+# fallback, which needs a boot menu a Pi has no equivalent of. Every extra kernel
+# costs a DKMS rebuild of every sensor module.
 # Trade-off: the media no longer boots other Pi family.
 #
 # Then hold what is left, so apt cannot swap the kernel under DKMS sensor
 # modules, where a failed rebuild kills cameras on next boot. Lift only for a
 # validated kernel.
-# Safe to re-run (no-op once the sibling is gone). Requires sudo.
+# Safe to re-run (no-op once trimmed). Requires sudo.
 #
 # Usage:
-#   sudo scripts/setup/kernel.sh            # purge sibling flavor, hold the kernel
+#   sudo scripts/setup/kernel.sh            # keep the running kernel, then hold
 #   sudo scripts/setup/kernel.sh --unhold   # lift the hold (validated kernel only)
 #   sudo scripts/setup/kernel.sh --revert   # reinstall the sibling kernel
 #   sudo scripts/setup/kernel.sh --help
@@ -48,6 +49,27 @@ kernel_packages() {
         | awk '$1 == "installed" { print $2 }'
 }
 
+# The sibling flavor at any release, plus releases older than the running one.
+# A newer release stays: an upgrade without a reboot has already pointed firmware
+# at its image. Flavor metapackages carry no release and stay.
+doomed_packages() {
+    local pkg release
+    while read -r pkg; do
+        case "$pkg" in
+            *"rpi-$SIBLING") printf '%s\n' "$pkg"; continue ;;
+            *+rpt*) ;;
+            *) continue ;;
+        esac
+        release="${pkg#linux-image-}"
+        release="${release#linux-headers-}"
+        release="${release%-common-rpi}"
+        release="${release%-rpi-*}"
+        if dpkg --compare-versions "$release" lt "$RUNNING_VER"; then
+            printf '%s\n' "$pkg"
+        fi
+    done < <(kernel_packages)
+}
+
 if [ "$UNHOLD" -eq 1 ]; then
     header "Kernel hold - lifting"
     mapfile -t HELD < <(apt-mark showhold | grep -E '^linux-(image|headers)-' || true)
@@ -67,6 +89,7 @@ case "$RUNNING" in
     *+rpt-rpi-*) FLAVOR="${RUNNING##*+rpt-rpi-}" ;;
     *) die "unexpected kernel release '$RUNNING' (want *+rpt-rpi-<flavor>)" ;;
 esac
+RUNNING_VER="${RUNNING%-rpi-*}"  # e.g. 6.18.34+rpt, shared by image and headers names
 
 # RPi OS arm64 ships exactly two flavors.
 case "$FLAVOR" in
@@ -82,29 +105,36 @@ if [ "$REVERT" -eq 1 ]; then
     exit 0
 fi
 
-header "Kernel trim - purging sibling flavor ($SIBLING, running $FLAVOR)"
+header "Kernel trim - keeping $RUNNING alone"
 
-# Metapackages and versioned image/headers packages all end in "rpi-<flavor>"
-# (e.g. linux-image-rpi-v8, linux-image-6.18.34+rpt-rpi-v8). The shared
-# linux-headers-*-common-rpi package matches neither suffix and is kept.
-mapfile -t DOOMED < <(kernel_packages | grep -E "rpi-${SIBLING}\$" || true)
+mapfile -t DOOMED < <(doomed_packages)
+
+# Hard guard: never remove what the running kernel needs, whatever matched above.
+KEEP=(
+    "linux-image-rpi-$FLAVOR"
+    "linux-headers-rpi-$FLAVOR"
+    "linux-image-$RUNNING"
+    "linux-headers-$RUNNING"
+    "linux-headers-$RUNNING_VER-common-rpi"
+)
 
 if [ "${#DOOMED[@]}" -eq 0 ]; then
-    log "No $SIBLING kernel packages installed, nothing to purge."
+    log "Only the running kernel is installed, nothing to purge."
 else
-    # Hard guard: never touch the running flavor, whatever the match above did.
     for pkg in "${DOOMED[@]}"; do
-        case "$pkg" in
-            *"rpi-$FLAVOR"*) die "refusing to remove '$pkg' (matches running flavor $FLAVOR)" ;;
+        case " ${KEEP[*]} " in
+            *" $pkg "*) die "refusing to remove '$pkg' (running $RUNNING)" ;;
         esac
     done
 
     log "Purging: ${DOOMED[*]}"
+    # An earlier run held the kernel it ran under, which a reboot makes stale.
+    apt-mark unhold "${DOOMED[@]}" >/dev/null
     # Separate autoremove: one pass misses linux-base-<ver>, which orphans
     # only once linux-base-rpi-<flavor> is gone.
     apt_get purge -y "${DOOMED[@]}"
     apt_get autoremove --purge -y
-    log "DKMS now builds for the $FLAVOR kernel only."
+    log "DKMS now builds for $RUNNING only."
 fi
 
 header "Kernel hold"
