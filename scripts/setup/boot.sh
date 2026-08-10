@@ -69,6 +69,8 @@ MASK_UNITS=(
     ModemManager.service
     apt-daily.timer
     apt-daily-upgrade.timer
+    # Fires early on a fresh boot, and cards that lie about discard eat live data.
+    fstrim.timer
 )
 # cloud-init ships on stock RPi OS images and is pure overhead on a fixed appliance.
 CLOUDINIT_UNITS=(
