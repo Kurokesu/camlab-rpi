@@ -227,7 +227,7 @@ fi
 systemctl disable camlab-readonly-firstboot.service >/dev/null 2>&1 || true
 logger -t camlab-readonly "locked in, rebooting into read-only root"
 sync
-systemctl reboot
+systemctl reboot --no-wall
 FINEOF
     chmod 0755 "$FINALISE_SCRIPT"
     log "installed finaliser $FINALISE_SCRIPT"

@@ -863,7 +863,7 @@ def _main(argv: list[str] | None = None) -> int:
         if args.no_reboot:
             print("reboot to run the update")
             return 0
-        subprocess.run(["systemctl", "reboot"], check=False)
+        subprocess.run(["systemctl", "reboot", "--no-wall"], check=False)
         return 0
     if args.cmd == "run":
         if not _require_root(args.cmd):
