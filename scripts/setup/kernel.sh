@@ -100,6 +100,8 @@ else
     done
 
     log "Purging: ${DOOMED[*]}"
+    # Separate autoremove: one pass misses linux-base-<ver>, which orphans
+    # only once linux-base-rpi-<flavor> is gone.
     apt_get purge -y "${DOOMED[@]}"
     apt_get autoremove --purge -y
     log "DKMS now builds for the $FLAVOR kernel only."
