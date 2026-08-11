@@ -1,3 +1,12 @@
+camlab-rpi (1.0.1-1) unstable; urgency=medium
+
+  * New upstream release. Notes:
+    https://github.com/Kurokesu/camlab-rpi/releases/tag/v1.0.1
+  * Floor rpicam-apps-core at 1:1.12.0+krks1. A bare name was satisfied
+    by the Raspberry Pi build images ship.
+
+ -- Danius Kalvaitis <danius@kurokesu.com>  Mon, 11 Aug 2026 10:35:00 +0300
+
 camlab-rpi (1.0.0-1) unstable; urgency=medium
 
   * New upstream release. Notes:

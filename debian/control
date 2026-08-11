@@ -23,7 +23,8 @@ Depends: ${misc:Depends},
  cage,
  wlr-randr,
  qt6-wayland,
- awb-nn
+ awb-nn,
+ rpicam-apps-core (>= 1:1.12.0+krks1)
 # camlab-setup installs drivers after kernel.sh prunes the
 # sibling kernel flavor.
 Suggests: ar0234-rpi-dkms,
