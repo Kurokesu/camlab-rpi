@@ -82,7 +82,7 @@ sudo camlab-setup
 - Start **camlab** when install finishes:
 
 ```bash
-sudo systemctl start camlab
+camlabctl start
 ```
 
 *App starts with sensor defaults (AR0234 on a free CSI port) and no live image, sensor overlay loads on next boot.*
