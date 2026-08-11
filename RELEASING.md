@@ -10,7 +10,7 @@ Maintainer notes for versioning and cutting releases.
 
 ## Cutting a release
 
-1. Set `__version__` to the release version in a release commit on `main` (for example `1.0.0-beta-dev` -> `1.0.0-beta.1`). In the same commit point the README install block at the release's `camlab-rpi-<version>.tar.gz`.
+1. Set `__version__` to release version in a release commit on `main` (for example `1.0.0-beta-dev` -> `1.0.0-beta.1`).
 2. Tag that commit and push:
 
 ```bash
@@ -25,7 +25,7 @@ git push origin v1.0.0-beta.1
 
 The deb ships from `debian/latest`, a packaging-only branch (DEP-14, recipe and workflows, never merged with `main`). After the source release exists:
 
-1. On `debian/latest`, open a `debian/changelog` entry for the release version in Debian form (`-` pre-release separator becomes `~`, for example `1.0.0~beta.3-1`). Sync `debian/control` Depends with `scripts/setup/deps.sh` and `drivers.sh`. Commit, push, wait for green CI.
+1. On `debian/latest`, open a `debian/changelog` entry for the release version in Debian form (`-` pre-release separator becomes `~`, for example `1.0.0~beta.3-1`). Sync `debian/control` Depends with `scripts/setup/deps.sh` and Suggests with drivers `drivers.sh` installs. Commit, push, wait for green CI.
 2. Tag that commit and push (`~` becomes `_` in tags):
 
 ```bash
@@ -33,6 +33,7 @@ git tag -a debian/1.0.0_beta.3-1 -m "debian/1.0.0_beta.3-1"
 git push origin debian/1.0.0_beta.3-1
 ```
 
-3. Release workflow verifies the paired `v` tag, builds against it and uploads `camlab_<version>.tar.gz` plus signed `SHA256SUMS` onto that release, next to the source tarball. A packaging-only rebuild is a new changelog entry and a `-2` tag.
+3. Release workflow verifies the paired `v` tag, builds against it and uploads `camlab-rpi_<version>.tar.gz` plus signed `SHA256SUMS` onto that release, next to the source tarball. A packaging-only rebuild increments Debian revision after the hyphen, each one a new changelog entry and its own tag.
+4. Publish into [apt.kurokesu.com](https://apt.kurokesu.com) with a manifest entry in `Kurokesu/apt`, which ingests those assets.
 
-See `debian/source/README.source` on that branch for layout and details.
+See `debian/source/README.source` on `debian/latest` for layout and details.
