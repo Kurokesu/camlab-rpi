@@ -26,10 +26,11 @@ git push origin v1.0.0-beta.1
 The deb ships from `debian/latest`, a packaging-only branch (DEP-14, recipe and workflows, never merged with `main`). After the source release exists:
 
 1. On `debian/latest`, open a `debian/changelog` entry for the release version in Debian form (`-` pre-release separator becomes `~`, for example `1.0.0~beta.3-1`). Sync `debian/control` Depends with `scripts/setup/deps.sh` and Suggests with drivers `drivers.sh` installs. Commit, push, wait for green CI.
-2. Tag that commit and push (`~` becomes `_` in tags):
+2. Tag the remote ref and push (`~` becomes `_` in tags):
 
 ```bash
-git tag -a debian/1.0.0_beta.3-1 -m "debian/1.0.0_beta.3-1"
+git fetch origin
+git tag -a debian/1.0.0_beta.3-1 -m "debian/1.0.0_beta.3-1" origin/debian/latest
 git push origin debian/1.0.0_beta.3-1
 ```
 
