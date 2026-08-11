@@ -72,6 +72,12 @@ mapfile -t MISSING < <(missing_packages \
     cage wlr-randr \
     qt6-wayland awb-nn)
 
+# Epoch floor: images ship RPi's build, which presence alone would keep.
+RPICAM_VER="$(dpkg-query -Wf '${Version}' rpicam-apps-core 2>/dev/null)" || RPICAM_VER=""
+if dpkg --compare-versions "${RPICAM_VER:-0}" lt "1:1.12.0+krks1"; then
+    MISSING+=(rpicam-apps-core)
+fi
+
 if [ "${#MISSING[@]}" -gt 0 ]; then
     log "Installing packages: ${MISSING[*]}"
     apt_get install -y --no-install-recommends "${MISSING[@]}"
