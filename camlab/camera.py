@@ -36,10 +36,15 @@ _CT_UI_RANGE = (2000, 10000)
 # Sentinel so set_control_state can tell "not passed" from "None = auto".
 _UNSET = object()
 
-# PispStatsOutput blob layout (libpisp pisp_statistics.h): AGC luma histogram
-# sits past the AWB zone block and AGC row sums.
-_AGC_HIST_OFFSET = 16448 + 2048
+# PispStatsOutput blob layout, packed struct pisp_statistics from
+# pisp_fe_statistics.h: AWB zones, AGC, CDAF focus grid
+_AWB_BYTES = (32 * 32 + 4) * 16  # zones + floating, 16 B each
+_AGC_ROW_SUMS_BYTES = 512 * 4
 _AGC_HIST_BINS = 1024
+_AGC_HIST_OFFSET = _AWB_BYTES + _AGC_ROW_SUMS_BYTES
+_AGC_BYTES = _AGC_ROW_SUMS_BYTES + _AGC_HIST_BINS * 4 + 4 * 16
+_CDAF_OFFSET = _AWB_BYTES + _AGC_BYTES
+_CDAF_SIZE = 8  # 8x8 grid of focus figures of merit
 
 # Frame duration ceiling when FPS is exposure driven
 _MAX_FRAME_US = 1_000_000
@@ -101,7 +106,8 @@ class CameraEngine:
         self._main_size: tuple[int, int] | None = None
         self._raw = False
         self.control_state = ControlState()
-        self.stats_output = False  # ISP statistics in metadata (histogram)
+        self.stats_output = False  # ISP statistics in metadata
+        self._stats_owners: set[str] = set()
         # Latch histogram because stats arrive below frame rate.
         self.latest_histogram: np.ndarray | None = None
         self.telemetry = Telemetry()  # latest per-frame snapshot
@@ -442,13 +448,13 @@ class CameraEngine:
         self._apply_controls()
         self.start(reset_telemetry=False)
 
-    def set_stats_output(self, enabled: bool) -> None:
-        """Deliver ISP statistics (PispStatsOutput) with each frame's metadata.
-
-        Feeds the histogram overlay. Off by default: the binding converts a
-        23 kB blob on every frame that carries it.
-        """
-        self.stats_output = bool(enabled)
+    def set_stats_output(self, enabled: bool, owner: str = "histogram") -> None:
+        """Deliver ISP statistics (PispStatsOutput) with each frame's metadata."""
+        if enabled:
+            self._stats_owners.add(owner)
+        else:
+            self._stats_owners.discard(owner)
+        self.stats_output = bool(self._stats_owners)
         if not self.stats_output:
             self.latest_histogram = None
         if self.picam2 is not None and "StatsOutputEnable" in self._camera_controls:
@@ -469,6 +475,19 @@ class CameraEngine:
         if len(raw) < _AGC_HIST_OFFSET + _AGC_HIST_BINS * 4:
             return None
         return np.frombuffer(raw, dtype=np.uint32, count=_AGC_HIST_BINS, offset=_AGC_HIST_OFFSET)
+
+    @staticmethod
+    def cdaf_focus(metadata: dict) -> np.ndarray | None:
+        """8x8 grid of CDAF focus figures of merit."""
+        blob = metadata.get("PispStatsOutput")
+        if not blob:
+            return None
+        raw = bytes(blob)
+        count = _CDAF_SIZE * _CDAF_SIZE
+        if len(raw) < _CDAF_OFFSET + count * 8:
+            return None
+        grid = np.frombuffer(raw, dtype=np.uint64, count=count, offset=_CDAF_OFFSET)
+        return grid.reshape(_CDAF_SIZE, _CDAF_SIZE)
 
     def _match_sensor_mode(self, sensor_cfg: dict) -> dict:
         """Find the sensor_modes entry matching configured size + bit depth.

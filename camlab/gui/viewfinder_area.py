@@ -4,7 +4,7 @@
 """ViewfinderArea hosts live viewfinder widget.
 
 Owns main layout slot, exposes frost toggle for modals. Viewfinder renders in-scene,
-overlays stack above. Corner overlays: histogram top-left, stats card top-right.
+overlays stack above.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 
 from ..qt import Qt, QtWidgets, Signal
+from .focus_map import FocusMapOverlay
 from .histogram import MARGIN, HistogramOverlay
 from .rpi_stats import RpiStatsCard
 
@@ -44,6 +45,11 @@ class ViewfinderArea(QtWidgets.QWidget):
         self._histogram.move(MARGIN, MARGIN)
         self._histogram.setVisible(False)
 
+        self._focus_map = FocusMapOverlay(parent=self)
+        self._focus_map.setVisible(False)
+        self._focus_map_enabled = False
+        self._place_focus_map()
+
         self._stats_card = RpiStatsCard(self)
         self._stats_card.setVisible(False)
         self._stats_enabled = False
@@ -52,7 +58,9 @@ class ViewfinderArea(QtWidgets.QWidget):
     def apply_profile(self, profile) -> None:
         """Corner overlay cards share one profile height, smaller on compact."""
         self._histogram.set_card_height(profile.overlay_card_h)
+        self._focus_map.set_card_height(profile.overlay_card_h)
         self._stats_card.set_card_height(profile.overlay_card_h)
+        self._place_focus_map()
         if self._stats_card.isVisible():
             self._place_stats_card()
 
@@ -81,6 +89,7 @@ class ViewfinderArea(QtWidgets.QWidget):
         else:
             self._live.setVisible(not frosted)
         self._sync_histogram_visible()
+        self._sync_focus_map_visible()
         self._sync_stats_visible()
 
     def set_histogram_enabled(self, enabled: bool) -> None:
@@ -88,6 +97,7 @@ class ViewfinderArea(QtWidgets.QWidget):
         if not self._hist_enabled:
             self._histogram.clear()
         self._sync_histogram_visible()
+        self._place_focus_map()
 
     def update_histogram(self, bins) -> None:
         """Push a fresh ISP histogram (no-op while hidden)."""
@@ -97,6 +107,33 @@ class ViewfinderArea(QtWidgets.QWidget):
     def _sync_histogram_visible(self) -> None:
         self._histogram.setVisible(self._hist_enabled and not self._frosted)
         self._histogram.raise_()
+
+    def set_focus_map_enabled(self, enabled: bool) -> None:
+        """Monitor sheet toggle."""
+        self._focus_map_enabled = bool(enabled) and self.has_camera
+        if not self._focus_map_enabled:
+            self._focus_map.clear()
+        self._sync_focus_map_visible()
+
+    def update_focus_map(self, levels) -> None:
+        """Push fresh CDAF cell levels (no-op while hidden)."""
+        if not self._focus_map.isVisible():
+            return
+        mode = self._engine.current_mode
+        if mode is not None:
+            # Cheap while the mode holds, and picks a new one up without a hook.
+            self._focus_map.set_frame_shape(*mode.size)
+        self._focus_map.set_levels(levels)
+
+    def _sync_focus_map_visible(self) -> None:
+        self._focus_map.setVisible(self._focus_map_enabled and not self._frosted)
+        self._focus_map.raise_()
+
+    def _place_focus_map(self) -> None:
+        """Keyed on enabled, not visible, so a modal's frost does not shuffle it."""
+        # Right of histogram, or in its slot when it is off.
+        x = MARGIN + self._histogram.width() + MARGIN if self._hist_enabled else MARGIN
+        self._focus_map.move(x, MARGIN)
 
     def set_stats_overlay(self, enabled: bool) -> None:
         self._stats_enabled = bool(enabled)

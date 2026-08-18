@@ -257,11 +257,12 @@ _ZEBRA_LO, _ZEBRA_HI, _ZEBRA_DEFAULT = 70, 100, 95
 
 
 class MonitorSheet(SheetCard):
-    """Histogram, focus peaking and zebra toggles + zebra threshold slider."""
+    """Histogram, focus map, focus peaking and zebra toggles + zebra threshold."""
 
     changed = Signal(bool, bool, float)  # (peaking, zebra, zebra_threshold 0..1)
-    # Separate signal: histogram drives the stats pipeline, not shaders.
+    # Separate signals: these two drive stats pipeline
     histogram_changed = Signal(bool)
+    focus_map_changed = Signal(bool)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -270,9 +271,10 @@ class MonitorSheet(SheetCard):
 
         # Labels and icons come from apply_profile, sized for the display.
         self.hist_btn = QtWidgets.QPushButton()
+        self.map_btn = QtWidgets.QPushButton()
         self.peak_btn = QtWidgets.QPushButton()
         self.zebra_btn = QtWidgets.QPushButton()
-        for btn in (self.hist_btn, self.peak_btn, self.zebra_btn):
+        for btn in (self.hist_btn, self.map_btn, self.peak_btn, self.zebra_btn):
             # Segment look (square corners) to match the Auto/Manual rows.
             # No pos property, so these stay visually separate toggles.
             btn.setObjectName("segment")
@@ -280,6 +282,7 @@ class MonitorSheet(SheetCard):
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setFocusPolicy(Qt.FocusPolicy.TabFocus)
         self.hist_btn.toggled.connect(self.histogram_changed.emit)
+        self.map_btn.toggled.connect(self.focus_map_changed.emit)
         self.peak_btn.toggled.connect(self._emit)
         self.zebra_btn.toggled.connect(self._emit)
 
@@ -303,6 +306,7 @@ class MonitorSheet(SheetCard):
         row.addWidget(self.title_lbl)
         # Toggles first, so threshold keeps the loose end of the row.
         row.addWidget(self.hist_btn)
+        row.addWidget(self.map_btn)
         row.addWidget(self.peak_btn)
         # Threshold cluster hugs the Zebra button (tighter spacing than the
         # row) and dims with it, so it reads as that button's parameter.
@@ -322,11 +326,14 @@ class MonitorSheet(SheetCard):
         self.slider.setFixedWidth(profile.zebra_slider_w)
         # Full labels plus threshold outgrow an 800 px panel, so compact trims them.
         self.hist_btn.setText("" if profile.compact else " Histogram")
+        self.map_btn.setText("" if profile.compact else " Focus Map")
         self.peak_btn.setText(" Peaking" if profile.compact else " Focus Peaking")
         self.zebra_btn.setText(" Zebra")
+        self.thr_lbl.setVisible(not profile.compact)
         icon_px = profile.icon_px - 2
         glyphs = (
             (self.hist_btn, "bar_chart"),
+            (self.map_btn, "grid_on"),
             (self.peak_btn, "center_focus_weak"),
             (self.zebra_btn, "texture"),
         )
@@ -343,6 +350,16 @@ class MonitorSheet(SheetCard):
         self.hist_btn.blockSignals(True)
         self.hist_btn.setChecked(bool(on))
         self.hist_btn.blockSignals(False)
+
+    @property
+    def focus_map(self) -> bool:
+        return self.map_btn.isChecked()
+
+    def set_focus_map(self, on: bool) -> None:
+        """Seed from stored settings without reporting it back as a change."""
+        self.map_btn.blockSignals(True)
+        self.map_btn.setChecked(bool(on))
+        self.map_btn.blockSignals(False)
 
     @property
     def peaking(self) -> bool:

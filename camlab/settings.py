@@ -149,6 +149,16 @@ class SettingsStore:
         data.setdefault("ui", {})["histogram"] = bool(enabled)
         return self._atomic_write(data)
 
+    def get_focus_map(self) -> bool:
+        """App-level CDAF focus map overlay toggle."""
+        return bool((self._load().get("ui") or {}).get("focus_map", False))
+
+    def set_focus_map(self, enabled: bool) -> bool:
+        data = self._load()
+        data["version"] = _VERSION
+        data.setdefault("ui", {})["focus_map"] = bool(enabled)
+        return self._atomic_write(data)
+
     def get_backlight(self) -> int | None:
         """Panel backlight percent, None when never set (keep the panel default)."""
         value = (self._load().get("ui") or {}).get("backlight")

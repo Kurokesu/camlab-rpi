@@ -15,6 +15,7 @@ from ..config_manager import ConfigManager, poweroff
 from ..display import Backlight, DisplayManager
 from ..drm import dsi_blocked_ports
 from ..dsi_panels import PanelRegistry
+from ..focus_metric import FocusSampler
 from ..integrity import IntegrityMonitor, LogClassifier, StderrCapture
 from ..modes import mode_for
 from ..qt import Qt, QtCore, QtGui, QtWidgets, Signal, Slot
@@ -142,12 +143,20 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._wire()
         self._populate_static()
-        # Histogram overlay, persisted app-wide, default off.
         self._histogram_on = settings.get_histogram()
         self._sheets["monitor"].set_histogram(self._histogram_on)
         if self._histogram_on:
             self.engine.set_stats_output(True)
             self.viewfinder_area.set_histogram_enabled(True)
+        # CDAF focus map overlay: image statistics, samples only while shown.
+        self.focus_sampler = FocusSampler(engine, parent=self)
+        self.focus_sampler.sample.connect(lambda s: self.viewfinder_area.update_focus_map(s.heat))
+        self._focus_map_on = settings.get_focus_map()
+        self._sheets["monitor"].set_focus_map(self._focus_map_on)
+        self.viewfinder_area.set_focus_map_enabled(self._focus_map_on)
+        self.focus_sampler.set_sampling(self._focus_map_on, "map")
+        # Seeding blocks sheet signals, so refresh the chip explicitly.
+        self._refresh_monitor_chip()
         # Start on inert sink so nothing highlighted until Tab.
         central.setFocus(Qt.FocusReason.OtherFocusReason)
 
@@ -181,6 +190,7 @@ class MainWindow(QtWidgets.QMainWindow):
         monitor = self._sheets["monitor"]
         monitor.changed.connect(self._on_monitor_changed)
         monitor.histogram_changed.connect(self._apply_histogram)
+        monitor.focus_map_changed.connect(self._apply_focus_map)
         # Keep open sheet glued to viewfinder bottom edge on resize.
         self.viewfinder_area.installEventFilter(self)
 
@@ -601,7 +611,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _refresh_monitor_chip(self) -> None:
         """Amber chip while anything the sheet owns draws, same accent as manual control."""
         monitor = self._sheets["monitor"]
-        drawing = monitor.peaking or monitor.zebra or monitor.histogram
+        drawing = monitor.peaking or monitor.zebra or monitor.histogram or monitor.focus_map
         self._set_chip_accent(self.monitor_btn, "stroke_partial", drawing)
 
     def _on_control_changed(self, key: str, value) -> None:
@@ -884,6 +894,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.settings.set_histogram(self._histogram_on)
         self._refresh_monitor_chip()
         log.info("histogram overlay %s", "on" if enabled else "off")
+
+    def _apply_focus_map(self, enabled: bool) -> None:
+        self._focus_map_on = bool(enabled)
+        self.viewfinder_area.set_focus_map_enabled(self._focus_map_on)
+        self.focus_sampler.set_sampling(self._focus_map_on, "map")
+        self.settings.set_focus_map(self._focus_map_on)
+        self._refresh_monitor_chip()
+        log.info("focus map overlay %s", "on" if enabled else "off")
 
     def _apply_network(self, enabled: bool) -> None:
         self._close_modal()
