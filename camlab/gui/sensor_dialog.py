@@ -39,7 +39,7 @@ class SensorCard(QtWidgets.QFrame):
         self._on_apply = on_apply
         self._display_locked = bool(display_locked)
         self._locked_ports = set(locked_ports)
-        # Off-catalogue display blocks kept as-is on apply, port they claim locks while selected.
+        # Off-catalog display blocks kept as-is on apply, port they claim locks while selected.
         self._offcat_name = (
             current_display
             if current_display is not None and panels.by_name(current_display) is None
@@ -77,7 +77,7 @@ class SensorCard(QtWidgets.QFrame):
             options: list[tuple[str, str | None]] = [("None", None)]
             options += [(name, name) for name in panels.names]
             if self._offcat_name is not None:
-                # Keep off-catalogue overlays selectable so Apply does not clobber them.
+                # Keep off-catalog overlays selectable so Apply does not clobber them.
                 options.append((self._offcat_name, self._offcat_name))
             self.display_sel.set_options(options, current=current_display)
         self.display_sel.changed.connect(self._on_wiring_changed)

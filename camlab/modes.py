@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Sensor mode catalogue and selection (pure, no Picamera2/Qt).
+"""Sensor mode catalog and selection (pure, no Picamera2/Qt).
 
 A mode is one raw sensor output: packed format, size, bit depth, max fps.
 Operator picks via Resolution --> Bit depth --> FPS. Bench rates (24, 30, 60,
@@ -27,7 +27,7 @@ DEFAULT_FPS = 30.0
 # Tolerance when matching reported fps (e.g. 33.89) to nominal rates.
 _FPS_EPS = 0.5
 
-# Lores alignment. Even size avoids fractional scaling artefacts.
+# Lores alignment. Even size avoids fractional scaling artifacts.
 _LORES_ALIGN = 2
 
 
@@ -107,7 +107,7 @@ def fps_to_frame_duration(fps: float) -> int:
 
 
 def nearest_fps_option(options: list[float], target: float | None) -> float:
-    """Option closest to target (ties favour the lower rate).
+    """Option closest to target (ties favor the lower rate).
 
     target None means "no preference" and returns the maximum available rate.
     Used to carry the chosen fps across a mode change: kept when still offered,
@@ -156,7 +156,7 @@ def default_mode(modes: list[SensorMode]) -> tuple[SensorMode, float]:
 def resolve_initial_mode(modes: list[SensorMode], saved: dict | None) -> tuple[SensorMode, float]:
     """Pick the boot mode: a valid persisted selection, else the heaviest mode.
 
-    A persisted selection is honoured only if its (size, bit_depth) still exists.
+    A persisted selection is honored only if its (size, bit_depth) still exists.
     Its fps snaps to the nearest offered rate when no longer offered (no stale,
     unrunnable rates), same as a runtime mode change. Missing fps means no
     intent to preserve, so DEFAULT_FPS applies.

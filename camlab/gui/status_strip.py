@@ -3,7 +3,7 @@
 
 """Status strip: read-only live capture facts.
 
-Centre mirrors rpicam-hello info text. Version left, board stats right.
+Center mirrors rpicam-hello info text. Version left, board stats right.
 Compact profile drops frame counter, trims stats to CPU/GPU, tap toggles card.
 """
 
@@ -128,7 +128,7 @@ class StatusStrip(QtWidgets.QFrame):
             view.pin_width()
 
     def _sync_balance(self) -> None:
-        """Pin both zones to the wider one so centred telemetry cannot drift."""
+        """Pin both zones to the wider one so centered telemetry cannot drift."""
         active = self._active_stats()
         right_min = max(active.minimumWidth(), active.sizeHint().width())
         width = max(self.version_lbl.sizeHint().width(), right_min)

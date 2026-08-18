@@ -3,7 +3,7 @@
 
 """Collapsible log panel for captured camera-stack stderr.
 
-Integrity lines coloured by severity with exclusive filter and running counts.
+Integrity lines colored by severity with exclusive filter and running counts.
 Ring buffer lets filter re-render without re-tailing. Boot-to-viewfinder time in header.
 """
 
@@ -176,7 +176,7 @@ class LogPanel(QtWidgets.QWidget):
         color = SEV_COLOR.get(sev or "")
         if color:
             safe = f"<span style='color:{color}'>{safe}</span>"
-        # Fresh formats, else severity colour bleeds into following lines.
+        # Fresh formats, else severity color bleeds into following lines.
         if not cur.document().isEmpty():
             cur.insertBlock(QtGui.QTextBlockFormat(), QtGui.QTextCharFormat())
         cur.insertHtml(safe)

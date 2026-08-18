@@ -4,7 +4,7 @@
 
 """Write a transparent Xcursor theme.
 
-Cage paints a pointer at screen centre from its own startup until a client
+Cage paints a pointer at screen center from its own startup until a client
 overrides it, which shows an arrow on black boot screen. Pointed at by
 XCURSOR_PATH, this theme makes that pointer invisible. A missing theme does not
 work, wlroots then falls back to a builtin arrow.

@@ -83,7 +83,7 @@ class SegmentedSelector(QtWidgets.QWidget):
         """Populate (text, value) options, preselecting `current` if present.
 
         `stretch` trails expanding spacer to left-pack buttons in wide form.
-        False keeps row hugging buttons. `disabled_values` greys out options,
+        False keeps row hugging buttons. `disabled_values` grays out options,
         e.g. CSI port occupied by DSI display.
         """
         for btn in self._group.buttons():

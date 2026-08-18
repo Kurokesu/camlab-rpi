@@ -113,7 +113,7 @@ stage_fbsplash
 stage_cmdline
 
 if [ "$REVERT" -eq 1 ]; then
-    log "Revert complete. Reboot to restore stock behaviour."
+    log "Revert complete. Reboot to restore stock behavior."
 else
     log "Done."
 fi

@@ -145,7 +145,7 @@ stage_systemd() {
             changed=1
         fi
     done
-    # cloud-init also honours a disable flag, which stops it even when a unit is
+    # cloud-init also honors a disable flag, which stops it even when a unit is
     # static or gets re-enabled by a package upgrade.
     if [ -d /etc/cloud ]; then
         touch /etc/cloud/cloud-init.disabled
@@ -210,7 +210,7 @@ stage_apt
 stage_console
 
 if [ "$REVERT" -eq 1 ]; then
-    log "Revert complete. Reboot to restore stock boot behaviour."
+    log "Revert complete. Reboot to restore stock boot behavior."
 else
     log "Done."
 fi

@@ -228,7 +228,7 @@ class MainWindow(QtWidgets.QMainWindow):
         for btn in self._ctrl_buttons.values():
             crow.addWidget(btn)
         crow.addWidget(self.monitor_btn)
-        # Stretch splits evenly around divider, keeping it centred in gap.
+        # Stretch splits evenly around divider, keeping it centered in gap.
         self._mid_divider = vline()
         crow.addStretch(1)
         self._add_divider(self._mid_divider)
@@ -706,7 +706,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._persist_timer.start()
 
     def _display_name_current(self, disp: dict) -> str | None:
-        """Catalogue name for the current display block, raw overlay when off-catalogue."""
+        """Catalog name for the current display block, raw overlay when off-catalog."""
         if not disp["present"] or not disp["overlay"]:
             return None
         panel = self.panels.by_overlay(disp["overlay"].split(",")[0])
@@ -720,7 +720,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # No block but a live DSI connector: firmware-detected panel, not ours to manage.
         locked_ports = dsi_blocked_ports() if not disp["present"] else set()
         current_display = self._display_name_current(disp)
-        # Off-catalogue block: its claimed port is fixed, the card locks it out.
+        # Off-catalog block: its claimed port is fixed, the card locks it out.
         offcat_port = None
         if current_display is not None and self.panels.by_name(current_display) is None:
             offcat_port = disp["port_blocked"]
@@ -755,7 +755,7 @@ class MainWindow(QtWidgets.QMainWindow):
         panel = self.panels.by_name(display_name)
         if panel is not None:
             target_raw = ConfigManager.compose_display_overlay(panel.overlay, port)
-        elif display_name is not None:  # off-catalogue block kept as-is
+        elif display_name is not None:  # off-catalog block kept as-is
             target_raw = disp["overlay"]
         else:
             target_raw = None

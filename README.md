@@ -127,7 +127,7 @@ A DSI touch panel serves as both display and input device. Supported panels:
 Setup:
 
 - Pi 5: plug and play, firmware loads overlay and **Select sensor** shows touch display as auto-detected
-- CM5: pick it in **Select sensor** dialogue together with the sensor, one **Apply & Shutdown** covers both
+- CM5: pick it in **Select sensor** dialog together with the sensor, one **Apply & Shutdown** covers both
 - CM5 without HDMI: install with `--display vc4-kms-dsi-7inch`, reboot and continue sensor selection on touch display
 
 ## Development

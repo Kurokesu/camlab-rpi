@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# Supported DSI touch panels (GUI catalogue). overlay is dtoverlay token
+# Supported DSI touch panels (GUI catalog). overlay is dtoverlay token
 # written to config.txt (dsi0 param selects DISP0, default is DISP1).
 panels:
   # 4.3" 800x480 IPS, reuses official 7" timings.

@@ -15,7 +15,7 @@ import glob
 from dataclasses import dataclass
 
 # v3d exposes per-queue cumulative busy ns. Bin and render carry the real
-# rasterisation work (tfu/csd are transfer/compute, rarely the bottleneck).
+# rasterization work (tfu/csd are transfer/compute, rarely the bottleneck).
 _GPU_STATS_GLOB = "/sys/devices/platform/axi/*.v3d/gpu_stats"
 _SOC_TEMP = "/sys/class/thermal/thermal_zone0/temp"
 

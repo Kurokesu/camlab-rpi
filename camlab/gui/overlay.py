@@ -20,7 +20,7 @@ _DIM = QtGui.QColor(12, 13, 16, 165)
 
 
 class ModalOverlay(QtWidgets.QWidget):
-    """Covers host, dims it, blocks input and centres a card.
+    """Covers host, dims it, blocks input and centers a card.
 
     Dim skips optional clear_rect (frosted viewfinder) so frost stays full
     strength. Tab stays in card.

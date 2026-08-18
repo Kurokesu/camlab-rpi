@@ -101,7 +101,7 @@ esac
 if [ "$REVERT" -eq 1 ]; then
     header "Kernel trim - reinstalling sibling flavor ($SIBLING)"
     apt_get install -y "linux-image-rpi-$SIBLING" "linux-headers-rpi-$SIBLING"
-    log "Done. Sibling kernel restored (universal-image behaviour is back)."
+    log "Done. Sibling kernel restored (universal-image behavior is back)."
     exit 0
 fi
 

@@ -111,7 +111,7 @@ log = logging.getLogger(__name__)
 # equivalent), two together read as the intended frost strength.
 _BLUR_PASSES = 2
 
-# uRotate turns sampled texcoord about centre, portrait panel shows landscape sensor upright.
+# uRotate turns sampled texcoord about center, portrait panel shows landscape sensor upright.
 # Identity at 0 degrees.
 _VERT = """
     attribute vec2 aPosition;
@@ -181,8 +181,8 @@ _FRAG_EXT_FX = """
     void main()
     {
         vec4 color = texture2D(tex, texcoord);
-        float centre = dot(color.rgb, LUMA);
-        if (zebra > 0.5 && centre > zebraThr) {
+        float center = dot(color.rgb, LUMA);
+        if (zebra > 0.5 && center > zebraThr) {
             float stripe = mod((texcoord.x + texcoord.y + time * 0.02) / 0.01, 2.0);
             gl_FragColor = stripe < 1.0 ? vec4(0.0, 0.0, 0.0, 1.0)
                                         : vec4(1.0, 1.0, 1.0, 1.0);
@@ -191,7 +191,7 @@ _FRAG_EXT_FX = """
         if (peaking > 0.5) {
             float right = dot(texture2D(tex, texcoord + vec2(texel.x, 0.0)).rgb, LUMA);
             float below = dot(texture2D(tex, texcoord + vec2(0.0, texel.y)).rgb, LUMA);
-            if (abs(right - centre) + abs(below - centre) > 0.08) {
+            if (abs(right - center) + abs(below - center) > 0.08) {
                 gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
                 return;
             }
@@ -465,7 +465,7 @@ class GlViewfinder(QOpenGLWidget):
         return prog
 
     def _rotate_matrix(self):
-        """Column-major mat2 turns centred texcoord by -transform, picture turns by +transform.
+        """Column-major mat2 turns centered texcoord by -transform, picture turns by +transform.
 
         Mirror negates the first column, reflecting the picture left to right as
         shown. Folded in here rather than into the turn so the axis is the
