@@ -32,7 +32,7 @@ from .rpi_stats import field_texts
 from .sensor_dialog import SensorCard
 from .settings_dialog import SettingsCard
 from .status_strip import StatusStrip
-from .style import SEV_COLOR, UiProfile, build_stylesheet, profile_for_screen
+from .style import SEV_COLOR, UiProfile, build_stylesheet, forced_screen, profile_for_screen
 from .viewfinder_area import ViewfinderArea
 from .widgets import repolish, vline
 
@@ -100,7 +100,21 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setStyleSheet(build_stylesheet(self._profile))
 
         central = QtWidgets.QWidget()
-        self.setCentralWidget(central)
+        forced = forced_screen()
+        if forced is None:
+            self.setCentralWidget(central)
+        else:
+            # Panel preview. Cage forces fullscreen, so the UI shrinks, not the window.
+            central.setFixedSize(*forced)
+            wrapper = QtWidgets.QWidget()
+            wrapper.setObjectName("previewBackdrop")
+            wrapper.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            # Selector scopes the black to the backdrop, a bare rule cascades.
+            wrapper.setStyleSheet("QWidget#previewBackdrop { background: #000; }")
+            grid = QtWidgets.QGridLayout(wrapper)
+            grid.setContentsMargins(0, 0, 0, 0)
+            grid.addWidget(central, 0, 0, Qt.AlignmentFlag.AlignCenter)
+            self.setCentralWidget(wrapper)
         # Focus sink: empty chrome click parks focus here, not on button.
         central.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         root = QtWidgets.QVBoxLayout(central)

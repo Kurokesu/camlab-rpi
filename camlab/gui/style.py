@@ -10,6 +10,7 @@ Profile picked from active screen, re-applied on display switch.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 
 from ..qt import QtGui
@@ -93,7 +94,18 @@ COMPACT = UiProfile(
 _COMPACT_MAX_HEIGHT = 600
 
 
+def forced_screen() -> tuple[int, int] | None:
+    """CAMLAB_SCREEN=WxH dev override: preview a panel layout on a big display."""
+    w, sep, h = os.environ.get("CAMLAB_SCREEN", "").partition("x")
+    if not (sep and w.isdigit() and h.isdigit()):
+        return None
+    return int(w), int(h)
+
+
 def profile_for_screen(screen) -> UiProfile:
+    forced = forced_screen()
+    if forced is not None:
+        return COMPACT if forced[1] <= _COMPACT_MAX_HEIGHT else REGULAR
     if screen is None:
         return REGULAR
     return COMPACT if screen.geometry().height() <= _COMPACT_MAX_HEIGHT else REGULAR

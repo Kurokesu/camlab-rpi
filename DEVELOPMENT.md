@@ -26,6 +26,23 @@ Network toggle (GUI Settings or `camlabctl net`) persists across reboots. Turnin
 
 Run directly under a Cage session with `python3 -m camlab`. Sensors are defined in `camlab/data/sensors.yaml`. CSI port is set in a managed block in `/boot/firmware/config.txt`. Boot is tuned by `scripts/setup/boot.sh` (run during install, `--revert` undoes it). Each script under `scripts/setup/` is self-documenting (`--help`) and safe to re-run.
 
+## Panel preview
+
+`CAMLAB_SCREEN=800x480` renders the UI panel-sized on a black backdrop, for judging a touch panel layout on a monitor. Set it with a drop-in:
+
+```bash
+sudo mkdir -p /etc/systemd/system/camlab.service.d
+printf '[Service]\nEnvironment=CAMLAB_SCREEN=800x480\n' | sudo tee /etc/systemd/system/camlab.service.d/preview.conf
+sudo systemctl daemon-reload && camlabctl restart
+```
+
+Remove the drop-in to return to full-screen rendering:
+
+```bash
+sudo rm -r /etc/systemd/system/camlab.service.d
+sudo systemctl daemon-reload && camlabctl restart
+```
+
 ## Read-only root
 
 Root is read-only (overlayfs, RAM upper) so a yanked power cable can't corrupt it. `scripts/setup/readonly.sh` sets it up during install and arms a one-shot that locks down on the first reboot after first-boot tasks settle, so the operator does nothing extra. Sensor selections persist on a small loopback data partition at `/var/lib/camlab`, outside the overlay. For edits: `camlabctl rw`, reboot, change, `camlabctl ro`, reboot.
@@ -49,3 +66,4 @@ README walkthrough targets SD on a Pi 5, any boot storage works. CM5 eMMC boots 
 - `CAMLAB_CAMERA_NUM` (default `0`)
 - `CAMLAB_STATE_FILE` persisted mode/fps settings path
 - `CAMLAB_NO_CAPTURE` disable stderr splicing
+- `CAMLAB_SCREEN` force `WxH` panel preview (see [Panel preview](#panel-preview))
