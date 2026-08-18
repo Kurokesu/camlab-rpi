@@ -22,6 +22,8 @@ Network toggle (GUI Settings or `camlabctl net`) persists across reboots. Turnin
 
 `sudo ./install.sh` from a checkout copies that tree to `/opt/camlab` and runs the same wiring as `camlab-setup`, no package needed. Add `--no-readonly` to keep root writable. Where the package is installed, the copy sits on top of package files until the next update restores them, and `dpkg -V camlab-rpi` lists what drifted.
 
+`sudo scripts/setup/app-deploy.sh && camlabctl restart` redeploys code without re-running full setup.
+
 ## Running the app
 
 Run directly under a Cage session with `python3 -m camlab`. Sensors are defined in `camlab/data/sensors.yaml`. CSI port is set in a managed block in `/boot/firmware/config.txt`. Boot is tuned by `scripts/setup/boot.sh` (run during install, `--revert` undoes it). Each script under `scripts/setup/` is self-documenting (`--help`) and safe to re-run.

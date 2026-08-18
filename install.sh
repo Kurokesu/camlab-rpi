@@ -25,11 +25,6 @@ LOG_FILE="/var/log/camlab-install.log"
 # shellcheck disable=SC2034  # log tag read by common.sh
 CAMLAB_TAG="install"
 
-# Dev-clone clutter to prune from /opt/camlab
-mapfile -t DEV_CLUTTER < <(awk '$2 == "export-ignore" { sub(/\/$/, "", $1); print $1 }' \
-    "$REPO_DIR/.gitattributes" 2>/dev/null)
-DEV_CLUTTER+=(.git .venv)
-
 # shellcheck source=scripts/common.sh
 source "$REPO_DIR/scripts/common.sh"
 
@@ -79,25 +74,9 @@ if [ "$(systemctl get-default)" = "graphical.target" ]; then
 fi
 log "Install user: $CAMLAB_USER (uid=$CAMLAB_UID)"
 
-# Fixed app location. Re-run from $APP_DIR skips copy. Stage then swap on failure.
+# Fixed app location. app-deploy.sh skips copy when run from $APP_DIR.
 APP_DIR="/opt/camlab"
-if [ "$REPO_DIR" != "$APP_DIR" ]; then
-    header "Installing app to $APP_DIR"
-    STAGE_DIR="$APP_DIR.new"
-    rm -rf "$STAGE_DIR"
-    mkdir -p "$STAGE_DIR"
-    cp -a "$REPO_DIR/." "$STAGE_DIR/"
-    for item in "${DEV_CLUTTER[@]}"; do
-        rm -rf "${STAGE_DIR:?}/$item"
-    done
-    find "$STAGE_DIR" -type d -name __pycache__ -prune -exec rm -rf {} +
-    chown -R root:root "$STAGE_DIR"
-    rm -rf "$APP_DIR"
-    mv "$STAGE_DIR" "$APP_DIR"
-    log "Copied $REPO_DIR -> $APP_DIR"
-fi
-# Precompile: service user cannot write bytecode into root-owned tree.
-python3 -m compileall -q -j 0 "$APP_DIR/camlab"
+"$REPO_DIR/scripts/setup/app-deploy.sh"
 
 # Primitives run from $APP_DIR. Kernel trim before drivers. Overlay-root last.
 "$APP_DIR/scripts/setup/deps.sh"
