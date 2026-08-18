@@ -126,6 +126,7 @@ class MainWindow(QtWidgets.QMainWindow):
         root.addWidget(self.status)
 
         self.viewfinder_area = ViewfinderArea(engine)
+        self.viewfinder_area.apply_profile(self._profile)
         self.viewfinder_area.setSizePolicy(
             QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Expanding
         )
@@ -353,6 +354,9 @@ class MainWindow(QtWidgets.QMainWindow):
         """Static button labels: full words on a monitor, icon-only compact."""
         compact = self._profile.compact
         self.monitor_btn.setText("" if compact else " Monitor")
+        if self.monitor_btn.property("iconOnly") != compact:
+            self.monitor_btn.setProperty("iconOnly", compact)
+            repolish(self.monitor_btn)
         self.settings_btn.setText("" if compact else " Settings")
         self.shutdown_btn.setText("" if compact else " Shutdown")
         self._sync_log_button(self.log_btn.isChecked())
@@ -974,6 +978,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if self._open_sheet is not None:
             self._position_sheet(self._open_sheet)
         self.status.set_compact(profile.compact)
+        self.viewfinder_area.apply_profile(profile)
         # A monitor already shows the full cluster in the strip.
         if not profile.compact:
             self.viewfinder_area.set_stats_overlay(False)

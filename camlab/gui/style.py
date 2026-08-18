@@ -46,6 +46,7 @@ class UiProfile:
     sheet_title_w: int  # one title column across sheets, 0 = hug contents
     sheet_value_w: int  # pinned, so the row holds still as digits change
     zebra_slider_w: int  # coarse control, a short slider does
+    overlay_card_h: int  # corner overlay cards share one height
 
 
 REGULAR = UiProfile(
@@ -66,6 +67,7 @@ REGULAR = UiProfile(
     sheet_title_w=110,
     sheet_value_w=80,
     zebra_slider_w=260,
+    overlay_card_h=96,
 )
 
 # 13 px is ~1.5 mm on 800x480 4.3" panel: unreadable. 30 px touch targets unhittable.
@@ -88,6 +90,7 @@ COMPACT = UiProfile(
     sheet_title_w=0,
     sheet_value_w=96,
     zebra_slider_w=170,
+    overlay_card_h=72,
 )
 
 # Anything at or below this height is a small touch panel, not a monitor.
@@ -122,7 +125,7 @@ QLabel#telemetry { color: #c4c9d2; }
 QLabel#bootInfo { color: #8a909b; }
 QLabel#version { color: #8a909b; }
 QLabel#rpiStats { color: #8a909b; }
-QLabel#statsCard { background: transparent; color: #c4c9d2; }
+QLabel#statsCard { background: transparent; color: #c4c9d2; font-size: 13px; }
 QPushButton { background: #2c303a; border: 1px solid #3a3f4b; border-radius: 5px; }
 QPushButton:disabled { background: #23262d; border-color: #2f333c; color: #5c6370; }
 QPushButton:checked { background: #3d4858; border-color: #7f8aa0; color: #ffffff; }
@@ -143,6 +146,7 @@ QPushButton#segment:checked:focus { border-color: #9db8ff; background: #45526a; 
 QPushButton#segment[sev="warning"], QPushButton#segment[sev="warning"]:checked { color: #e5c07b; }
 QPushButton#segment[sev="error"], QPushButton#segment[sev="error"]:checked { color: #e06c75; }
 QPushButton#chip { text-align: left; }
+QPushButton#chip[iconOnly="true"] { text-align: center; }
 QPushButton[manual="true"] { border-color: #7f6a3d; color: #e5c07b; }
 QPushButton[manual="true"]:checked { background: #4a4231; border-color: #b08d3f; color: #f0d493; }
 QPushButton[sev="warning"] { border-color: #7f6a3d; }

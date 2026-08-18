@@ -49,6 +49,13 @@ class ViewfinderArea(QtWidgets.QWidget):
         self._stats_enabled = False
         self._stats_texts: dict[str, str | None] | None = None
 
+    def apply_profile(self, profile) -> None:
+        """Corner overlay cards share one profile height, smaller on compact."""
+        self._histogram.set_card_height(profile.overlay_card_h)
+        self._stats_card.set_card_height(profile.overlay_card_h)
+        if self._stats_card.isVisible():
+            self._place_stats_card()
+
     def mousePressEvent(self, event) -> None:
         # Live widget and corner overlays ignore presses, so they land here.
         self.tapped.emit()

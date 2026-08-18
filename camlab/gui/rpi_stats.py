@@ -119,7 +119,7 @@ class RpiStatsCard(QtWidgets.QWidget):
         # Informational only: never steal taps from viewfinder.
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         col = QtWidgets.QVBoxLayout(self)
-        col.setContentsMargins(14, 10, 14, 10)
+        col.setContentsMargins(14, 8, 14, 8)
         col.setSpacing(4)
         self._labels: dict[str, QtWidgets.QLabel] = {}
         for field in CARD_FIELDS:
@@ -127,6 +127,10 @@ class RpiStatsCard(QtWidgets.QWidget):
             lbl.setObjectName("statsCard")
             col.addWidget(lbl)
             self._labels[field] = lbl
+
+    def set_card_height(self, h: int) -> None:
+        """Match histogram card height, so open corner overlays read as one row."""
+        self.setFixedHeight(h)
 
     def set_texts(self, texts: dict[str, str | None]) -> None:
         """Render field_texts. Missing source keeps last value, so the card holds its size."""

@@ -16,7 +16,7 @@ from ..qt import Qt, QtCore, QtGui, QtWidgets
 from .style import GLASS_BG
 
 MARGIN = 12  # from viewfinder top-left
-_SIZE = (256, 96)  # card size, plot fills it minus padding
+_ASPECT = 8 / 3  # card w:h
 _PAD = 8
 _CURVE = QtGui.QColor(215, 218, 224, 230)
 _FILL = QtGui.QColor(215, 218, 224, 90)
@@ -25,14 +25,19 @@ _FILL = QtGui.QColor(215, 218, 224, 90)
 class HistogramOverlay(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedSize(*_SIZE)
         # Informational only: never steal viewfinder taps.
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self._levels: np.ndarray | None = None
+        self.set_card_height(96)
+
+    def set_card_height(self, h: int) -> None:
+        """Profile sets height, width follows the aspect."""
+        self.setFixedSize(round(h * _ASPECT), h)
+        self._levels = None
 
     def set_histogram(self, bins: np.ndarray) -> None:
         """Fold 1024 ISP bins to plot columns and cache 0..1 levels."""
-        cols = _SIZE[0] - 2 * _PAD
+        cols = self.width() - 2 * _PAD
         group = len(bins) // cols
         folded = bins[: group * cols].reshape(cols, group).sum(axis=1)
         peak = folded.max()
