@@ -13,6 +13,7 @@ import math
 from collections.abc import Callable
 
 from ..qt import Qt, QtCore, QtGui, QtWidgets, Signal
+from ..settings import MonitorState
 from . import icons
 from .style import GLASS_BG, GLASS_BORDER, UiProfile
 from .widgets import SegmentedSelector, repolish
@@ -341,37 +342,33 @@ class MonitorSheet(SheetCard):
             btn.setIcon(icons.icon(name, icon_px))
             btn.setIconSize(QtCore.QSize(icon_px, icon_px))
 
-    @property
-    def histogram(self) -> bool:
-        return self.hist_btn.isChecked()
-
-    def set_histogram(self, on: bool) -> None:
+    def seed(self, state: MonitorState) -> None:
         """Seed from stored settings without reporting it back as a change."""
-        self.hist_btn.blockSignals(True)
-        self.hist_btn.setChecked(bool(on))
-        self.hist_btn.blockSignals(False)
+        toggles = (
+            (self.hist_btn, state.histogram),
+            (self.map_btn, state.focus_map),
+            (self.peak_btn, state.peaking),
+            (self.zebra_btn, state.zebra),
+        )
+        for btn, on in toggles:
+            btn.blockSignals(True)
+            btn.setChecked(bool(on))
+            btn.blockSignals(False)
+        self.slider.blockSignals(True)
+        self.slider.setValue(round(state.zebra_threshold * 100))
+        self.slider.blockSignals(False)
+        self.value_lbl.setText(f"{self.slider.value()}%")
+        self._style_slider()
 
     @property
-    def focus_map(self) -> bool:
-        return self.map_btn.isChecked()
-
-    def set_focus_map(self, on: bool) -> None:
-        """Seed from stored settings without reporting it back as a change."""
-        self.map_btn.blockSignals(True)
-        self.map_btn.setChecked(bool(on))
-        self.map_btn.blockSignals(False)
-
-    @property
-    def peaking(self) -> bool:
-        return self.peak_btn.isChecked()
-
-    @property
-    def zebra(self) -> bool:
-        return self.zebra_btn.isChecked()
-
-    @property
-    def zebra_threshold(self) -> float:
-        return self.slider.value() / 100.0
+    def state(self) -> MonitorState:
+        return MonitorState(
+            histogram=self.hist_btn.isChecked(),
+            focus_map=self.map_btn.isChecked(),
+            peaking=self.peak_btn.isChecked(),
+            zebra=self.zebra_btn.isChecked(),
+            zebra_threshold=self.slider.value() / 100.0,
+        )
 
     def _on_slider(self, _pos: int) -> None:
         self.value_lbl.setText(f"{self.slider.value()}%")
@@ -384,7 +381,8 @@ class MonitorSheet(SheetCard):
 
     def _emit(self) -> None:
         self._style_slider()
-        self.changed.emit(self.peaking, self.zebra, self.zebra_threshold)
+        s = self.state
+        self.changed.emit(s.peaking, s.zebra, s.zebra_threshold)
 
     def _style_slider(self) -> None:
         """Dim the threshold cluster while zebra is off (slider reuses the

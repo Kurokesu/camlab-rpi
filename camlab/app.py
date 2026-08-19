@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import os
+import signal
 import sys
 
 from .camera import CameraEngine
@@ -134,7 +135,8 @@ def main(argv: list[str] | None = None) -> int:
     win.showFullScreen()
     display_manager.start()
 
-    # Window starts camera once fullscreen. Starting here blocks before event loop runs.
+    # Sent by ExecStop.
+    signal.signal(signal.SIGUSR1, lambda *_: win.flush_settings())
 
     rc = app.exec()
 

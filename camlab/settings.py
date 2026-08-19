@@ -22,10 +22,23 @@ import logging
 import os
 import tempfile
 from pathlib import Path
+from typing import NamedTuple
 
 log = logging.getLogger(__name__)
 
 _VERSION = 1
+
+_ZEBRA_THR_DEFAULT = 0.95
+
+
+class MonitorState(NamedTuple):
+    """Monitor sheet toggles plus zebra clip threshold."""
+
+    histogram: bool
+    focus_map: bool
+    peaking: bool
+    zebra: bool
+    zebra_threshold: float
 
 
 def default_state_file() -> Path:
@@ -139,24 +152,31 @@ class SettingsStore:
         }
         return self._atomic_write(data)
 
-    def get_histogram(self) -> bool:
-        """App-level histogram overlay toggle, default off."""
-        return bool((self._load().get("ui") or {}).get("histogram", False))
+    def get_monitor(self) -> MonitorState:
+        """Monitor sheet state, defaults off."""
+        ui = self._load().get("ui") or {}
+        try:
+            threshold = float(ui.get("zebra_threshold", _ZEBRA_THR_DEFAULT))
+        except (TypeError, ValueError):
+            log.warning("zebra threshold in %s is malformed - ignoring", self._path)
+            threshold = _ZEBRA_THR_DEFAULT
+        return MonitorState(
+            histogram=bool(ui.get("histogram", False)),
+            focus_map=bool(ui.get("focus_map", False)),
+            peaking=bool(ui.get("peaking", False)),
+            zebra=bool(ui.get("zebra", False)),
+            zebra_threshold=threshold,
+        )
 
-    def set_histogram(self, enabled: bool) -> bool:
+    def set_monitor(self, state: MonitorState) -> bool:
         data = self._load()
         data["version"] = _VERSION
-        data.setdefault("ui", {})["histogram"] = bool(enabled)
-        return self._atomic_write(data)
-
-    def get_focus_map(self) -> bool:
-        """App-level CDAF focus map overlay toggle."""
-        return bool((self._load().get("ui") or {}).get("focus_map", False))
-
-    def set_focus_map(self, enabled: bool) -> bool:
-        data = self._load()
-        data["version"] = _VERSION
-        data.setdefault("ui", {})["focus_map"] = bool(enabled)
+        ui = data.setdefault("ui", {})
+        ui["histogram"] = bool(state.histogram)
+        ui["focus_map"] = bool(state.focus_map)
+        ui["peaking"] = bool(state.peaking)
+        ui["zebra"] = bool(state.zebra)
+        ui["zebra_threshold"] = float(state.zebra_threshold)
         return self._atomic_write(data)
 
     def get_backlight(self) -> int | None:

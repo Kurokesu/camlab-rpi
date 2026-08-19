@@ -143,18 +143,19 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._wire()
         self._populate_static()
-        self._histogram_on = settings.get_histogram()
-        self._sheets["monitor"].set_histogram(self._histogram_on)
+        mon = settings.get_monitor()
+        self._sheets["monitor"].seed(mon)
+        self._histogram_on = mon.histogram
         if self._histogram_on:
             self.engine.set_stats_output(True)
             self.viewfinder_area.set_histogram_enabled(True)
         # CDAF focus map overlay: image statistics, samples only while shown.
         self.focus_sampler = FocusSampler(engine, parent=self)
         self.focus_sampler.sample.connect(lambda s: self.viewfinder_area.update_focus_map(s.heat))
-        self._focus_map_on = settings.get_focus_map()
-        self._sheets["monitor"].set_focus_map(self._focus_map_on)
+        self._focus_map_on = mon.focus_map
         self.viewfinder_area.set_focus_map_enabled(self._focus_map_on)
         self.focus_sampler.set_sampling(self._focus_map_on, "map")
+        self.viewfinder_area.set_assists(mon.peaking, mon.zebra, mon.zebra_threshold)
         # Seeding blocks sheet signals, so refresh the chip explicitly.
         self._refresh_monitor_chip()
         # Start on inert sink so nothing highlighted until Tab.
@@ -610,8 +611,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _refresh_monitor_chip(self) -> None:
         """Amber chip while anything the sheet owns draws, same accent as manual control."""
-        monitor = self._sheets["monitor"]
-        drawing = monitor.peaking or monitor.zebra or monitor.histogram or monitor.focus_map
+        s = self._sheets["monitor"].state
+        drawing = s.peaking or s.zebra or s.histogram or s.focus_map
         self._set_chip_accent(self.monitor_btn, "stroke_partial", drawing)
 
     def _on_control_changed(self, key: str, value) -> None:
@@ -627,11 +628,18 @@ class MainWindow(QtWidgets.QMainWindow):
         st = self.engine.control_state
         self.settings.set_controls(overlay, st.exposure_us, st.gain, st.colour_temp)
 
-    def _flush_pending_persist(self) -> None:
-        """Persist a control change still sitting in the debounce window."""
+    def flush_settings(self) -> None:
+        """Write final session state."""
         if self._persist_timer.isActive():
             self._persist_timer.stop()
             self._persist_controls()
+        self._persist_ui()
+
+    def _persist_ui(self) -> None:
+        """Monitor toggles write once at quit."""
+        state = self._sheets["monitor"].state
+        if state != self.settings.get_monitor():
+            self.settings.set_monitor(state)
 
     @property
     def _modal_active(self) -> bool:
@@ -778,7 +786,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if mono and chosen.mono_option and chosen.mono_option not in options:
             options.append(chosen.mono_option)
         # Flush before the rewrite: persisted controls key by overlay, about to change.
-        self._flush_pending_persist()
+        self.flush_settings()
         disp = self.config.get_current_display()
         panel = self.panels.by_name(display_name)
         if panel is not None:
@@ -861,7 +869,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _apply_update(self, ids: list[str]) -> None:
         self._close_modal()
-        self._flush_pending_persist()
+        self.flush_settings()
         self._open_modal(message_card("Starting the update", "", []))
         # Painted first: arming surveys apt and then reboots, all of it blocking.
         QtCore.QTimer.singleShot(_PAINT_MS, lambda: self._arm_update(ids))
@@ -891,7 +899,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self._histogram_on = bool(enabled)
         self.engine.set_stats_output(self._histogram_on)
         self.viewfinder_area.set_histogram_enabled(self._histogram_on)
-        self.settings.set_histogram(self._histogram_on)
         self._refresh_monitor_chip()
         log.info("histogram overlay %s", "on" if enabled else "off")
 
@@ -899,7 +906,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self._focus_map_on = bool(enabled)
         self.viewfinder_area.set_focus_map_enabled(self._focus_map_on)
         self.focus_sampler.set_sampling(self._focus_map_on, "map")
-        self.settings.set_focus_map(self._focus_map_on)
         self._refresh_monitor_chip()
         log.info("focus map overlay %s", "on" if enabled else "off")
 
@@ -915,7 +921,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _shutdown(self) -> None:
         # No confirmation by design: power-cycle-heavy bench tool, save click.
-        self._flush_pending_persist()
+        self.flush_settings()
         try:
             poweroff()
         except Exception as exc:  # noqa: BLE001

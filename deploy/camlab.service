@@ -33,6 +33,9 @@ Environment=XCURSOR_PATH=/usr/local/lib/camlab/cursors
 
 ExecStart=/usr/bin/cage -- /usr/bin/python3 -m camlab
 
+# Settings save-now before stop kill, pattern anchored or SIGUSR1 hits Cage too.
+ExecStop=-/bin/sh -c 'pkill -USR1 -f "^/usr/bin/python3 -m camlab" && sleep 0.5'
+
 Restart=on-failure
 RestartSec=2
 
