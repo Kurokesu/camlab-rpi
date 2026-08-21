@@ -186,6 +186,7 @@ class MainWindow(QtWidgets.QMainWindow):
         for sheet in self._sheets.values():
             sheet.setVisible(False)
             sheet.apply_profile(self._profile)
+        self._match_sheet_heights()
         for key in self._CTRL_SPEC:
             self._sheets[key].changed.connect(lambda v, k=key: self._on_control_changed(k, v))
         monitor = self._sheets["monitor"]
@@ -571,10 +572,21 @@ class MainWindow(QtWidgets.QMainWindow):
     def _position_sheet(self, key: str) -> None:
         """Dock the sheet to viewfinder's bottom edge, flush with the controls bar."""
         sheet = self._sheets[key]
-        h = sheet.sizeHint().height()
+        # Sheet hints differ, so use the shared height or the bar jumps between sheets.
+        h = self._sheet_h
         pa = self.viewfinder_area
         origin = pa.mapTo(self, QtCore.QPoint(0, 0))
         sheet.setGeometry(origin.x(), origin.y() + pa.height() - h, pa.width(), h)
+
+    def _match_sheet_heights(self) -> None:
+        """Pin every sheet to the tallest, so switching sheets cannot resize the bar."""
+        sheets = self._sheets.values()
+        # Polish first: hints read QSS padding and font, unresolved mid-build.
+        for sheet in sheets:
+            sheet.ensurePolished()
+        self._sheet_h = max(sheet.sizeHint().height() for sheet in sheets)
+        for sheet in sheets:
+            sheet.setFixedHeight(self._sheet_h)
 
     def eventFilter(self, obj, event) -> bool:
         if (
@@ -999,6 +1011,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._apply_row_metrics()
         for sheet in self._sheets.values():
             sheet.apply_profile(profile)
+        self._match_sheet_heights()
         if self._open_sheet is not None:
             self._position_sheet(self._open_sheet)
         self.status.set_compact(profile.compact)
