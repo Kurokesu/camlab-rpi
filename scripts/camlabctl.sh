@@ -12,7 +12,9 @@
 #   camlabctl status
 #   camlabctl logs [journalctl-args]     default: last 200 lines
 #   camlabctl log-level <level>          trace|debug|info|warn|error|off
-#   camlabctl shot [path]                screenshot the live kiosk (needs grim)
+#   camlabctl shot [path]                screenshot live kiosk (needs grim)
+#   camlabctl rec [secs] [path]          record live kiosk (needs wf-recorder)
+#   camlabctl tap <x> <y>                click in live kiosk (needs wlrctl)
 #   camlabctl net <on|off|status>        toggle networking (off for production,
 #                                         on for SSH dev)
 #   camlabctl rw                         boot writable next time
@@ -90,6 +92,36 @@ cmd_shot() {
     _kiosk_session
     grim "$out"
     log "saved $out"
+}
+
+cmd_rec() {
+    command -v wf-recorder >/dev/null ||
+        die "wf-recorder not installed (sudo apt install wf-recorder)"
+    local secs="${1:-30}"
+    local out="${2:-/tmp/camlab-$(date +%Y%m%d-%H%M%S).mp4}"
+    _kiosk_session
+    for i in 3 2 1; do
+        printf "recording in %d\r" "$i" >&2
+        sleep 1
+    done
+    log "recording ${secs}s to $out"
+    # SIGINT lets wf-recorder flush the container.
+    timeout -s INT "$secs" wf-recorder -f "$out" -c libx264 -p preset=veryfast -p crf=20 ||
+        [ "$?" -eq 124 ]  # timeout reports 124 after a clean stop
+    log "saved $out ($(du -h "$out" | cut -f1))"
+}
+
+cmd_tap() {
+    command -v wlrctl >/dev/null || die "wlrctl not installed (sudo apt install wlrctl)"
+    local x="${1:-}" y="${2:-}"
+    if [ -z "$x" ] || [ -z "$y" ]; then
+        die "tap requires x and y"
+    fi
+    _kiosk_session
+    # Pointer moves are relative, so clamp into the corner for a known origin first.
+    wlrctl pointer move -4000 -4000
+    wlrctl pointer move "$x" "$y"
+    wlrctl pointer click left
 }
 
 # Networking toggle: off for production (faster boot), on for SSH dev. Masked,
@@ -204,6 +236,8 @@ case "$cmd" in
     logs)           cmd_logs "$@" ;;
     log-level)      cmd_log_level "$@" ;;
     shot)           cmd_shot "$@" ;;
+    rec)            cmd_rec "$@" ;;
+    tap)            cmd_tap "$@" ;;
     net)            cmd_net "$@" ;;
     rw)             cmd_rw ;;
     ro)             cmd_ro ;;
