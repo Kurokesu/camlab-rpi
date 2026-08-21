@@ -129,7 +129,7 @@ cmd_net() {
                 sudo systemctl enable --now "$u" >/dev/null 2>&1 || true
                 _persist_net enable "$u"
             done
-            log "networking ON (unmasked + started). For dev/SSH."
+            log "networking ON (unmasked + started)"
             ;;
         off)
             for u in "${NET_MANAGERS[@]}" "${NET_WAIT_UNITS[@]}"; do
@@ -139,7 +139,7 @@ cmd_net() {
                 _persist_net disable "$u"
                 _persist_net mask "$u"
             done
-            warn "networking OFF (stopped + masked). Reverse with: camlabctl net on"
+            warn "networking OFF (stopped + masked)"
             warn "Wi-Fi drops now. Ethernet keeps its address until reboot, so an"
             warn "SSH session over Ethernet survives as a grace period."
             ;;
@@ -171,13 +171,13 @@ _overlay_present() { [ -f /etc/overlayroot.local.conf ]; }
 cmd_rw() {
     _overlay_present || { warn "read-only root not set up (run scripts/setup/readonly.sh)"; return; }
     if grep -q 'overlayroot=disabled' "$CMDLINE"; then
-        log "already set to boot writable (overlayroot=disabled). Reboot if not already."
+        log "already set to boot writable (overlayroot=disabled)"
         return
     fi
     sudo mount -o remount,rw "$FW_DIR" 2>/dev/null || true
     # cmdline.txt is one line, so append space-separated with no newline.
     sudo sed -i 's/[[:space:]]*$/ overlayroot=disabled/' "$CMDLINE"
-    log "writable on next boot. Apply: sudo reboot   (then camlabctl ro to re-lock)"
+    log "writable on next boot. Apply: sudo reboot"
 }
 
 cmd_ro() {
