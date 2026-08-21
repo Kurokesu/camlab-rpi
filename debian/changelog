@@ -1,3 +1,10 @@
+camlab-rpi (1.1.0-1) unstable; urgency=medium
+
+  * New upstream release. Notes:
+    https://github.com/Kurokesu/camlab-rpi/releases/tag/v1.1.0
+
+ -- Danius Kalvaitis <danius@kurokesu.com>  Fri, 21 Aug 2026 18:48:09 +0300
+
 camlab-rpi (1.0.1-1) unstable; urgency=medium
 
   * New upstream release. Notes:
