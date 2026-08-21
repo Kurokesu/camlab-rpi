@@ -606,12 +606,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.centralWidget().setFocus(Qt.FocusReason.OtherFocusReason)
 
     def _seed_sheet(self, key: str) -> None:
-        """Range and state from the engine, silent (no changed emission)."""
+        """Range, state and last live reading, silent (no changed emission)."""
         sheet = self._sheets[key]
         rng = self.engine.control_ranges().get(key)
         if rng:
             sheet.set_range(*rng)
         sheet.set_state(getattr(self.engine.control_state, key))
+        sheet.set_live(self._chip_values.get(key))
 
     def _on_monitor_changed(self, peaking: bool, zebra: bool, threshold: float) -> None:
         self.viewfinder_area.set_assists(peaking, zebra, threshold)
