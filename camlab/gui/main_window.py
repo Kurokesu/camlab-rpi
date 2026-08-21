@@ -570,20 +570,16 @@ class MainWindow(QtWidgets.QMainWindow):
             btn.setChecked(k == key)
 
     def _position_sheet(self, key: str) -> None:
-        """Dock the sheet to viewfinder's bottom edge, flush with the controls bar."""
+        """Dock sheet to viewfinder bottom edge, flush with controls bar."""
         sheet = self._sheets[key]
-        # Sheet hints differ, so use the shared height or the bar jumps between sheets.
         h = self._sheet_h
         pa = self.viewfinder_area
         origin = pa.mapTo(self, QtCore.QPoint(0, 0))
         sheet.setGeometry(origin.x(), origin.y() + pa.height() - h, pa.width(), h)
 
     def _match_sheet_heights(self) -> None:
-        """Pin every sheet to the tallest, so switching sheets cannot resize the bar."""
+        """Pin all sheets to tallest."""
         sheets = self._sheets.values()
-        # Polish first: hints read QSS padding and font, unresolved mid-build.
-        for sheet in sheets:
-            sheet.ensurePolished()
         self._sheet_h = max(sheet.sizeHint().height() for sheet in sheets)
         for sheet in sheets:
             sheet.setFixedHeight(self._sheet_h)
