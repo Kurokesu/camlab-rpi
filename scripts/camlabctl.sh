@@ -70,11 +70,8 @@ EOF
     log "Apply: camlabctl restart"
 }
 
-cmd_shot() {
-    command -v grim >/dev/null || die "grim not installed (sudo apt install grim)"
-    local out="${1:-/tmp/camlab-$(date +%Y%m%d-%H%M%S).png}"
-    local sock
-    sock=""
+_kiosk_session() {
+    local sock=""
     for s in "/run/user/$CAMLAB_UID"/wayland-*; do
         [ -e "$s" ] || continue
         case "$s" in *.lock) continue ;; esac
@@ -82,7 +79,16 @@ cmd_shot() {
         break
     done
     [ -n "$sock" ] || die "no wayland socket for uid $CAMLAB_UID (is camlab running?)"
-    XDG_RUNTIME_DIR="/run/user/$CAMLAB_UID" WAYLAND_DISPLAY="$(basename "$sock")" grim "$out"
+    export XDG_RUNTIME_DIR="/run/user/$CAMLAB_UID"
+    WAYLAND_DISPLAY="$(basename "$sock")"
+    export WAYLAND_DISPLAY
+}
+
+cmd_shot() {
+    command -v grim >/dev/null || die "grim not installed (sudo apt install grim)"
+    local out="${1:-/tmp/camlab-$(date +%Y%m%d-%H%M%S).png}"
+    _kiosk_session
+    grim "$out"
     log "saved $out"
 }
 
