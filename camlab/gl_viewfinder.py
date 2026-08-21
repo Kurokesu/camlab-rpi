@@ -42,6 +42,7 @@ from OpenGL.EGL.VERSION.EGL_1_0 import (
     eglGetCurrentDisplay,
     eglGetProcAddress,
 )
+from OpenGL.error import Error as OpenGLError
 from OpenGL.GL import shaders
 from OpenGL.GLES2.OES.EGL_image_external import GL_TEXTURE_EXTERNAL_OES
 from OpenGL.GLES2.VERSION.GLES2_2_0 import (
@@ -101,6 +102,7 @@ from OpenGL.GLES2.VERSION.GLES2_2_0 import (
     glValidateProgram,
     glViewport,
 )
+
 # GL_EXT_texture_rg shares these enums, so ES2 carrying it works too.
 from OpenGL.GLES3.VERSION.GLES3_3_0 import GL_R8, GL_RED, GL_RG, GL_RG8, glBindVertexArray
 
@@ -245,6 +247,8 @@ _FRAG_EXT_FX = """
     uniform sampler2D luma;
     uniform vec2 stepX;
     uniform vec2 stepY;
+    uniform vec2 guideX;
+    uniform vec2 guideY;
     uniform vec3 peakColor;
     uniform float peakThr;
     uniform float peaking;
@@ -271,19 +275,22 @@ _FRAG_EXT_FX = """
         }
         if (peaking > 0.5) {
             vec2 g = texture2D(guide, guidecoord).rg;
-            // Pixel against neighborhood mean, so flat and blurred areas sit low
-            float r = abs(lum(texcoord) - g.r);
-            if (r > peakThr) {
-                float sector = floor(g.g * 4.0 + 0.5);
-                vec2 d = stepX + stepY;
-                if (sector < 0.5) d = stepX;
-                else if (sector > 1.5 && sector < 2.5) d = stepY;
-                else if (sector > 2.5) d = stepX - stepY;
-                // Ridge center across the edge, so a mark is one pixel wide
-                if (r >= abs(lum(texcoord + d) - g.r) && r >= abs(lum(texcoord - d) - g.r)) {
-                    gl_FragColor = vec4(peakColor, 1.0);
-                    return;
-                }
+            float sector = floor(g.g * 4.0 + 0.5);
+            vec2 d = stepX + stepY;
+            vec2 dg = guideX + guideY;
+            if (sector < 0.5) { d = stepX; dg = guideX; }
+            else if (sector > 1.5 && sector < 2.5) { d = stepY; dg = guideY; }
+            else if (sector > 2.5) { d = stepX - stepY; dg = guideX - guideY; }
+            // Pixel against its own neighborhood mean, across the edge
+            float c = lum(texcoord) - g.r;
+            float f = lum(texcoord + d) - texture2D(guide, guidecoord + dg).r;
+            float b = lum(texcoord - d) - texture2D(guide, guidecoord - dg).r;
+            // Sign flips on the edge itself, so a mark is one pixel and lands
+            // where the edge is. Amplitude stays low on blur, shade and noise.
+            bool cross = (c * f < 0.0 && abs(c) <= abs(f)) || (c * b < 0.0 && abs(c) < abs(b));
+            if (cross && abs(f - b) > peakThr) {
+                gl_FragColor = vec4(peakColor, 1.0);
+                return;
             }
         }
         gl_FragColor = color;
@@ -291,7 +298,7 @@ _FRAG_EXT_FX = """
 """
 
 _PEAK_COLOR = (1.0, 0.0, 0.0)
-_PEAK_THR = 0.06
+_PEAK_THR = 0.12
 # Plane luma is studio range, stretch it to match a conversion.
 _LUMA_GAIN = 255.0 / 219.0
 
@@ -472,7 +479,7 @@ class _Buffer:
         if pixel_format in ("YUV420", "YVU420"):
             try:
                 self.luma = _import_luma(display, fb.planes[0].fd, w, h, cfg.stride)
-            except Exception:
+            except (OpenGLError, RuntimeError):
                 if not _Buffer.luma_warned:
                     _Buffer.luma_warned = True
                     log.warning("luma plane import failed, peaking converts instead")
@@ -749,7 +756,17 @@ class GlViewfinder(QOpenGLWidget):
         self._prog_fx = self._build_program(
             _VERT_FX, _FRAG_EXT_FX, {"tex": 0, "guide": 1, "luma": 2}
         )
-        names = ("stepX", "stepY", "peaking", "zebra", "zebraThr", "time", "gain")
+        names = (
+            "stepX",
+            "stepY",
+            "guideX",
+            "guideY",
+            "peaking",
+            "zebra",
+            "zebraThr",
+            "time",
+            "gain",
+        )
         self._fx_locs = {name: glGetUniformLocation(self._prog_fx, name) for name in names}
         # _build_program leaves the program current. Color and threshold never
         # change, upload once.
@@ -782,6 +799,9 @@ class GlViewfinder(QOpenGLWidget):
         sx, sy = self._peak_basis(vw, vh)
         glUniform2f(loc["stepX"], *sx)
         glUniform2f(loc["stepY"], *sy)
+        # Guide is display oriented, so the same step unrotated, y flipped
+        glUniform2f(loc["guideX"], 1.0 / max(vw, 1), 0.0)
+        glUniform2f(loc["guideY"], 0.0, -1.0 / max(vh, 1))
         glUniform1f(loc["gain"], gain)
         glUniform1f(loc["peaking"], 1.0 if self._peaking else 0.0)
         glUniform1f(loc["zebra"], 1.0 if self._zebra else 0.0)
