@@ -67,7 +67,7 @@ Environment=CAMLAB_LOG_LEVEL=$level
 EOF
     sudo systemctl daemon-reload
     log "wrote $LOG_LEVEL_DROPIN (CAMLAB_LOG_LEVEL=$level)"
-    log "restart to apply: camlabctl restart"
+    log "Apply: camlabctl restart"
 }
 
 cmd_shot() {
