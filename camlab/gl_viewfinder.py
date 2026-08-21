@@ -69,6 +69,7 @@ from OpenGL.GLES2.VERSION.GLES2_2_0 import (
     GL_TEXTURE_WRAP_T,
     GL_TRIANGLE_FAN,
     GL_UNSIGNED_BYTE,
+    GL_VALIDATE_STATUS,
     GL_VERTEX_SHADER,
     glActiveTexture,
     glBindBuffer,
@@ -86,17 +87,22 @@ from OpenGL.GLES2.VERSION.GLES2_2_0 import (
     glGenTextures,
     glGetAttribLocation,
     glGetIntegerv,
+    glGetProgramInfoLog,
+    glGetProgramiv,
     glGetUniformLocation,
     glTexImage2D,
     glTexParameteri,
     glUniform1f,
     glUniform1i,
     glUniform2f,
+    glUniform3f,
     glUniformMatrix2fv,
     glUseProgram,
+    glValidateProgram,
     glViewport,
 )
-from OpenGL.GLES3.VERSION.GLES3_3_0 import glBindVertexArray
+# GL_EXT_texture_rg shares these enums, so ES2 carrying it works too.
+from OpenGL.GLES3.VERSION.GLES3_3_0 import GL_R8, GL_RED, GL_RG, GL_RG8, glBindVertexArray
 
 # Raw entry point: PyOpenGL wrapper caches array per-context keyed by
 # eglGetCurrentContext(), reads 0 inside QOpenGLWidget and raises.
@@ -123,6 +129,22 @@ _VERT = """
         gl_Position = vec4(aPosition * 2.0 - 1.0, 0.0, 1.0);
         vec2 tc = vec2(aPosition.x, 1.0 - aPosition.y);
         texcoord = uRotate * (tc - 0.5) + 0.5;
+    }
+"""
+
+# Guide is already in displayed orientation, so it comes straight off the quad.
+_VERT_FX = """
+    attribute vec2 aPosition;
+    varying vec2 texcoord;
+    varying vec2 guidecoord;
+    uniform mat2 uRotate;
+
+    void main()
+    {
+        gl_Position = vec4(aPosition * 2.0 - 1.0, 0.0, 1.0);
+        vec2 tc = vec2(aPosition.x, 1.0 - aPosition.y);
+        texcoord = uRotate * (tc - 0.5) + 0.5;
+        guidecoord = aPosition;
     }
 """
 
@@ -161,44 +183,118 @@ _FRAG_2D = """
     }
 """
 
-# Focus peaking + zebra in one pass (after cinepi-kurokesu's overlays).
-# Peaking: 2-tap gradient of luma, red where it exceeds the threshold.
-# Zebra: animated diagonal black/white stripes where luma clips zebraThr.
-# Both gated by 0/1 uniforms, only compiled in when an assist is active.
-_FRAG_EXT_FX = """
+# Peaking guide: mean and gradient sector, smooth enough for half resolution.
+# Paint does the sharp work against them.
+_FRAG_GUIDE = """
+    precision mediump float;
+    varying vec2 texcoord;
+    uniform sampler2D tex;
+    uniform vec2 stepX;
+    uniform vec2 stepY;
+    uniform float gain;
+
+    float luma(vec2 at)
+    {
+        return texture2D(tex, at).r * gain;
+    }
+
+    void main()
+    {
+        float c = luma(texcoord);
+        float xp = luma(texcoord + stepX);
+        float xm = luma(texcoord - stepX);
+        float yp = luma(texcoord + stepY);
+        float ym = luma(texcoord - stepY);
+        float gx = xp - xm;
+        float gy = yp - ym;
+        // Gradient quantized to 4 sectors, 0.414 is tan(22.5 deg)
+        float sector = 0.25;
+        if (abs(gy) < 0.414 * abs(gx)) sector = 0.0;
+        else if (abs(gx) < 0.414 * abs(gy)) sector = 0.5;
+        else if (gx * gy < 0.0) sector = 0.75;
+        gl_FragColor = vec4((c + xp + xm + yp + ym) * 0.2, sector, 0.0, 1.0);
+    }
+"""
+
+# Luma for formats with no plane to import. Plain texcoords keep the target in
+# camera orientation, like an imported plane.
+_FRAG_LUMA = """
     #extension GL_OES_EGL_image_external : enable
     precision mediump float;
     varying vec2 texcoord;
     uniform samplerExternalOES tex;
-    uniform vec2 texel;
+
+    const vec3 WEIGHTS = vec3(0.299, 0.587, 0.114);
+
+    void main()
+    {
+        gl_FragColor = vec4(dot(texture2D(tex, texcoord).rgb, WEIGHTS), 0.0, 0.0, 1.0);
+    }
+"""
+
+# Paint pass: marks and zebra over the frame, gated by 0/1 uniforms and compiled
+# on first assist use.
+# Zebra: animated diagonal black/white stripes where luma clips zebraThr.
+_FRAG_EXT_FX = """
+    #extension GL_OES_EGL_image_external : enable
+    precision mediump float;
+    varying vec2 texcoord;
+    varying vec2 guidecoord;
+    uniform samplerExternalOES tex;
+    uniform sampler2D guide;
+    uniform sampler2D luma;
+    uniform vec2 stepX;
+    uniform vec2 stepY;
+    uniform vec3 peakColor;
+    uniform float peakThr;
     uniform float peaking;
     uniform float zebra;
     uniform float zebraThr;
     uniform float time;
+    uniform float gain;
 
-    const vec3 LUMA = vec3(0.299, 0.587, 0.114);
+    const vec3 WEIGHTS = vec3(0.299, 0.587, 0.114);
+
+    float lum(vec2 at)
+    {
+        return texture2D(luma, at).r * gain;
+    }
 
     void main()
     {
         vec4 color = texture2D(tex, texcoord);
-        float center = dot(color.rgb, LUMA);
-        if (zebra > 0.5 && center > zebraThr) {
+        if (zebra > 0.5 && dot(color.rgb, WEIGHTS) > zebraThr) {
             float stripe = mod((texcoord.x + texcoord.y + time * 0.02) / 0.01, 2.0);
             gl_FragColor = stripe < 1.0 ? vec4(0.0, 0.0, 0.0, 1.0)
                                         : vec4(1.0, 1.0, 1.0, 1.0);
             return;
         }
         if (peaking > 0.5) {
-            float right = dot(texture2D(tex, texcoord + vec2(texel.x, 0.0)).rgb, LUMA);
-            float below = dot(texture2D(tex, texcoord + vec2(0.0, texel.y)).rgb, LUMA);
-            if (abs(right - center) + abs(below - center) > 0.08) {
-                gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);
-                return;
+            vec2 g = texture2D(guide, guidecoord).rg;
+            // Pixel against neighborhood mean, so flat and blurred areas sit low
+            float r = abs(lum(texcoord) - g.r);
+            if (r > peakThr) {
+                float sector = floor(g.g * 4.0 + 0.5);
+                vec2 d = stepX + stepY;
+                if (sector < 0.5) d = stepX;
+                else if (sector > 1.5 && sector < 2.5) d = stepY;
+                else if (sector > 2.5) d = stepX - stepY;
+                // Ridge center across the edge, so a mark is one pixel wide
+                if (r >= abs(lum(texcoord + d) - g.r) && r >= abs(lum(texcoord - d) - g.r)) {
+                    gl_FragColor = vec4(peakColor, 1.0);
+                    return;
+                }
             }
         }
         gl_FragColor = color;
     }
 """
+
+_PEAK_COLOR = (1.0, 0.0, 0.0)
+_PEAK_THR = 0.06
+# Plane luma is studio range, stretch it to match a conversion.
+_LUMA_GAIN = 255.0 / 219.0
+
 
 # 9-tap separable Gaussian using linear-sampling offsets (5 fetches).
 # texel is one texel along the blur axis, zero on the other.
@@ -255,8 +351,42 @@ def _egl_image_target_texture(target, image) -> None:
     _egl_image_target_fn(int(target), ctypes.cast(image, ctypes.c_void_p))
 
 
+def _import_luma(display, fd: int, width: int, height: int, stride: int) -> int:
+    """Import plane 0 of a planar YUV dmabuf as an R8 2D texture."""
+    attribs = [
+        EGL_WIDTH,
+        width,
+        EGL_HEIGHT,
+        height,
+        EGL_LINUX_DRM_FOURCC_EXT,
+        str_to_fourcc("R8  "),
+        EGL_DMA_BUF_PLANE0_FD_EXT,
+        fd,
+        EGL_DMA_BUF_PLANE0_OFFSET_EXT,
+        0,
+        EGL_DMA_BUF_PLANE0_PITCH_EXT,
+        stride,
+        EGL_NONE,
+    ]
+    image = eglCreateImageKHR(display, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, None, attribs)
+    if not image:
+        raise RuntimeError("luma plane import rejected")
+    texture = glGenTextures(1)
+    glBindTexture(GL_TEXTURE_2D, texture)
+    # Bilinear, both passes sample off their own grid
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+    _egl_image_target_texture(GL_TEXTURE_2D, image)
+    eglDestroyImageKHR(display, image)
+    return texture
+
+
 class _Buffer:
     """One camera dmabuf imported as an external GL texture (zero-copy)."""
+
+    luma_warned = False
 
     # libcamera format string -> DRM fourcc (24-bit formats unsupported).
     FMT_MAP: ClassVar[dict[str, str]] = {
@@ -337,6 +467,15 @@ class _Buffer:
         glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
         _egl_image_target_texture(GL_TEXTURE_EXTERNAL_OES, image)
         eglDestroyImageKHR(display, image)
+        # Peaking wants luma only and plane 0 holds it. R8 costs a plain fetch.
+        self.luma = None
+        if pixel_format in ("YUV420", "YVU420"):
+            try:
+                self.luma = _import_luma(display, fb.planes[0].fd, w, h, cfg.stride)
+            except Exception:
+                if not _Buffer.luma_warned:
+                    _Buffer.luma_warned = True
+                    log.warning("luma plane import failed, peaking converts instead")
 
 
 class GlViewfinder(QOpenGLWidget):
@@ -443,25 +582,33 @@ class GlViewfinder(QOpenGLWidget):
         self._prog_blur = self._build_program(_VERT_PLAIN, _FRAG_BLUR)
         self._blur_step = glGetUniformLocation(self._prog_blur, "texel")
         self._prog_fx = None  # compiled on first assist use
-        self._fbos = [int(f) for f in glGenFramebuffers(3)]
-        self._texs = [int(t) for t in glGenTextures(3)]
+        # 0..2 frost chain, 3 peaking guide, 4 luma when no plane to import
+        self._fbos = [int(f) for f in glGenFramebuffers(5)]
+        self._texs = [int(t) for t in glGenTextures(5)]
+        self._assist_sizes: dict[int, tuple[int, int]] = {}
         # Context loss (e.g. reparenting a realized widget) invalidates every
         # cached texture id along with the context they lived in.
         self._buffers = {}
         self._target_size = None
 
-    def _build_program(self, vsrc: str, fsrc: str):
+    def _build_program(self, vsrc: str, fsrc: str, samplers: dict[str, int] | None = None):
+        # Samplers default to unit 0 at link time, invalid for two sampler types,
+        # so validate after assigning.
         prog = shaders.compileProgram(
-            _compile(vsrc, GL_VERTEX_SHADER), _compile(fsrc, GL_FRAGMENT_SHADER)
+            _compile(vsrc, GL_VERTEX_SHADER), _compile(fsrc, GL_FRAGMENT_SHADER), validate=False
         )
         self._attr_locs[prog] = glGetAttribLocation(prog, "aPosition")
         glUseProgram(prog)
-        glUniform1i(glGetUniformLocation(prog, "tex"), 0)
+        for name, unit in (samplers or {"tex": 0}).items():
+            glUniform1i(glGetUniformLocation(prog, name), unit)
         # uRotate exists only in _VERT programs. Seed it so a program left at
         # its default (0 matrix) never samples a collapsed texcoord.
         loc = glGetUniformLocation(prog, "uRotate")
         if loc != -1:
             glUniformMatrix2fv(loc, 1, GL_FALSE, self._rotate_matrix())
+        glValidateProgram(prog)
+        if not glGetProgramiv(prog, GL_VALIDATE_STATUS):
+            log.warning("program validation failed: %s", glGetProgramInfoLog(prog))
         return prog
 
     def _rotate_matrix(self):
@@ -511,13 +658,14 @@ class GlViewfinder(QOpenGLWidget):
         if req is None:
             return
         try:
-            texture = self._texture_for(req)
+            buffer = self._buffer_for(req)
         except Exception:
             # Log once, not per frame (34 Hz would flood the journal).
             if not self._import_err_logged:
                 self._import_err_logged = True
                 log.exception("dmabuf import failed")
             return
+        texture = buffer.texture
         vx, vy, vw, vh = self._letterbox_viewport()
         if self._frosted:
             try:
@@ -529,47 +677,132 @@ class GlViewfinder(QOpenGLWidget):
                 self._frost_broken = True
                 self._frosted = False
                 glBindFramebuffer(GL_FRAMEBUFFER, self.defaultFramebufferObject())
-        glViewport(vx, vy, vw, vh)
         if self._peaking or self._zebra:
-            self._use_fx()
-        else:
-            self._use(self._prog_ext)
+            try:
+                self._draw_fx(buffer, (vx, vy, vw, vh))
+                return
+            except Exception:
+                # Assists are optional: never let one take the viewfinder down.
+                log.exception("assist render failed, disabling")
+                self._peaking = self._zebra = False
+                glBindFramebuffer(GL_FRAMEBUFFER, self.defaultFramebufferObject())
+        glViewport(vx, vy, vw, vh)
+        self._use(self._prog_ext)
         glBindTexture(GL_TEXTURE_EXTERNAL_OES, texture)
         glDrawArrays(GL_TRIANGLE_FAN, 0, 4)
 
-    def _use_fx(self) -> None:
-        """Activate the assist (peaking/zebra) program with fresh uniforms."""
-        if self._prog_fx is None:
-            self._prog_fx = self._build_program(_VERT, _FRAG_EXT_FX)
-            self._fx_locs = {
-                name: glGetUniformLocation(self._prog_fx, name)
-                for name in ("texel", "peaking", "zebra", "zebraThr", "time")
-            }
+    # assist chain (luma -> guide -> marks over the frame)
+    def _draw_fx(self, buffer, viewport) -> None:
+        vx, vy, vw, vh = viewport
+        self._ensure_fx_programs()
+        luma, gain = buffer.luma, _LUMA_GAIN
+        if luma is None:
+            luma, gain = self._render_luma(buffer.texture, vw, vh), 1.0
+        glActiveTexture(GL_TEXTURE0 + 2)
+        glBindTexture(GL_TEXTURE_2D, luma)
+        glActiveTexture(GL_TEXTURE0)
+        if self._peaking:
+            gw, gh = max(1, vw // 2), max(1, vh // 2)
+            self._ensure_target(3, gw, gh, GL_RG8, GL_RG, GL_LINEAR)
+            glBindFramebuffer(GL_FRAMEBUFFER, self._fbos[3])
+            glViewport(0, 0, gw, gh)
+            self._use(self._prog_guide)
+            sx, sy = self._peak_basis(gw, gh)
+            glUniform2f(self._guide_locs["stepX"], *sx)
+            glUniform2f(self._guide_locs["stepY"], *sy)
+            glUniform1f(self._guide_locs["gain"], gain)
+            glDrawArrays(GL_TRIANGLE_FAN, 0, 4)
+            glBindFramebuffer(GL_FRAMEBUFFER, self.defaultFramebufferObject())
+        glViewport(vx, vy, vw, vh)
+        self._use_fx(vw, vh, gain)
+        glActiveTexture(GL_TEXTURE0 + 1)
+        glBindTexture(GL_TEXTURE_2D, self._texs[3])
+        glActiveTexture(GL_TEXTURE0)
+        glBindTexture(GL_TEXTURE_EXTERNAL_OES, buffer.texture)
+        glDrawArrays(GL_TRIANGLE_FAN, 0, 4)
+
+    def _render_luma(self, camera_texture: int, width: int, height: int) -> int:
+        """Convert camera texture to an R8 target, for formats with no plane."""
+        self._ensure_target(4, width, height, GL_R8, GL_RED, GL_LINEAR)
+        glBindFramebuffer(GL_FRAMEBUFFER, self._fbos[4])
+        glViewport(0, 0, width, height)
+        self._use(self._prog_luma)
+        glBindTexture(GL_TEXTURE_EXTERNAL_OES, camera_texture)
+        glDrawArrays(GL_TRIANGLE_FAN, 0, 4)
+        glBindFramebuffer(GL_FRAMEBUFFER, self.defaultFramebufferObject())
+        return self._texs[4]
+
+    def _peak_basis(self, gw: int, gh: int) -> tuple[tuple[float, float], tuple[float, float]]:
+        """One grid pixel in camera texcoord space, so a turned panel thins across
+        the edge it shows, not the sensor's axis."""
+        m = self._rotate_matrix()  # column-major [m00, m10, m01, m11]
+        dx, dy = 1.0 / max(gw, 1), 1.0 / max(gh, 1)
+        return (m[0] * dx, m[1] * dx), (m[2] * dy, m[3] * dy)
+
+    def _ensure_fx_programs(self) -> None:
+        if self._prog_fx is not None:
+            return
+        self._prog_guide = self._build_program(_VERT, _FRAG_GUIDE, {"tex": 2})
+        names = ("stepX", "stepY", "gain")
+        self._guide_locs = {n: glGetUniformLocation(self._prog_guide, n) for n in names}
+        self._prog_luma = self._build_program(_VERT_PLAIN, _FRAG_LUMA)
+        self._prog_fx = self._build_program(
+            _VERT_FX, _FRAG_EXT_FX, {"tex": 0, "guide": 1, "luma": 2}
+        )
+        names = ("stepX", "stepY", "peaking", "zebra", "zebraThr", "time", "gain")
+        self._fx_locs = {name: glGetUniformLocation(self._prog_fx, name) for name in names}
+        # _build_program leaves the program current. Color and threshold never
+        # change, upload once.
+        glUniform3f(glGetUniformLocation(self._prog_fx, "peakColor"), *_PEAK_COLOR)
+        glUniform1f(glGetUniformLocation(self._prog_fx, "peakThr"), _PEAK_THR)
+
+    def _ensure_target(self, slot: int, width: int, height: int, internal, fmt, filt) -> None:
+        """(Re)allocate an assist target when the letterboxed viewport changes."""
+        if self._assist_sizes.get(slot) == (width, height):
+            return
+        glBindTexture(GL_TEXTURE_2D, self._texs[slot])
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filt)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filt)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
+        glTexImage2D(GL_TEXTURE_2D, 0, internal, width, height, 0, fmt, GL_UNSIGNED_BYTE, None)
+        glBindFramebuffer(GL_FRAMEBUFFER, self._fbos[slot])
+        glFramebufferTexture2D(
+            GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, self._texs[slot], 0
+        )
+        if glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE:
+            raise RuntimeError("assist framebuffer incomplete")
+        glBindFramebuffer(GL_FRAMEBUFFER, self.defaultFramebufferObject())
+        self._assist_sizes[slot] = (width, height)
+
+    def _use_fx(self, vw: int, vh: int, gain: float) -> None:
+        """Activate the assist (peaking/zebra) program with per-frame uniforms."""
         self._use(self._prog_fx)
-        try:
-            iw, ih = self._display_size()
-        except Exception:  # noqa: BLE001 fall back to widget size
-            iw, ih = self.width(), self.height()
         loc = self._fx_locs
-        glUniform2f(loc["texel"], 1.0 / max(iw, 1), 1.0 / max(ih, 1))
+        sx, sy = self._peak_basis(vw, vh)
+        glUniform2f(loc["stepX"], *sx)
+        glUniform2f(loc["stepY"], *sy)
+        glUniform1f(loc["gain"], gain)
         glUniform1f(loc["peaking"], 1.0 if self._peaking else 0.0)
         glUniform1f(loc["zebra"], 1.0 if self._zebra else 0.0)
         glUniform1f(loc["zebraThr"], self._zebra_thr)
         # Wrapped epoch keeps mediump float precise (stripes drift, never jump).
         glUniform1f(loc["time"], (time.monotonic() - self._fx_t0) % 3600.0)
 
-    def _texture_for(self, completed_request) -> int:
+    def _buffer_for(self, completed_request) -> _Buffer:
         if completed_request.request not in self._buffers:
             if self._stop_count != self.picamera2.stop_count:
                 # Reconfigured: every cached request is stale, textures included.
                 for buffer in self._buffers.values():
                     glDeleteTextures(1, [buffer.texture])
+                    if buffer.luma is not None:
+                        glDeleteTextures(1, [buffer.luma])
                 self._buffers = {}
                 self._stop_count = self.picamera2.stop_count
             self._buffers[completed_request.request] = _Buffer(
                 self._egl_display, completed_request, self._max_texture_size
             )
-        return self._buffers[completed_request.request].texture
+        return self._buffers[completed_request.request]
 
     def _display_size(self) -> tuple[int, int]:
         cfg = self.picamera2.stream_map[self.picamera2.camera_config["display"]].configuration
@@ -598,8 +831,8 @@ class GlViewfinder(QOpenGLWidget):
         iw, ih = self._displayed(*self._display_size())
         self._ensure_targets(iw, ih)
         (aw, ah), (bw, bh) = self._sizes[0], self._sizes[1]
-        a_fbo, b_fbo, c_fbo = self._fbos
-        a_tex, b_tex, c_tex = self._texs
+        a_fbo, b_fbo, c_fbo = self._fbos[:3]
+        a_tex, b_tex, c_tex = self._texs[:3]
 
         # camera (external) -> A at 1/4 (flip happens here, in _VERT)
         glBindFramebuffer(GL_FRAMEBUFFER, a_fbo)
@@ -640,7 +873,7 @@ class GlViewfinder(QOpenGLWidget):
             (max(1, width // 8), max(1, height // 8)),
             (max(1, width // 8), max(1, height // 8)),
         ]
-        for fbo, tex, (tw, th) in zip(self._fbos, self._texs, self._sizes):
+        for fbo, tex, (tw, th) in zip(self._fbos[:3], self._texs[:3], self._sizes):
             glBindTexture(GL_TEXTURE_2D, tex)
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
