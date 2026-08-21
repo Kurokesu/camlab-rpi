@@ -10,6 +10,8 @@ camlabctl start|stop           # start/stop kiosk service
 camlabctl restart              # restart
 camlabctl logs -f              # tail service logs
 camlabctl shot                 # screenshot live kiosk (needs grim)
+camlabctl rec                  # record live kiosk (needs wf-recorder)
+camlabctl tap <x> <y>          # click in live kiosk (needs wlrctl)
 camlabctl log-level debug      # set log level (follow with camlabctl restart)
 camlabctl net off|on|status    # toggle networking
 camlabctl rw                   # boot writable next time
