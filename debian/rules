@@ -2,8 +2,23 @@
 
 include /usr/share/dpkg/pkg-info.mk
 
+# Camera stack relations for control, rendered from the source tree's
+# camera-stack.version
+ifeq ($(wildcard camera-stack.version),)
+$(error camera-stack.version missing from source tree)
+endif
+STACK_DEPENDS := $(shell . ./camera-stack.version && \
+	for pin in "$$LIBCAMERA_VERSION $$LIBCAMERA_PACKAGES" \
+	           "$$RPICAM_APPS_VERSION $$RPICAM_APPS_PACKAGES"; do \
+		set -- $$pin; v=$$1; shift; \
+		for p in "$$@"; do echo "$$p (>= $$v)"; echo "$$p (<< $$v.)"; done; \
+	done | awk '{ printf "%s%s", sep, $$0; sep = ", " }')
+
 %:
 	dh $@
+
+override_dh_gencontrol:
+	dh_gencontrol -- -V'camlab:StackDepends=$(STACK_DEPENDS)'
 
 # Interpreted Python tree, nothing to compile at packaging time.
 # Bytecode is generated on target by postinst.

@@ -10,9 +10,8 @@ Rules-Requires-Root: no
 Package: camlab-rpi
 Architecture: all
 # Mirrors what scripts/setup/deps.sh installs on main. Sync on every
-# release. Version floors (>=) go on Kurokesu stack packages only when
-# camlab starts requiring a newer piece, noted in the changelog entry
-# adding them.
+# release. Camera stack relations come from camera-stack.version
+# through debian/rules.
 Depends: ${misc:Depends},
  python3,
  python3-picamera2,
@@ -24,7 +23,7 @@ Depends: ${misc:Depends},
  wlr-randr,
  qt6-wayland,
  awb-nn,
- rpicam-apps-core (>= 1:1.12.0+krks1)
+ ${camlab:StackDepends}
 # camlab-setup installs drivers after kernel.sh prunes the
 # sibling kernel flavor.
 Suggests: ar0234-rpi-dkms,
