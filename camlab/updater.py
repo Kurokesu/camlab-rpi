@@ -8,7 +8,9 @@ name from its caller:
 
     app             camlab-rpi
     driver:<name>   driver_package from data/sensors.yaml
-    stack           installed archive packages that are neither of the above
+
+Camera stack rides an app update through deb's Depends, pinned by
+camera-stack.version. About card lists its version from stack_packages().
 
 Only a camlab-rpi that came from the archive gets updates, so hand-unpacked
 copies and forks get none (update_path()).
@@ -33,7 +35,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -242,13 +244,13 @@ def components(registry: SensorRegistry | None = None) -> list[Component]:
     out = [Component("app", APP_PACKAGE, (APP_PACKAGE,))]
     for overlay, package in sorted(drivers.items()):
         out.append(Component(f"driver:{overlay}", f"{overlay} driver", (package,)))
-    # Everything else the archive serves, so a libcamera soname bump needs no edit here.
-    rest = sorted(
-        (archive_packages() & installed_packages()) - {APP_PACKAGE} - set(drivers.values())
-    )
-    if rest:
-        out.append(Component("stack", "camera stack", tuple(rest)))
     return out
+
+
+def stack_packages(drivers: Iterable[str]) -> list[str]:
+    """Installed archive packages that are neither app nor driver."""
+    # Derived, so a libcamera soname bump needs no edit here
+    return sorted((archive_packages() & installed_packages()) - {APP_PACKAGE, *drivers})
 
 
 def resolve(ident: str, registry: SensorRegistry | None = None) -> Component:
@@ -694,13 +696,14 @@ def _stack_version(packages: Sequence[str], found: dict[str, str]) -> str:
 def inventory(registry: SensorRegistry | None = None) -> list[dict]:
     """Every row About shows, from dpkg and uname alone, so it answers offline.
 
-    Not updatable where no press could change the version: a mainline sensor, a
-    driver this box does not carry, the kernel that kernel.sh holds.
+    Not updatable where no press on the row could change the version: a mainline
+    sensor, a driver dpkg does not carry, the stack that rides an app update,
+    the kernel that kernel.sh holds.
     """
     reg = registry or SensorRegistry.load()
-    stack = next((c for c in components(reg) if c.id == "stack"), None)
     drivers = {s.overlay: s.driver_package for s in reg if s.driver_package}
-    found = installed_versions([APP_PACKAGE, *drivers.values(), *(stack.packages if stack else ())])
+    stack = stack_packages(drivers.values())
+    found = installed_versions([APP_PACKAGE, *drivers.values(), *stack])
 
     rows = [_row("app", APP_PACKAGE, found.get(APP_PACKAGE, ""))]
     # Every sensor, not only packaged ones, or the card leaves half of them unexplained.
@@ -712,7 +715,7 @@ def inventory(registry: SensorRegistry | None = None) -> list[dict]:
         else:
             rows.append(_row(ident, label, found.get(package, "")))
     if stack:
-        rows.append(_row(stack.id, stack.label, _stack_version(stack.packages, found)))
+        rows.append(_row("stack", "camera stack", _stack_version(stack, found), updatable=False))
     # Running kernel, not the held package version, which sits a step ahead until a reboot.
     rows.append(_row("kernel", "kernel", os.uname().release, updatable=False))
     return rows
@@ -728,22 +731,12 @@ def _moves_to(installed: str, pending: str) -> str:
 
 
 def component_summary(component: dict) -> tuple[str, str]:
-    """(installed, available) row text for one surveyed component.
-
-    Parts share a source and a version, so one move stands for all of them and
-    the row never names or counts them.
-    """
-    packages = component.get("packages") or []
-    if not packages:
-        return "-", ""
-    pending = [p for p in packages if p.get("pending")]
-    if not pending:
-        if len(packages) == 1:
-            return _plain(packages[0].get("installed") or "") or "-", ""
-        return f"{len(packages)} packages", ""
-    lead = pending[0]
-    installed = _plain(lead.get("installed") or "") or "-"
-    return installed, _moves_to(installed, _plain(lead["pending"]))
+    """(installed, available) row text for one surveyed component."""
+    package = component["packages"][0]
+    installed = _plain(package.get("installed") or "") or "-"
+    if not package.get("pending"):
+        return installed, ""
+    return installed, _moves_to(installed, _plain(package["pending"]))
 
 
 def pending_ids(state: dict) -> list[str]:
