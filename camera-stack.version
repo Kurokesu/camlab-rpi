@@ -1,0 +1,13 @@
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Camera stack this camlab release was validated against.
+#
+# Versions are floors. Ceiling adds a trailing dot, so range covers Debian
+# revision rebuilds of same fork release
+
+LIBCAMERA_VERSION="1:0.7.2+rpt20260817+krks2"
+LIBCAMERA_PACKAGES="libcamera0.7 python3-libcamera"
+
+RPICAM_APPS_VERSION="1:1.13.0+krks1"
+RPICAM_APPS_PACKAGES="librpicam-app1 rpicam-apps-core"
