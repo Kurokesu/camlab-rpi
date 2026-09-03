@@ -50,7 +50,7 @@ Releasing
 A release is a pair of tags:
 
  * main is tagged v<semver>, revision-less, e.g. v1.0.0. Cut per
-   RELEASING.md on main, which also creates the GitHub release deb
+   RELEASING.md on main, which also drafts the GitHub release deb
    assets land on.
  * debian/latest is tagged debian/<version>-<rev>, carrying a Debian
    revision, e.g. debian/1.0.0-1. Pre-release '~' becomes '_' in the
@@ -64,6 +64,8 @@ To release, after the source release exists:
  2. Tag this branch with debian/<version>-<rev> and push the tag. That
     triggers release.yml: paired-tag preflight, build against the
     v tag, sign, upload onto the v-tag release.
+ 3. Rewrite the draft description and publish the release, per
+    RELEASING.md on main. Archive ingest reads published releases.
 
 A packaging-only rebuild (1.0.0-1 to 1.0.0-2) is a new changelog entry
 and a new packaging tag. The source tag is reused, not retagged, and

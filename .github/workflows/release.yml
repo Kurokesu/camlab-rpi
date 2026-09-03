@@ -220,7 +220,8 @@ jobs:
 
           # The v-tag release carries the README-pinned source tarball,
           # so this step never creates or deletes a release and never
-          # touches flags or notes.
+          # touches flags or notes. It is still a draft here, which gh
+          # resolves by tag like any published release.
           if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "::error::No GitHub release at ${TAG}."
             echo "::error::Cut the source release first (RELEASING.md on main), then re-run."
