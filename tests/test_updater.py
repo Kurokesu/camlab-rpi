@@ -208,17 +208,21 @@ class TestComponents:
         package_sets(set(), set())
         assert "driver:ov5647" not in [c.id for c in updater.components(registry)]
 
-    def test_stack_takes_the_rest_of_the_archive(self, registry, package_sets):
+    def test_stack_is_no_component(self, registry, package_sets):
+        """It rides an app update."""
+        package_sets({"camlab-rpi", "libcamera0.7"}, {"camlab-rpi", "libcamera0.7"})
+        assert "stack" not in [c.id for c in updater.components(registry)]
+
+    def test_stack_takes_the_rest_of_the_archive(self, package_sets):
         package_sets(
             {"camlab-rpi", "ar0234-rpi-dkms", "libcamera0.7", "python3-libcamera"},
             {"camlab-rpi", "ar0234-rpi-dkms", "libcamera0.7", "python3-libcamera", "coreutils"},
         )
-        stack = [c for c in updater.components(registry) if c.id == "stack"]
-        assert stack[0].packages == ("libcamera0.7", "python3-libcamera")
+        assert updater.stack_packages(["ar0234-rpi-dkms"]) == ["libcamera0.7", "python3-libcamera"]
 
-    def test_stack_skips_uninstalled_archive_packages(self, registry, package_sets):
+    def test_stack_skips_uninstalled_archive_packages(self, package_sets):
         package_sets({"camlab-rpi", "libcamera0.7"}, {"camlab-rpi"})
-        assert "stack" not in [c.id for c in updater.components(registry)]
+        assert updater.stack_packages([]) == []
 
     def test_resolve_maps_an_id_to_packages(self, registry, package_sets):
         package_sets(set(), set())
@@ -362,8 +366,9 @@ class TestInventory:
         row = self.rows(registry)["kernel"]
         assert (row["installed"], row["updatable"]) == ("6.18.34+rpt-rpi-2712", False)
 
-    def test_stack_shipping_in_step_shows_one_version(self, registry):
-        assert self.rows(registry)["stack"]["installed"] == "0.7.1+krks1-4"
+    def test_stack_shipping_in_step_shows_one_version_and_no_button(self, registry):
+        row = self.rows(registry)["stack"]
+        assert (row["installed"], row["updatable"]) == ("0.7.1+krks1-4", False)
 
     def test_an_epoch_stays_out_of_the_row(self, registry):
         """An epoch only orders apt's comparisons, so it is noise on a card."""
@@ -877,7 +882,12 @@ class TestCli:
         monkeypatch.setattr(
             updater,
             "survey",
-            lambda: {"components": [{"id": "app", "pending": True}, {"id": "stack", "pending": 0}]},
+            lambda: {
+                "components": [
+                    {"id": "app", "pending": True},
+                    {"id": "driver:ar0234", "pending": 0},
+                ]
+            },
         )
         updater._main(["apply", "--no-reboot"])
         assert self.armed == [["app"]]
@@ -899,23 +909,23 @@ class TestCli:
 class TestGuiHelpers:
     """What the updates card reads and runs. The card itself stays free of logic."""
 
-    def _component(self, packages: list[dict]) -> dict:
-        return {"id": "stack", "label": "camera stack", "pending": False, "packages": packages}
+    def _component(self, package: dict) -> dict:
+        return {"id": "app", "label": "camlab-rpi", "pending": False, "packages": [package]}
 
     def test_single_package_shows_its_version(self):
-        component = self._component([{"name": "camlab-rpi", "installed": "1.0.0", "pending": ""}])
+        component = self._component({"name": "camlab-rpi", "installed": "1.0.0", "pending": ""})
         assert updater.component_summary(component) == ("1.0.0", "")
 
     def test_single_package_shows_what_it_moves_to(self):
         component = self._component(
-            [{"name": "camlab-rpi", "installed": "1.0.0", "pending": "1.0.1"}]
+            {"name": "camlab-rpi", "installed": "1.0.0", "pending": "1.0.1"}
         )
         assert updater.component_summary(component) == ("1.0.0", "1.0.1")
 
     def test_long_versions_show_only_what_differs(self):
         krks = "0.7.1+rpt20260429+krks1"
         component = self._component(
-            [{"name": "libcamera0.7", "installed": f"{krks}-4", "pending": f"{krks}-5"}]
+            {"name": "libcamera0.7", "installed": f"{krks}-4", "pending": f"{krks}-5"}
         )
         assert updater.component_summary(component) == (f"{krks}-4", "\u2026-5")
 
@@ -923,60 +933,32 @@ class TestGuiHelpers:
         """Stripped before the shortening, or the shared prefix would not line up."""
         krks = "0.7.1+rpt20260429+krks1"
         component = self._component(
-            [{"name": "libcamera0.7", "installed": f"1:{krks}-4", "pending": f"1:{krks}-5"}]
+            {"name": "libcamera0.7", "installed": f"1:{krks}-4", "pending": f"1:{krks}-5"}
         )
         assert updater.component_summary(component) == (f"{krks}-4", "\u2026-5")
 
     def test_short_versions_stay_whole(self):
         component = self._component(
-            [{"name": "camlab-rpi", "installed": "1.0.0~beta.10-1", "pending": "1.0.0~beta.11-1"}]
+            {"name": "camlab-rpi", "installed": "1.0.0~beta.10-1", "pending": "1.0.0~beta.11-1"}
         )
         assert updater.component_summary(component) == ("1.0.0~beta.10", "1.0.0~beta.11")
 
     def test_a_repackaged_build_still_shows_a_move(self):
         """Hiding revision 1 must not leave an Update button beside two equal versions."""
         component = self._component(
-            [{"name": "ar0234-rpi-dkms", "installed": "0.1.0-1", "pending": "0.1.0-2"}]
+            {"name": "ar0234-rpi-dkms", "installed": "0.1.0-1", "pending": "0.1.0-2"}
         )
         assert updater.component_summary(component) == ("0.1.0", "0.1.0-2")
-
-    def test_many_packages_show_one_move_for_the_component(self):
-        component = self._component(
-            [
-                {"name": "libcamera0.7", "installed": "0.7.1", "pending": "0.7.2"},
-                {"name": "python3-picamera2", "installed": "0.3.31", "pending": "0.3.32"},
-                {"name": "libcamera-tools", "installed": "0.7.1", "pending": ""},
-            ]
-        )
-        assert updater.component_summary(component) == ("0.7.1", "0.7.2")
-
-    def test_move_comes_from_the_part_that_has_one(self):
-        component = self._component(
-            [
-                {"name": "libcamera0.7", "installed": "0.7.1", "pending": ""},
-                {"name": "libcamera-tools", "installed": "0.7.1", "pending": "0.7.2"},
-            ]
-        )
-        assert updater.component_summary(component) == ("0.7.1", "0.7.2")
-
-    def test_many_packages_with_nothing_pending_just_count(self):
-        component = self._component(
-            [
-                {"name": "libcamera0.7", "installed": "0.7.1", "pending": ""},
-                {"name": "libcamera-tools", "installed": "0.7.1", "pending": ""},
-            ]
-        )
-        assert updater.component_summary(component) == ("2 packages", "")
 
     def test_pending_ids_are_what_the_card_offers(self):
         state = {
             "components": [
                 {"id": "app", "pending": True},
                 {"id": "driver:ar0234", "pending": False},
-                {"id": "stack", "pending": True},
+                {"id": "driver:imx585", "pending": True},
             ]
         }
-        assert updater.pending_ids(state) == ["app", "stack"]
+        assert updater.pending_ids(state) == ["app", "driver:imx585"]
 
     def test_never_checked_offers_nothing(self):
         assert updater.pending_ids({}) == []
