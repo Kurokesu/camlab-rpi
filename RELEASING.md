@@ -31,8 +31,10 @@ git tag -a v1.0.0-beta.1 -m "v1.0.0-beta.1"
 git push origin v1.0.0-beta.1
 ```
 
-4. Release workflow builds `camlab-rpi-<version>.tar.gz` (versioned root directory inside) and publishes a GitHub release with generated notes. Tags with a hyphen publish as pre-releases.
+4. Release workflow builds `camlab-rpi-<version>.tar.gz` (versioned root directory inside) and drafts a GitHub release, generated notes seeding the description. Tags with a hyphen carry the pre-release flag.
 5. Bump `__version__` to the next expected version with `-dev` in a follow-up commit.
+
+Release stays a draft until the deb lands on it. Publishing is the one notification watchers get, so it goes out with final description and every asset attached.
 
 ## Debian package
 
@@ -48,6 +50,7 @@ git push origin debian/1.0.0_beta.3-1
 ```
 
 3. Release workflow verifies the paired `v` tag, builds against it and uploads `camlab-rpi_<version>.tar.gz` plus signed `SHA256SUMS` onto that release, next to the source tarball. A packaging-only rebuild increments Debian revision after the hyphen, each one a new changelog entry and its own tag.
-4. Publish into [apt.kurokesu.com](https://apt.kurokesu.com) with a manifest entry in `Kurokesu/apt`, which ingests those assets.
+4. Rewrite the draft description, then publish the release.
+5. Publish into [apt.kurokesu.com](https://apt.kurokesu.com) with a manifest entry in `Kurokesu/apt`, which ingests those assets. Ingest reads published releases, so step 4 comes first.
 
 See `debian/source/README.source` on `debian/latest` for layout and details.
