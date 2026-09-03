@@ -224,6 +224,31 @@ class TestComponents:
         package_sets({"camlab-rpi", "libcamera0.7"}, {"camlab-rpi"})
         assert updater.stack_packages([]) == []
 
+    def test_binary_packages_collapse_onto_their_source(self, package_sets, monkeypatch):
+        """Two libcamera binaries ship one fork version, so the card wants one row."""
+        package_sets(
+            {"camlab-rpi", "libcamera0.7", "python3-libcamera", "rpicam-apps-core"},
+            {"camlab-rpi", "libcamera0.7", "python3-libcamera", "rpicam-apps-core"},
+        )
+        monkeypatch.setattr(
+            updater,
+            "_run",
+            lambda cmd: (
+                "installed libcamera 1:0.7.2+krks2-1\n"
+                "installed libcamera 1:0.7.2+krks2-1\n"
+                "installed rpicam-apps 1:1.13.0+krks1-1\n"
+            ),
+        )
+        assert updater.stack_versions([]) == {
+            "libcamera": "1:0.7.2+krks2-1",
+            "rpicam-apps": "1:1.13.0+krks1-1",
+        }
+
+    def test_no_stack_asks_dpkg_nothing(self, package_sets, monkeypatch):
+        package_sets({"camlab-rpi"}, {"camlab-rpi"})
+        monkeypatch.setattr(updater, "_run", lambda cmd: pytest.fail("dpkg-query called"))
+        assert updater.stack_versions([]) == {}
+
     def test_resolve_maps_an_id_to_packages(self, registry, package_sets):
         package_sets(set(), set())
         assert updater.resolve("driver:ar0234", registry).packages == ("ar0234-rpi-dkms",)
@@ -327,14 +352,14 @@ class TestInventory:
         self.versions = {
             "camlab-rpi": "1.0.0~beta.11-1",
             "ar0234-rpi-dkms": "0.1.0-1",
-            "libcamera0.7": "1:0.7.1+krks1-4",
-            "python3-libcamera": "1:0.7.1+krks1-4",
         }
         monkeypatch.setattr(
             updater,
             "installed_versions",
             lambda packages: {k: v for k, v in self.versions.items() if k in packages},
         )
+        self.sources = {"libcamera": "1:0.7.1+krks1-4", "rpicam-apps": "1:1.13.0+krks1-1"}
+        monkeypatch.setattr(updater, "stack_versions", lambda drivers: self.sources)
 
     def rows(self, registry) -> dict[str, dict]:
         return {r["id"]: r for r in updater.inventory(registry)}
@@ -346,7 +371,8 @@ class TestInventory:
             "driver:ar0234",
             "driver:imx585",
             "driver:ov5647",
-            "stack",
+            "stack:libcamera",
+            "stack:rpicam-apps",
             "kernel",
         ]
 
@@ -366,23 +392,31 @@ class TestInventory:
         row = self.rows(registry)["kernel"]
         assert (row["installed"], row["updatable"]) == ("6.18.34+rpt-rpi-2712", False)
 
-    def test_stack_shipping_in_step_shows_one_version_and_no_button(self, registry):
-        row = self.rows(registry)["stack"]
-        assert (row["installed"], row["updatable"]) == ("0.7.1+krks1-4", False)
+    def test_each_fork_carries_its_own_version_and_no_button(self, registry):
+        """Forks version apart, so one row for both could only show a count."""
+        rows = self.rows(registry)
+        assert (rows["stack:libcamera"]["installed"], rows["stack:libcamera"]["updatable"]) == (
+            "0.7.1+krks1-4",
+            False,
+        )
+        assert rows["stack:rpicam-apps"]["installed"] == "1.13.0+krks1"
+
+    def test_a_fork_row_is_labelled_by_its_source_package(self, registry):
+        assert self.rows(registry)["stack:libcamera"]["label"] == "libcamera"
 
     def test_an_epoch_stays_out_of_the_row(self, registry):
         """An epoch only orders apt's comparisons, so it is noise on a card."""
-        assert ":" not in self.rows(registry)["stack"]["installed"]
+        assert ":" not in self.rows(registry)["stack:libcamera"]["installed"]
 
     def test_a_first_packaging_revision_stays_out_of_the_row(self, registry):
         """Revision 1 is the convention for a first build. A later one tells builds apart."""
         rows = self.rows(registry)
         assert rows["driver:ar0234"]["installed"] == "0.1.0"
-        assert rows["stack"]["installed"].endswith("-4")
+        assert rows["stack:libcamera"]["installed"].endswith("-4")
 
-    def test_stack_out_of_step_counts_parts_instead(self, registry):
-        self.versions["python3-libcamera"] = "1:0.7.0+krks1-1"
-        assert self.rows(registry)["stack"]["installed"] == "2 packages"
+    def test_a_stack_dpkg_does_not_carry_adds_no_rows(self, registry):
+        self.sources = {}
+        assert [r["id"] for r in updater.inventory(registry) if r["id"].startswith("stack")] == []
 
     def test_a_box_that_never_checked_still_answers(self, registry, tmp_path, monkeypatch):
         """No update.json at all is the offline case the card exists for."""

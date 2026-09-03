@@ -10,7 +10,7 @@ name from its caller:
     driver:<name>   driver_package from data/sensors.yaml
 
 Camera stack rides an app update through deb's Depends, pinned by
-camera-stack.version. About card lists its version from stack_packages().
+camera-stack.version. About card lists a row per fork (stack_versions()).
 
 Only a camlab-rpi that came from the archive gets updates, so hand-unpacked
 copies and forks get none (update_path()).
@@ -687,23 +687,35 @@ def _row(ident: str, label: str, installed: str, updatable: bool = True) -> dict
     }
 
 
-def _stack_version(packages: Sequence[str], found: dict[str, str]) -> str:
-    """One version while a source package ships in step, else how many parts it has."""
-    versions = {found[p] for p in packages if p in found}
-    return versions.pop() if len(versions) == 1 else f"{len(versions)} packages"
+def stack_versions(drivers: Iterable[str]) -> dict[str, str]:
+    """Version per source package behind the installed stack.
+
+    Forks version apart, so libcamera and rpicam-apps each carry their own,
+    and a binary package rename lands under the source name regardless.
+    """
+    packages = stack_packages(drivers)
+    if not packages:
+        return {}
+    fmt = r"${db:Status-Status} ${source:Package} ${Version}\n"
+    lines = _run(["dpkg-query", "-Wf", fmt, *packages]).splitlines()
+    out: dict[str, str] = {}
+    for line in lines:
+        parts = line.split()
+        if len(parts) == 3 and parts[0] == "installed":
+            out[parts[1]] = parts[2]
+    return out
 
 
 def inventory(registry: SensorRegistry | None = None) -> list[dict]:
     """Every row About shows, from dpkg and uname alone, so it answers offline.
 
     Not updatable where no press on the row could change the version: a mainline
-    sensor, a driver dpkg does not carry, the stack that rides an app update,
+    sensor, a driver dpkg does not carry, a stack fork that rides an app update,
     the kernel that kernel.sh holds.
     """
     reg = registry or SensorRegistry.load()
     drivers = {s.overlay: s.driver_package for s in reg if s.driver_package}
-    stack = stack_packages(drivers.values())
-    found = installed_versions([APP_PACKAGE, *drivers.values(), *stack])
+    found = installed_versions([APP_PACKAGE, *drivers.values()])
 
     rows = [_row("app", APP_PACKAGE, found.get(APP_PACKAGE, ""))]
     # Every sensor, not only packaged ones, or the card leaves half of them unexplained.
@@ -714,8 +726,8 @@ def inventory(registry: SensorRegistry | None = None) -> list[dict]:
             rows.append(_row(ident, label, MAINLINE, updatable=False))
         else:
             rows.append(_row(ident, label, found.get(package, "")))
-    if stack:
-        rows.append(_row("stack", "camera stack", _stack_version(stack, found), updatable=False))
+    for source, version in sorted(stack_versions(drivers.values()).items()):
+        rows.append(_row(f"stack:{source}", source, version, updatable=False))
     # Running kernel, not the held package version, which sits a step ahead until a reboot.
     rows.append(_row("kernel", "kernel", os.uname().release, updatable=False))
     return rows
