@@ -152,9 +152,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # CDAF focus map overlay: image statistics, samples only while shown.
         self.focus_sampler = FocusSampler(engine, parent=self)
         self.focus_sampler.sample.connect(lambda s: self.viewfinder_area.update_focus_map(s.heat))
-        self._focus_map_on = mon.focus_map
-        self.viewfinder_area.set_focus_map_enabled(self._focus_map_on)
-        self.focus_sampler.set_sampling(self._focus_map_on, "map")
+        self.viewfinder_area.set_focus_map_enabled(mon.focus_map)
+        self.focus_sampler.set_sampling(mon.focus_map, "map")
         self.viewfinder_area.set_assists(mon.peaking, mon.zebra, mon.zebra_threshold)
         # Seeding blocks sheet signals, so refresh the chip explicitly.
         self._refresh_monitor_chip()
@@ -478,6 +477,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # without blob (libcamera skips some above 30 fps).
         if self._histogram_on and self.engine.latest_histogram is not None:
             self.viewfinder_area.update_histogram(self.engine.latest_histogram)
+        if self.focus_sampler.sampling:
+            self.focus_sampler.poll()
         self._render_chips()
 
     def _render_chips(self) -> None:
@@ -912,9 +913,8 @@ class MainWindow(QtWidgets.QMainWindow):
         log.info("histogram overlay %s", "on" if enabled else "off")
 
     def _apply_focus_map(self, enabled: bool) -> None:
-        self._focus_map_on = bool(enabled)
-        self.viewfinder_area.set_focus_map_enabled(self._focus_map_on)
-        self.focus_sampler.set_sampling(self._focus_map_on, "map")
+        self.viewfinder_area.set_focus_map_enabled(enabled)
+        self.focus_sampler.set_sampling(enabled, "map")
         self._refresh_monitor_chip()
         log.info("focus map overlay %s", "on" if enabled else "off")
 

@@ -14,21 +14,16 @@ from .qt import QtCore, Signal
 
 log = logging.getLogger(__name__)
 
-_POLL_MS = 100
 _CENTER_CELLS = 2
 # Ref-count tag for the shared stats output.
 _OWNER = "focus"
-# Frame-to-frame scatter is 0.7% at fixed exposure, under 2% is noise.
-_TREND_EPS = 0.02
 
 
 @dataclass(frozen=True)
 class FocusSample:
-    """Current sharpness. Score is the fraction of the running peak."""
+    """Current sharpness."""
 
-    score: float | None = None
-    raw: float | None = None  # center FoM before peak scaling
-    trend: int = 0  # +1 sharpening, -1 softening, 0 steady
+    raw: float | None = None  # center figure of merit
     # Scaled by the running peak cell, so the whole map dims as focus is lost.
     heat: np.ndarray | None = None
 
@@ -40,7 +35,7 @@ def center_score(grid, cells: int = _CENTER_CELLS) -> float:
 
 
 class FocusSampler(QtCore.QObject):
-    """Poll focus metrics while a readout is showing them."""
+    """Focus metrics from the shared stats blob, polled by whoever shows them."""
 
     sample = Signal(object)  # FocusSample
 
@@ -48,52 +43,36 @@ class FocusSampler(QtCore.QObject):
         super().__init__(parent)
         self._engine = engine
         self._last = FocusSample()
-        self._peak = 0.0
         self._cell_peak = 0.0
         self._logged = False
-        # Explicit, so an unbalanced start would not leave stats blob switched on.
-        self._running = False
         self._owners: set[str] = set()
-        self._timer = QtCore.QTimer(self)
-        self._timer.setInterval(_POLL_MS)
-        self._timer.timeout.connect(self._poll)
+
+    @property
+    def sampling(self) -> bool:
+        """True while a readout wants samples, which is when poll() is worth calling."""
+        return bool(self._owners)
 
     def set_sampling(self, enabled: bool, owner: str) -> None:
-        """Ref-counted like stats blob: polls while any owner has it enabled."""
-        if not enabled:
+        """Ref-counted like stats blob: samples while any owner has it enabled."""
+        was = self.sampling
+        if enabled:
+            if owner in self._owners:
+                return
+            self._owners.add(owner)
+            # A readout switching on scores against the current scene.
+            self._rewind()
+        else:
             self._owners.discard(owner)
-            if not self._owners:
-                self.stop()
-            return
-        if owner in self._owners:
-            return
-        self._owners.add(owner)
-        # A readout switching on scores against the current scene.
-        self._rewind()
-        self.start()
-
-    def start(self) -> None:
-        if self._running:
-            return
-        self._running = True
-        self._rewind()
-        self._engine.set_stats_output(True, owner=_OWNER)
-        self._timer.start()
-
-    def stop(self) -> None:
-        if not self._running:
-            return
-        self._running = False
-        self._timer.stop()
-        self._engine.set_stats_output(False, owner=_OWNER)
+        if self.sampling != was:
+            self._engine.set_stats_output(self.sampling, owner=_OWNER)
 
     def _rewind(self) -> None:
         """Reset peak hold, so a scene is not scored against the previous one."""
-        self._peak = 0.0
         self._cell_peak = 0.0
         self._last = FocusSample()
 
-    def _poll(self) -> None:
+    def poll(self) -> None:
+        """Read the latest grid and emit. Driven by the caller's telemetry tick."""
         md = self._engine.telemetry.metadata
         grid = self._engine.cdaf_focus(md)
         self._describe_once(md, grid)
@@ -101,14 +80,9 @@ class FocusSampler(QtCore.QObject):
             # libcamera can skip the blob on a frame, hold rather than blink.
             self.sample.emit(self._last)
             return
-        raw = center_score(grid)
-        self._peak = max(self._peak, raw)
         self._cell_peak = max(self._cell_peak, float(grid.max()))
-        previous = self._last.raw
         self._last = FocusSample(
-            score=raw / self._peak if self._peak > 0 else None,
-            raw=raw,
-            trend=_trend(previous, raw),
+            raw=center_score(grid),
             heat=grid / self._cell_peak if self._cell_peak > 0 else None,
         )
         self.sample.emit(self._last)
@@ -128,15 +102,3 @@ class FocusSampler(QtCore.QObject):
             float(grid.max()),
             md.get("FocusFoM"),
         )
-
-
-def _trend(previous: float | None, raw: float) -> int:
-    """Which way focus is going, which is what says which way to turn."""
-    if previous is None or previous <= 0:
-        return 0
-    change = (raw - previous) / previous
-    if change > _TREND_EPS:
-        return 1
-    if change < -_TREND_EPS:
-        return -1
-    return 0
