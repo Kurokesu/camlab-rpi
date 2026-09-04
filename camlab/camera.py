@@ -30,7 +30,8 @@ from .qt import QtCore
 log = logging.getLogger(__name__)
 
 # libcamera advertises ColourTemperature as 100-100000 K, far beyond any tuning
-# curve. Clamp slider range to a practical photographic band.
+# curve. Widest ct_curve across supported sensors runs 2220 to 9400 K, so this
+# band encloses every one of them.
 _CT_UI_RANGE = (2000, 10000)
 
 # Sentinel so set_control_state can tell "not passed" from "None = auto".
@@ -67,25 +68,8 @@ class Telemetry:
     """Atomic per-frame snapshot for GUI readers."""
 
     frame: int | None = None  # None until the first frame
-    fps: float = 0.0
+    fps: float = 0.0  # rate actually delivered, as rpicam-apps preview shows
     metadata: dict = field(default_factory=dict)
-
-
-@dataclass
-class CameraInfo:
-    model: str = ""
-    id: str = ""
-    location: str = ""
-    num: int = -1
-
-    @classmethod
-    def from_dict(cls, d: dict) -> CameraInfo:
-        return cls(
-            model=str(d.get("Model", "")),
-            id=str(d.get("Id", "")),
-            location=str(d.get("Location", "")),
-            num=int(d.get("Num", -1)),
-        )
 
 
 class CameraEngine:
@@ -93,12 +77,10 @@ class CameraEngine:
         self.size = tuple(size)  # lores / display size (set on configure)
         self.pixel_format = pixel_format
         self.picam2 = None
-        self.info: CameraInfo | None = None
+        self.info: dict = {}  # global_camera_info entry: Model, Id, Location, Num
         self.modes: list[SensorMode] = []
         self.main_config: dict = {}
         self.lores_config: dict = {}
-        self.sensor_config: dict = {}
-        self.sensor_mode: dict = {}
         self.current_mode: SensorMode | None = None
         self.fps_current: float | None = None
         self.fps_fixed = True  # False lets exposure extend frame duration to 1 s
@@ -121,7 +103,6 @@ class CameraEngine:
         self._flush_pending = False
         # Drain timer, created on first use (needs QApplication).
         self._flush_timer: QtCore.QTimer | None = None
-        self._cc_cache: dict | None = None  # camera_controls, per configure
 
     def open(self, camera_num: int = 0) -> None:
         """Open camera and enumerate its modes. Does not configure a stream.
@@ -135,12 +116,14 @@ class CameraEngine:
         infos = Picamera2.global_camera_info()
         if not infos:
             raise RuntimeError("no camera enumerated by libcamera")
-        self.info = CameraInfo.from_dict(infos[camera_num])
+        self.info = dict(infos[camera_num])
         self.picam2 = Picamera2(camera_num)
-        self._cc_cache = None
         self.modes = enumerate_modes(self.picam2.sensor_modes)
         log.info(
-            "camera opened: %s (%s) with %d modes", self.info.model, self.info.id, len(self.modes)
+            "camera opened: %s (%s) with %d modes",
+            self.info.get("Model", ""),
+            self.info.get("Id", ""),
+            len(self.modes),
         )
 
     @staticmethod
@@ -183,9 +166,6 @@ class CameraEngine:
         )
         self.picam2.configure(cfg)
         self._flush_pending = False  # reconfigure restarts the pipeline anyway
-        # Control limits change with mode (exposure scales with line length), so
-        # widen and re-clamp below need fresh ones.
-        self._cc_cache = None
         if not self.fps_fixed:
             if self._sensor_max_frame_us() is None:
                 log.warning("no usable FrameDurationLimits from sensor, FPS lock degrades to fixed")
@@ -196,10 +176,6 @@ class CameraEngine:
         full = self.picam2.camera_configuration()
         self.main_config = dict(full["main"])
         self.lores_config = dict(full.get("lores") or {})
-        # main/raw formats are ISP internal (XBGR8888 / *_PISP_COMP*) and do not
-        # match rpicam-hello --list-cameras, so resolve the mode libcamera picked.
-        self.sensor_config = dict(full.get("sensor") or {})
-        self.sensor_mode = self._match_sensor_mode(self.sensor_config)
         self.current_mode = mode
         self.fps_current = float(fps)
         self.size = tuple(self.lores_config.get("size", lores_size))
@@ -209,7 +185,7 @@ class CameraEngine:
         self._apply_controls()
         log.info(
             "configured: sensor_mode=%s fps=%.2f main=%s lores=%s",
-            self.sensor_mode_str(),
+            mode.label(),
             fps,
             self.main_config.get("size"),
             self.size,
@@ -253,14 +229,9 @@ class CameraEngine:
         return True
 
     def _sensor_max_frame_us(self) -> int | None:
-        """Sensor's advertised max frame duration, None if missing or malformed."""
+        """Sensor's advertised max frame duration, None when it advertises none."""
         limits = self._camera_controls.get("FrameDurationLimits")
-        if not isinstance(limits, (tuple, list)) or len(limits) < 2:
-            return None
-        try:
-            return int(limits[1])
-        except (TypeError, ValueError, OverflowError):
-            return None
+        return int(limits[1]) if limits else None
 
     def _frame_duration_limits(self, fps: float, fixed: bool) -> tuple[int, int]:
         """(min, max) FrameDurationLimits for the FPS lock policy.
@@ -284,16 +255,8 @@ class CameraEngine:
     # camera controls (exposure / gain / white balance)
     @property
     def _camera_controls(self) -> dict:
-        """picam2.camera_controls, cached per configure. Empty without a camera.
-
-        Each access rebuilds the whole dict and a slider drag reads it several
-        times per tick.
-        """
-        if self.picam2 is None:
-            return {}
-        if self._cc_cache is None:
-            self._cc_cache = self.picam2.camera_controls
-        return self._cc_cache
+        """(min, max, default) per control libcamera advertises, empty without a camera."""
+        return {} if self.picam2 is None else self.picam2.camera_controls
 
     def control_ranges(self) -> dict[str, tuple]:
         """(min, max) per manual control for the current configuration.
@@ -488,35 +451,6 @@ class CameraEngine:
             return None
         grid = np.frombuffer(raw, dtype=np.uint64, count=count, offset=_CDAF_OFFSET)
         return grid.reshape(_CDAF_SIZE, _CDAF_SIZE)
-
-    def _match_sensor_mode(self, sensor_cfg: dict) -> dict:
-        """Find the sensor_modes entry matching configured size + bit depth.
-
-        Its 'format' is the libcamera name rpicam-hello prints (SGRBG12_CSI2P).
-        """
-        size = tuple(sensor_cfg.get("output_size", ()) or ())
-        depth = sensor_cfg.get("bit_depth")
-        for m in self.picam2.sensor_modes if self.picam2 else []:
-            if tuple(m.get("size", ()) or ()) == size and m.get("bit_depth") == depth:
-                return {
-                    "format": str(m.get("format", "")),
-                    "bit_depth": m.get("bit_depth"),
-                    "size": tuple(m.get("size", ()) or ()),
-                    "fps": m.get("fps"),
-                }
-        return {}
-
-    def sensor_mode_str(self) -> str:
-        """Human sensor mode matching rpicam-hello, e.g. 'SGRBG12_CSI2P 1920x1080'."""
-        m = self.sensor_mode
-        if m and m.get("format") and m.get("size"):
-            w, h = m["size"]
-            return f"{m['format']} {w}x{h}"
-        size = tuple(self.sensor_config.get("output_size", ()) or ())
-        depth = self.sensor_config.get("bit_depth")
-        if size and depth:
-            return f"{depth}-bit {size[0]}x{size[1]}"
-        return "?"
 
     def make_viewfinder(self, transform: int = 0, mirror: bool = False):
         return GlViewfinder(self.picam2, transform=transform, mirror=mirror)

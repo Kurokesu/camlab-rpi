@@ -18,7 +18,7 @@ from ..dsi_panels import PanelRegistry
 from ..focus_metric import FocusSampler
 from ..integrity import IntegrityMonitor, LogClassifier, StderrCapture
 from ..modes import mode_for
-from ..qt import Qt, QtCore, QtGui, QtWidgets, Signal, Slot
+from ..qt import Qt, QtCore, QtGui, QtWidgets, Slot
 from ..sensors import SensorRegistry
 from ..settings import SettingsStore
 from ..stats import RpiStats
@@ -58,8 +58,6 @@ class _ChipSpec(NamedTuple):
 
 
 class MainWindow(QtWidgets.QMainWindow):
-    first_frame = Signal(float)
-
     _CTRL_SPEC: ClassVar[dict[str, _ChipSpec]] = {
         "exposure_us": _ChipSpec("Exp", "shutter_speed", "ExposureTime", fmt_exposure, "888.8 ms"),
         "gain": _ChipSpec("Gain", "iso", "AnalogueGain", fmt_gain, "88.88x"),
@@ -145,8 +143,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._populate_static()
         mon = settings.get_monitor()
         self._sheets["monitor"].seed(mon)
-        self._histogram_on = mon.histogram
-        if self._histogram_on:
+        if mon.histogram:
             self.engine.set_stats_output(True)
             self.viewfinder_area.set_histogram_enabled(True)
         # CDAF focus map overlay: image statistics, samples only while shown.
@@ -345,8 +342,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.viewfinder_area.tapped.connect(self._on_viewfinder_tapped)
         # Clearing the view resets counts, so the two never disagree.
         self.log_panel.cleared.connect(self.monitor.reset)
-        self.first_frame.connect(self._on_first_frame)
-        self.engine.on_first_frame(lambda boot_time: self.first_frame.emit(boot_time))
+        # picamera2 delivers requests on the GUI thread, so this lands here directly.
+        self.engine.on_first_frame(self._on_first_frame)
 
     @staticmethod
     def _is_mono(sensor, options: list[str]) -> bool:
@@ -397,7 +394,7 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.sensor_btn.setText(f" Sensor: {name} ({cur['port']}{variant})")
 
-        detected = self.engine.info.model if self.engine.info is not None else None
+        detected = self.engine.info.get("Model")
         overlay = cur["overlay"]
         if not detected:
             glyph, color, tip = "error", "#e06c75", "No camera detected by libcamera"
@@ -424,15 +421,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _refresh_mode_status(self) -> None:
         """Update the merged Mode chip. Compact drops the format token."""
-        m = self.engine.sensor_mode
-        if m and m.get("format") and m.get("size"):
-            w, h = m["size"]
-            if self._profile.compact:
-                self.mode_btn.setText(f" {w}x{h}")
-            else:
-                self.mode_btn.setText(f" Mode: {m['format']} {w}x{h}")
-        else:
+        m = self.engine.current_mode
+        if m is None:
             self.mode_btn.setText(" --" if self._profile.compact else " Mode: --")
+        elif self._profile.compact:
+            self.mode_btn.setText(f" {m.width}x{m.height}")
+        else:
+            self.mode_btn.setText(f" Mode: {m.label()}")
         self.mode_btn.setIcon(icons.icon("tune", self._profile.icon_px))
 
     def _refresh_control_buttons(self) -> None:
@@ -450,7 +445,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.status.set_rpi_stats(texts)
         self.viewfinder_area.update_stats(texts)
 
-    @Slot(float)
     def _on_first_frame(self, boot_time: float) -> None:
         self.log_panel.set_boot_time(boot_time)
         log.info("first frame at boot time=%.1fs", boot_time)
@@ -474,8 +468,9 @@ class MainWindow(QtWidgets.QMainWindow):
         # Not every sensor offers SensorTemperature. None keeps the last reading.
         self.status.set_temperature(md.get("SensorTemperature"))
         # Engine latches ISP histogram off any frame carrying stats, survives frames
-        # without blob (libcamera skips some above 30 fps).
-        if self._histogram_on and self.engine.latest_histogram is not None:
+        # without blob (libcamera skips some above 30 fps). Overlays drop the push
+        # while hidden.
+        if self.engine.latest_histogram is not None:
             self.viewfinder_area.update_histogram(self.engine.latest_histogram)
         if self.focus_sampler.sampling:
             self.focus_sampler.poll()
@@ -906,9 +901,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.settings.set_backlight(self._backlight_pct)
 
     def _apply_histogram(self, enabled: bool) -> None:
-        self._histogram_on = bool(enabled)
-        self.engine.set_stats_output(self._histogram_on)
-        self.viewfinder_area.set_histogram_enabled(self._histogram_on)
+        self.engine.set_stats_output(enabled)
+        self.viewfinder_area.set_histogram_enabled(enabled)
         self._refresh_monitor_chip()
         log.info("histogram overlay %s", "on" if enabled else "off")
 
