@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""CDAF focus sampler: score, trend, heat and shared sampling ownership."""
+"""CDAF focus sampler: center metric, heat and shared sampling ownership."""
 
 from __future__ import annotations
 
@@ -41,34 +41,25 @@ class TestFocusMetric:
         if grid is None:
             grid = np.full((8, 8), value, dtype=np.uint64)
         engine.telemetry.metadata = {"grid": grid}
-        sampler._poll()
+        sampler.poll()
 
     def test_center_score_reads_the_middle_cells(self):
         grid = np.ones((8, 8), dtype=np.uint64)
         grid[3:5, 3:5] = 100
         assert center_score(grid) == pytest.approx(100.0)
 
-    def test_score_holds_the_peak(self):
-        """Which is what says how close this is to the best focus seen."""
+    def test_the_metric_is_the_center_of_the_grid(self):
         sampler, engine, got = self._sampler()
         for value in (100, 200, 150):
             self._feed(sampler, engine, value)
-        assert [round(s.score, 3) for s in got] == [1.0, 1.0, 0.75]
-
-    def test_trend_says_which_way_to_turn(self):
-        sampler, engine, got = self._sampler()
-        for value in (100, 200, 100, 1005):
-            self._feed(sampler, engine, value)
-        # First sample has nothing to compare, last is a 0.5% wobble from 1000.
-        self._feed(sampler, engine, 1000)
-        assert [s.trend for s in got] == [0, 1, -1, 1, 0]
+        assert [s.raw for s in got] == [100.0, 200.0, 150.0]
 
     def test_a_missing_blob_holds_the_last_reading(self):
         """libcamera can skip the blob on a frame, and a blink reads as a fault."""
         sampler, engine, got = self._sampler()
         self._feed(sampler, engine, 100)
         engine.telemetry.metadata = {}
-        sampler._poll()
+        sampler.poll()
         assert got[-1] is got[-2]
 
     def test_heat_dims_as_sharpness_is_lost(self):
@@ -86,8 +77,10 @@ class TestFocusMetric:
         sampler.set_sampling(True, "sheet")
         sampler.set_sampling(False, "sheet")
         assert engine.stats == [(True, "focus")]
+        assert sampler.sampling
         sampler.set_sampling(False, "map")
         assert engine.stats == [(True, "focus"), (False, "focus")]
+        assert not sampler.sampling
 
     def test_switching_a_readout_on_rewinds_the_peak(self):
         """Or a new reading is judged against a scene its owner never saw."""
@@ -95,7 +88,7 @@ class TestFocusMetric:
         sampler.set_sampling(True, "map")
         self._feed(sampler, engine, 200)
         self._feed(sampler, engine, 50)
-        assert got[-1].score == pytest.approx(0.25)
+        assert got[-1].heat.max() == pytest.approx(0.25)
         sampler.set_sampling(True, "sheet")
         self._feed(sampler, engine, 50)
-        assert got[-1].score == pytest.approx(1.0)
+        assert got[-1].heat.max() == pytest.approx(1.0)
