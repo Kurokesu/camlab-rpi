@@ -6,7 +6,9 @@
 Replaces QGlPicamera2 subsurface path. In-scene QOpenGLWidget keeps UI in one
 surface, plain widgets stack above with translucency. Each dmabuf imported as
 EGLImage to GL_TEXTURE_EXTERNAL_OES, letterboxed draw. set_frosted swaps blur for
-modals. set_assists adds peaking/zebra. Call install_gles_format() before QApplication.
+modals. set_assists adds peaking/zebra. make_mirror adds a display-only twin in
+the same top-level window, drawing the same imports. Call install_gles_format()
+before QApplication.
 """
 
 from __future__ import annotations
@@ -107,7 +109,7 @@ from picamera2.previews.gl_helpers import (
     str_to_fourcc,
 )
 
-from .qt import QOpenGLWidget, QtCore, QtGui
+from .qt import QOpenGLWidget, QtCore, QtGui, Signal
 
 log = logging.getLogger(__name__)
 
@@ -780,6 +782,8 @@ class GlFrameWidget(QOpenGLWidget):
 class GlViewfinder(GlFrameWidget):
     """In-scene zero-copy viewfinder widget driving the picamera2 event loop."""
 
+    frame = Signal(object)  # newest CompletedRequest, mirrors repaint from it
+
     def __init__(self, picam2, parent=None, transform: int = 0, mirror: bool = False):
         super().__init__(_DisplayStream(picam2), parent, transform, mirror)
         self.picamera2 = picam2
@@ -792,6 +796,12 @@ class GlViewfinder(GlFrameWidget):
         self._notifier.activated.connect(self._handle_requests)
         self.running = True
         self.destroyed.connect(lambda: self._teardown())
+
+    def make_mirror(self, transform: int = 0, mirror: bool = False) -> GlFrameWidget:
+        """Display-only twin, same top-level window so contexts share textures."""
+        widget = GlFrameWidget(self._stream, transform=transform, mirror=mirror)
+        self.frame.connect(widget.show_request)
+        return widget
 
     def initializeGL(self) -> None:
         super().initializeGL()
@@ -820,6 +830,7 @@ class GlViewfinder(GlFrameWidget):
         if self.own_current:
             completed_request.acquire()
         self.show_request(completed_request)
+        self.frame.emit(completed_request)
 
     def _teardown(self) -> None:
         if not self.running:

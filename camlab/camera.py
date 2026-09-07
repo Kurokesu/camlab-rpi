@@ -81,6 +81,7 @@ class CameraEngine:
         self.size = tuple(size)  # lores / display size (set on configure)
         self.pixel_format = pixel_format
         self.picam2 = None
+        self.viewfinder: GlViewfinder | None = None
         self.info: dict = {}  # global_camera_info entry: Model, Id, Location, Num
         self.modes: list[SensorMode] = []
         self.main_config: dict = {}
@@ -460,7 +461,11 @@ class CameraEngine:
         return grid.reshape(_CDAF_SIZE, _CDAF_SIZE)
 
     def make_viewfinder(self, transform: int = 0, mirror: bool = False):
-        return GlViewfinder(self.picam2, transform=transform, mirror=mirror)
+        self.viewfinder = GlViewfinder(self.picam2, transform=transform, mirror=mirror)
+        return self.viewfinder
+
+    def make_mirror(self, transform: int = 0, mirror: bool = False):
+        return self.viewfinder.make_mirror(transform=transform, mirror=mirror)
 
     def on_first_frame(self, callback) -> None:
         """Register a one-shot callback(boot_time_s) fired on the first frame."""
