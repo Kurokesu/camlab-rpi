@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Output layout, cursor policy and panel backlight.
+"""Output layout, screen topology, cursor policy and panel backlight.
 
 Connected heads decide layout, display setting matters only when both are
 present. Switching via wlr-randr. Cursor follows input events, not
@@ -279,11 +279,31 @@ def _all_lit(targets: Iterable[Target]) -> bool:
     return all(n.name in outputs and outputs[n.name].enabled for n in targets)
 
 
+@dataclass(frozen=True)
+class Topology:
+    """Screens as Qt reports them after a hotplug settle."""
+
+    panel: QtCore.QRect | None
+    monitor: QtCore.QRect | None
+    bounds: QtCore.QRect
+
+    @classmethod
+    def from_screens(cls, screens) -> Topology:
+        screens = tuple(screens)
+        by_name = {s.name(): s for s in screens}
+        monitor, panel, _spare = classify(by_name)
+        return cls(
+            panel=by_name[panel].geometry() if panel else None,
+            monitor=by_name[monitor].geometry() if monitor else None,
+            bounds=screens[0].virtualGeometry() if screens else QtCore.QRect(),
+        )
+
+
 class DisplayManager(QtCore.QObject):
     """Applies output layout at boot and after every hotplug settle."""
 
-    # Active QScreen after every enforcement pass, no-ops included.
-    display_changed = Signal(object)
+    # Topology after every enforcement pass, no-ops and empty screen lists included.
+    topology_changed = Signal(object)
 
     def __init__(self, app: QtWidgets.QApplication, get_mode: Callable[[], DisplayMode]):
         super().__init__(app)
@@ -306,9 +326,7 @@ class DisplayManager(QtCore.QObject):
         QtCore.QTimer.singleShot(_SETTLE_MS, self._emit_changed)
 
     def _emit_changed(self) -> None:
-        screen = self._app.primaryScreen()
-        if screen is not None:
-            self.display_changed.emit(screen)
+        self.topology_changed.emit(Topology.from_screens(self._app.screens()))
 
 
 class CursorPolicy(QtCore.QObject):

@@ -1,9 +1,11 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Output layout table, wlr-randr parsing, mode choice and touch matrix."""
+"""Output layout table, wlr-randr parsing, mode choice, touch matrix and topology."""
 
 from __future__ import annotations
+
+from types import SimpleNamespace
 
 import pytest
 
@@ -12,6 +14,7 @@ from camlab.display import (
     Mode,
     Output,
     Target,
+    Topology,
     classify,
     native_mode,
     parse_outputs,
@@ -19,6 +22,7 @@ from camlab.display import (
     plan_layout,
     touch_matrix,
 )
+from camlab.qt import QtCore
 from camlab.settings import DisplayMode
 
 REPORT = """DSI-2 "(null) (null) (DSI-2)"
@@ -266,3 +270,85 @@ def test_apply_never_disables_when_target_did_not_light(rig, monkeypatch):
     monkeypatch.setattr(display, "_wlr_randr", lambda args=(): dark_monitor)
     display.apply_output_layout(DisplayMode.EXTERNAL)
     assert rig == [TOUCH_CLEAR]
+
+
+PANEL_RECT = QtCore.QRect(0, 0, 800, 480)
+MONITOR_RECT = QtCore.QRect(800, 0, 1920, 1080)
+UNION_RECT = QtCore.QRect(0, 0, 2720, 1080)
+
+
+def _screen(name: str, geometry: QtCore.QRect, virtual: QtCore.QRect) -> SimpleNamespace:
+    """QScreen stand-in, only the three methods Topology reads."""
+    return SimpleNamespace(
+        name=lambda: name, geometry=lambda: geometry, virtualGeometry=lambda: virtual
+    )
+
+
+def test_topology_panel_only():
+    topo = Topology.from_screens([_screen("DSI-2", PANEL_RECT, PANEL_RECT)])
+    assert topo == Topology(panel=PANEL_RECT, monitor=None, bounds=PANEL_RECT)
+
+
+def test_topology_monitor_only():
+    monitor = QtCore.QRect(0, 0, 1920, 1080)
+    topo = Topology.from_screens([_screen("HDMI-A-1", monitor, monitor)])
+    assert topo == Topology(panel=None, monitor=monitor, bounds=monitor)
+
+
+def test_topology_panel_and_monitor():
+    topo = Topology.from_screens(
+        [_screen("DSI-2", PANEL_RECT, UNION_RECT), _screen("HDMI-A-1", MONITOR_RECT, UNION_RECT)]
+    )
+    assert topo == Topology(panel=PANEL_RECT, monitor=MONITOR_RECT, bounds=UNION_RECT)
+
+
+def test_topology_ignores_spare_hdmi():
+    spare = QtCore.QRect(2720, 0, 1920, 1080)
+    union = QtCore.QRect(0, 0, 4640, 1080)
+    topo = Topology.from_screens(
+        [
+            _screen("HDMI-A-2", spare, union),
+            _screen("DSI-2", PANEL_RECT, union),
+            _screen("HDMI-A-1", MONITOR_RECT, union),
+        ]
+    )
+    assert topo == Topology(panel=PANEL_RECT, monitor=MONITOR_RECT, bounds=union)
+
+
+def test_topology_no_screens():
+    topo = Topology.from_screens([])
+    assert topo.panel is None
+    assert topo.monitor is None
+    assert topo.bounds == QtCore.QRect()
+    assert topo.bounds.isNull()
+
+
+class FakeApp(QtCore.QObject):
+    """QObject parent for DisplayManager with a scripted screen list."""
+
+    def __init__(self, screens):
+        super().__init__()
+        self._screens = screens
+
+    def screens(self):
+        return self._screens
+
+
+def test_manager_emits_topology_with_no_screens():
+    manager = display.DisplayManager(FakeApp([]), lambda: DisplayMode.EXTERNAL)
+    seen: list[Topology] = []
+    manager.topology_changed.connect(seen.append)
+    manager._emit_changed()
+    assert seen == [Topology(panel=None, monitor=None, bounds=QtCore.QRect())]
+
+
+def test_manager_emits_topology_from_app_screens():
+    screens = [
+        _screen("DSI-2", PANEL_RECT, UNION_RECT),
+        _screen("HDMI-A-1", MONITOR_RECT, UNION_RECT),
+    ]
+    manager = display.DisplayManager(FakeApp(screens), lambda: DisplayMode.BOTH)
+    seen: list[Topology] = []
+    manager.topology_changed.connect(seen.append)
+    manager._emit_changed()
+    assert seen == [Topology(panel=PANEL_RECT, monitor=MONITOR_RECT, bounds=UNION_RECT)]

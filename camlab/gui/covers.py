@@ -10,22 +10,27 @@ compositor cannot strand black. Switch does not: oversized is mid-relayout.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from ..qt import Qt, QtCore, QtWidgets, Signal
 
-
-def _screen_width(window: QtWidgets.QWidget) -> int | None:
-    screen = window.screen() or QtWidgets.QApplication.primaryScreen()
-    return None if screen is None else screen.geometry().width()
+TargetRect = Callable[[], QtCore.QRect | None]
 
 
 class _Cover(QtWidgets.QWidget):
-    def __init__(self, host: QtWidgets.QWidget, window: QtWidgets.QWidget):
+    def __init__(self, host: QtWidgets.QWidget, window: QtWidgets.QWidget, target: TargetRect):
         super().__init__(host)
         self._host = host
         self._window = window
+        # Window has settled once it spans this rect
+        self._target = target
         # Plain QWidget subclasses ignore QSS backgrounds without this attribute.
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet("background: #000;")
+
+    def _target_width(self) -> int | None:
+        rect = self._target()
+        return None if rect is None else rect.width()
 
     def _single_shot(self, ms: int, slot) -> QtCore.QTimer:
         timer = QtCore.QTimer(self)
@@ -44,10 +49,11 @@ class BootCover(_Cover):
     _RETRY_MS = 3000
     _MAX_TRIES = 10
 
-    def __init__(self, host: QtWidgets.QWidget, window: QtWidgets.QWidget):
-        super().__init__(host, window)
+    def __init__(self, host: QtWidgets.QWidget, window: QtWidgets.QWidget, target: TargetRect):
+        super().__init__(host, window, target)
         screen = QtWidgets.QApplication.primaryScreen()
-        g = screen.geometry() if screen is not None else host.rect()
+        # Virtual geometry spans every lit screen, as the window will
+        g = screen.virtualGeometry() if screen is not None else host.rect()
         self.setGeometry(0, 0, g.width(), g.height())
         self.raise_()
         # Show now so cover does not depend on construction order.
@@ -63,7 +69,7 @@ class BootCover(_Cover):
 
     @property
     def settled(self) -> bool:
-        width = _screen_width(self._window)
+        width = self._target_width()
         return width is not None and self._window.width() >= width - 1
 
     def on_resize(self) -> bool:
@@ -103,8 +109,8 @@ class SwitchCover(_Cover):
     _SETTLE_MS = 200
     _TIMEOUT_MS = 4000
 
-    def __init__(self, host: QtWidgets.QWidget, window: QtWidgets.QWidget):
-        super().__init__(host, window)
+    def __init__(self, host: QtWidgets.QWidget, window: QtWidgets.QWidget, target: TargetRect):
+        super().__init__(host, window, target)
         self.hide()
 
         self._settle = self._single_shot(self._SETTLE_MS, self.lift)
@@ -133,7 +139,7 @@ class SwitchCover(_Cover):
         """Count down to lifting once the window sits at screen width."""
         if not self.isVisible():
             return
-        width = _screen_width(self._window)
+        width = self._target_width()
         if width is not None and abs(self._window.width() - width) <= 1:
             self._settle.start()
         else:

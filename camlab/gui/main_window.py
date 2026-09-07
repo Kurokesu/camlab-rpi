@@ -10,7 +10,7 @@ import logging
 from .. import network, updater
 from ..camera import CameraEngine
 from ..config_manager import ConfigManager, poweroff
-from ..display import Backlight, DisplayManager
+from ..display import Backlight, DisplayManager, Topology
 from ..drm import dsi_blocked_ports
 from ..dsi_panels import PanelRegistry
 from ..focus_metric import FocusSampler
@@ -25,14 +25,16 @@ from .about_dialog import AboutCard
 from .chips import CTRL_SPEC, chip_sample, chip_text, fmt_ct, fmt_exposure, fmt_gain
 from .control_sheet import ControlSheet, MonitorSheet
 from .covers import BootCover, SwitchCover
+from .hybrid_root import HybridRoot, pane_screen, rect_text
 from .log_panel import LogPanel
 from .mode_dialog import ModeCard
+from .monitor_view import MonitorView
 from .overlay import ModalOverlay, message_card
 from .rpi_stats import field_texts
 from .sensor_dialog import SensorCard
 from .settings_dialog import SettingsCard
 from .status_strip import StatusStrip
-from .style import SEV_COLOR, UiProfile, build_stylesheet, forced_screen, profile_for_screen
+from .style import SEV_COLOR, UiProfile, build_stylesheet, forced_screen, profile_for_rect
 from .viewfinder_area import ViewfinderArea
 from .widgets import repolish, vline
 
@@ -71,9 +73,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self._mode_avail = (0, 0)  # viewfinder size captured when mode card opens
         self._engine_started = False
         self._backlight = backlight
-        # Output policy settles before Qt starts, boot-time primary screen is right one.
-        self._profile: UiProfile = profile_for_screen(QtWidgets.QApplication.primaryScreen())
-        self._display_key: tuple | None = None
+        # Output layout settled before Qt started, screens are already final
+        self._topology = Topology.from_screens(QtWidgets.QApplication.screens())
+        self._profile: UiProfile = profile_for_rect(pane_screen(self._topology))
+        self._display_key: Topology | None = None
         self._sev = ""  # worst severity seen, tints log button
         self._log_btn_state: tuple | None = None  # last synced look, skips no-op restyles
         self._chip_values: dict[str, float] = {}  # last metadata reading per chip
@@ -81,22 +84,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setWindowTitle("camlab")
         self.setStyleSheet(build_stylesheet(self._profile))
 
-        central = QtWidgets.QWidget()
-        forced = forced_screen()
-        if forced is None:
-            self.setCentralWidget(central)
-        else:
-            # Panel preview. Cage forces fullscreen, so the UI shrinks, not the window.
-            central.setFixedSize(*forced)
-            wrapper = QtWidgets.QWidget()
-            wrapper.setObjectName("previewBackdrop")
-            wrapper.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-            # Selector scopes the black to the backdrop, a bare rule cascades.
-            wrapper.setStyleSheet("QWidget#previewBackdrop { background: #000; }")
-            grid = QtWidgets.QGridLayout(wrapper)
-            grid.setContentsMargins(0, 0, 0, 0)
-            grid.addWidget(central, 0, 0, Qt.AlignmentFlag.AlignCenter)
-            self.setCentralWidget(wrapper)
+        self._root = HybridRoot(self._make_monitor_view, forced_screen())
+        central = self._root.panel_pane
+        self.setCentralWidget(self._root)
         # Focus sink: empty chrome click parks focus here, not on button.
         central.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         root = QtWidgets.QVBoxLayout(central)
@@ -142,15 +132,17 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._build_shortcuts()
         self._build_timers()
+        # Panes go last, a monitor view reads the sheets and sampler built above
+        self._root.set_topology(self._topology)
 
         # Black covers over chrome: boot until first fullscreen, switch across a hotplug.
-        self._boot_cover: BootCover | None = BootCover(central, self)
+        self._boot_cover: BootCover | None = BootCover(self._root, self, self._screen_rect)
         self._boot_cover.revealed.connect(self._on_boot_revealed)
-        self._switch_cover = SwitchCover(central, self)
+        self._switch_cover = SwitchCover(self._root, self, self._screen_rect)
 
         self._watch_screens()
         if display_manager is not None:
-            display_manager.display_changed.connect(self._on_display_changed)
+            display_manager.topology_changed.connect(self._on_topology_changed)
 
     # construction
     def _build_sheets(self) -> None:
@@ -314,6 +306,11 @@ class MainWindow(QtWidgets.QMainWindow):
         app.primaryScreenChanged.connect(lambda _s: self._resync_fullscreen())
         for scr in app.screens():
             scr.geometryChanged.connect(lambda _g: self._resync_fullscreen())
+
+    def _make_monitor_view(self, parent: QtWidgets.QWidget) -> MonitorView:
+        """Called once both heads are lit, the mirror needs the panel viewfinder first."""
+        sheet = self._sheets["monitor"]
+        return MonitorView(self.engine, self.focus_sampler, lambda: sheet.state, parent)
 
     # wiring
     def _wire(self) -> None:
@@ -670,7 +667,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Overlay traps Tab. Backdrop press cancels, same as Escape. Enter/Escape are shortcuts.
         margin = 16 if self._profile.compact else 40
         self._overlay = ModalOverlay(
-            self.centralWidget(),
+            self._root.panel_pane,
             card,
             clear_rect=clear,
             margin=margin,
@@ -694,7 +691,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._show_message("No modes", "No selectable sensor modes were enumerated")
             return
         # Viewfinder area at open time sizes the new mode's lores stream.
-        self._mode_avail = self.viewfinder_area.lores_size()
+        self._mode_avail = self._lores_avail()
         card = ModeCard(
             self.engine.modes,
             self.engine.current_mode,
@@ -942,31 +939,35 @@ class MainWindow(QtWidgets.QMainWindow):
         if self._boot_cover is None:  # boot cover already blanks everything
             self._switch_cover.blank()
 
-    def _on_display_changed(self, screen) -> None:
-        """Output settled: swap profile and fullscreen. Lores refit follows the resize."""
-        g = screen.geometry()
-        key = (screen.name(), g.width(), g.height())
-        if key == self._display_key:
+    def _on_topology_changed(self, topology) -> None:
+        """Outputs settled: place panes, swap profile and fullscreen, refit lores."""
+        self._topology = topology
+        self._root.set_topology(topology)
+        if topology == self._display_key:
             return
-        self._display_key = key
-        log.info("display: %s %dx%d", screen.name(), g.width(), g.height())
-        profile = profile_for_screen(screen)
+        self._display_key = topology
+        log.info(
+            "display: panel %s, monitor %s, bounds %s",
+            rect_text(topology.panel),
+            rect_text(topology.monitor),
+            rect_text(topology.bounds),
+        )
+        profile = profile_for_rect(pane_screen(topology))
         if profile != self._profile:
             self._apply_profile(profile)
         self._resync_fullscreen()
+        self._refit_timer.start()
         QtCore.QTimer.singleShot(0, self._check_chrome_fit)
 
     def _check_chrome_fit(self) -> None:
         """Chrome wider than the screen clips silently, so say so loudly."""
-        screen = self.screen()
-        if screen is None:
-            return
-        hint = self.minimumSizeHint().width()
-        if hint > screen.geometry().width():
+        pane = self._root.panel_pane
+        hint = pane.minimumSizeHint().width()
+        if hint > pane.width():
             log.warning(
                 "chrome minimum width %d px exceeds the %d px screen, right edge will clip",
                 hint,
-                screen.geometry().width(),
+                pane.width(),
             )
 
     def _apply_profile(self, profile: UiProfile) -> None:
@@ -997,11 +998,19 @@ class MainWindow(QtWidgets.QMainWindow):
         self._refresh_monitor_chip()
         self._update_status()
 
+    def _lores_avail(self) -> tuple[int, int]:
+        """Largest viewfinder across both heads, lores never upscales on either."""
+        sizes = [self.viewfinder_area.lores_size()]
+        monitor = self._root.monitor_view
+        if monitor is not None and not monitor.isHidden():
+            sizes.append(monitor.viewfinder_area.lores_size())
+        return max(sizes, key=lambda s: s[0] * s[1])
+
     def _refit_lores(self) -> None:
         if not self._engine_started:
             return
         try:
-            if self.engine.refit_lores(self.viewfinder_area.lores_size()):
+            if self.engine.refit_lores(self._lores_avail()):
                 log.info("lores stream refit to %dx%d", *self.engine.size)
         except Exception as exc:  # noqa: BLE001
             log.error("lores refit failed: %s", exc)
@@ -1010,11 +1019,17 @@ class MainWindow(QtWidgets.QMainWindow):
         # Deferred so Qt finishes updating its QScreen state first.
         QtCore.QTimer.singleShot(0, self._apply_fullscreen)
 
-    def _apply_fullscreen(self) -> None:
+    def _screen_rect(self) -> QtCore.QRect | None:
+        """Union of lit screens, Qt's placeholder screen when none is lit."""
+        if not self._topology.bounds.isEmpty():
+            return self._topology.bounds
         screen = self.screen() or QtWidgets.QApplication.primaryScreen()
-        if screen is None:
+        return None if screen is None else screen.geometry()
+
+    def _apply_fullscreen(self) -> None:
+        g = self._screen_rect()
+        if g is None:
             return
-        g = screen.geometry()
         if self._boot_cover is not None:
             self._boot_cover.sync_geometry(g)
         if self.isFullScreen() and abs(self.width() - g.width()) <= 1:
