@@ -14,6 +14,7 @@ camlabctl rec                  # record live kiosk (needs wf-recorder)
 camlabctl tap <x> <y>          # click in live kiosk (needs wlrctl)
 camlabctl log-level debug      # set log level (follow with camlabctl restart)
 camlabctl net off|on|status    # toggle networking
+camlabctl touch <a..f>|clear   # set or clear touchscreen calibration
 camlabctl rw                   # boot writable next time
 camlabctl ro                   # boot read-only next time
 ```
@@ -46,6 +47,10 @@ Remove the drop-in to return to full-screen rendering:
 sudo rm -r /etc/systemd/system/camlab.service.d
 sudo systemctl daemon-reload && camlabctl restart
 ```
+
+## Touch calibration
+
+In Both display mode the window spans panel and monitor, so touch is confined to the panel by a libinput calibration matrix. `camlabctl touch <a> <b> <c> <d> <e> <f>` writes it to `/run/udev/rules.d/90-camlab-touchmap.rules` and re-adds every touchscreen node (libinput reads the matrix at device add only), `camlabctl touch clear` removes the rule the same way. camlab calls both through sudoers, and a rule under `/run` does not survive a reboot.
 
 ## Read-only root
 

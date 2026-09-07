@@ -41,7 +41,7 @@ Flash Raspberry Pi OS $\color{#CA2031}{\textbf{\textsf{Lite}}}$ (Trixie 64-bit) 
 Connect and boot:
 
 - Connect your camera module to either CSI port (CM5 needs extra steps, see [CM5 IO board](#cm5-io-board))
-- Attach HDMI display (1920×1080 recommended, other resolutions untested) or a DSI touch panel (see [Touch display](#touch-display))
+- Attach HDMI display or a DSI touch panel (see [Touch display](#touch-display))
 - Connect keyboard and/or mouse
 - Connect Ethernet, unless Wi-Fi was configured in Imager (install needs internet)
 - Insert SD card and power on your Pi
