@@ -702,7 +702,9 @@ class GlViewfinder(QOpenGLWidget):
         """Activate the assist (peaking/zebra) program with per-frame uniforms."""
         self._use(self._prog_fx)
         loc = self._fx_locs
-        sx, sy = self._peak_basis(vw, vh)
+        # Step never finer than one source texel
+        sw, sh = self._displayed(*self._display_size())
+        sx, sy = self._peak_basis(min(vw, sw), min(vh, sh))
         glUniform2f(loc["stepX"], *sx)
         glUniform2f(loc["stepY"], *sy)
         # Guide is display oriented, so the same step unrotated, y flipped
