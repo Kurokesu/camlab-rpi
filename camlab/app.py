@@ -22,7 +22,7 @@ from .integrity import LOG_DATEFMT, LOG_FORMAT, LogClassifier, NullCapture, Stde
 from .modes import resolve_initial_mode
 from .qt import QtWidgets
 from .sensors import SensorRegistry
-from .settings import DisplayMode, SettingsStore
+from .settings import AwbMode, DisplayMode, SettingsStore
 
 log = logging.getLogger("camlab")
 
@@ -117,6 +117,7 @@ def main(argv: list[str] | None = None) -> int:
             engine.configure_mode(mode, fps, avail, fps_fixed=saved["fps_fixed"] if saved else True)
             # Restore manual overrides after configure, so they clamp to the new ranges.
             engine.set_control_state(**settings.get_controls(overlay))
+            engine.set_grey_world(settings.get_awb() is AwbMode.GREY)
         except Exception as exc:  # noqa: BLE001
             log.error("camera configure failed: %s", exc)
 
