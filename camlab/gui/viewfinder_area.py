@@ -4,7 +4,7 @@
 """ViewfinderArea hosts live viewfinder widget.
 
 Owns main layout slot, exposes frost toggle for modals. Viewfinder renders in-scene,
-overlays stack above.
+overlays stack above. Takes a pre-made mirror widget for a display-only twin.
 """
 
 from __future__ import annotations
@@ -21,7 +21,13 @@ class ViewfinderArea(QtWidgets.QWidget):
     # Press on the picture, dismisses whatever control is open over it.
     tapped = Signal()
 
-    def __init__(self, engine, parent: QtWidgets.QWidget | None = None):
+    def __init__(
+        self,
+        engine,
+        parent: QtWidgets.QWidget | None = None,
+        *,
+        live: QtWidgets.QWidget | None = None,
+    ):
         super().__init__(parent)
         self._engine = engine
         self._frosted = False
@@ -30,8 +36,10 @@ class ViewfinderArea(QtWidgets.QWidget):
         lay = QtWidgets.QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
 
-        if engine.picam2 is not None:
-            self._live: QtWidgets.QWidget = engine.make_viewfinder()
+        if live is not None:
+            self._live: QtWidgets.QWidget = live
+        elif engine.picam2 is not None:
+            self._live = engine.make_viewfinder()
             # Evaluation hook: boot with live frost on to judge the shader.
             if os.environ.get("CAMLAB_FROST"):
                 self.set_frost(True)
