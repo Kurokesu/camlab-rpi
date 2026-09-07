@@ -3,8 +3,9 @@
 
 """Settings card: app-level system options, one row per setting.
 
-Panel brightness on a touch display, networking toggle and a drill-in to
-About. Apply only acts on changed rows. Brightness applies live while dragging.
+Brightness and display choice when a built-in display is present, networking
+toggle and a drill-in to About. Apply only acts on changed rows. Brightness
+and display apply live.
 """
 
 from __future__ import annotations
@@ -12,8 +13,10 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from .. import network
-from ..display import BACKLIGHT_FLOOR_PCT
+from ..display import BACKLIGHT_FLOOR_PCT, apply_output_layout
+from ..drm import has_dsi_display
 from ..qt import Qt, QtWidgets
+from ..settings import DisplayMode, SettingsStore
 from . import icons
 from .control_sheet import JumpSlider
 from .widgets import SegmentedSelector, hline
@@ -24,6 +27,7 @@ _ICON_PX = 20
 class SettingsCard(QtWidgets.QFrame):
     def __init__(
         self,
+        settings: SettingsStore,
         backlight_pct: int | None,
         on_apply_network: Callable[[bool], None],
         on_backlight: Callable[[int], bool],
@@ -33,6 +37,7 @@ class SettingsCard(QtWidgets.QFrame):
         super().__init__()
         self.setObjectName("modalCard")
         self.setMinimumWidth(420)
+        self._settings = settings
         self._on_apply_network = on_apply_network
         self._on_backlight = on_backlight
         self._on_cancel = on_cancel
@@ -60,6 +65,25 @@ class SettingsCard(QtWidgets.QFrame):
             bl_row.addWidget(self.backlight_slider, 1)
             bl_row.addWidget(self.backlight_lbl)
             form.addRow("Brightness:", bl_row)
+
+        if has_dsi_display():
+            disp_label = QtWidgets.QLabel()
+            disp_label.setPixmap(icons.pixmap("monitor", _ICON_PX, "#8a909b"))
+            disp_row = QtWidgets.QHBoxLayout()
+            disp_row.setSpacing(8)
+            self.display_sel = SegmentedSelector()
+            self.display_sel.set_options(
+                [
+                    ("External", DisplayMode.EXTERNAL),
+                    ("Built-in", DisplayMode.BUILTIN),
+                    ("Both", DisplayMode.BOTH),
+                ],
+                current=settings.get_display(),
+            )
+            self.display_sel.changed.connect(self._on_display_changed)
+            disp_row.addWidget(disp_label)
+            disp_row.addWidget(self.display_sel, 1)
+            form.addRow("Display:", disp_row)
 
         net_label = QtWidgets.QLabel()
         net_label.setPixmap(
@@ -116,6 +140,12 @@ class SettingsCard(QtWidgets.QFrame):
         else:  # write failed, stop pretending the slider works
             self.backlight_slider.setEnabled(False)
             self.backlight_lbl.setText("n/a")
+
+    def _on_display_changed(self) -> None:
+        mode = self.display_sel.current_value()
+        # Persist first, hotplug settle re-applies from the store
+        self._settings.set_display(mode)
+        apply_output_layout(mode)
 
     def _refresh_apply(self) -> None:
         """Apply is live only when a selection changed."""

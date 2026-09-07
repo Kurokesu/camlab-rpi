@@ -812,6 +812,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if self._profile.compact and self._backlight is not None and self._backlight.available:
             backlight_pct = self._backlight.get_percent()
         card = SettingsCard(
+            settings=self.settings,
             backlight_pct=backlight_pct,
             on_apply_network=self._apply_network,
             on_backlight=self._on_backlight,
