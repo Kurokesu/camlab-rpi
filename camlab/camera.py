@@ -3,10 +3,10 @@
 
 """CameraEngine - Picamera2 wrapper for bench viewfinder.
 
-Owns Picamera2 instance, mode enumeration, control state and coalesced pipeline
-flush. raw carries sensor mode, main is full-res ISP, lores (YUV420) feeds GL
-viewfinder. Fixed FPS pins FrameDurationLimits min == max, exposure driven
-widens max toward 1 s.
+Owns Picamera2 instance, mode enumeration, control state, software grey world
+AWB and coalesced pipeline flush. raw carries sensor mode, main is full-res ISP,
+lores (YUV420) feeds GL viewfinder. Fixed FPS pins FrameDurationLimits min ==
+max, exposure driven widens max toward 1 s.
 """
 
 from __future__ import annotations
@@ -40,7 +40,8 @@ _UNSET = object()
 
 # PispStatsOutput blob layout, packed struct pisp_statistics from
 # pisp_fe_statistics.h: AWB zones, AGC, CDAF focus grid
-_AWB_BYTES = (32 * 32 + 4) * 16  # zones + floating, 16 B each
+_AWB_ZONES = 32 * 32
+_AWB_BYTES = (_AWB_ZONES + 4) * 16  # zones + floating, 16 B each
 _AGC_ROW_SUMS_BYTES = 512 * 4
 _AGC_HIST_BINS = 1024
 _AGC_HIST_OFFSET = _AWB_BYTES + _AGC_ROW_SUMS_BYTES
@@ -56,6 +57,37 @@ _SLOW_FRAME_US = 100_000
 
 _MISSED_FRAME_GAP = 1.5  # frames
 _CALLBACK_SPACING_WINDOW = 16  # frames
+
+# Grey world AWB. Frontend sums zones before white balance gains apply, so G/R
+# and G/B give the gains outright. Zone thresholds are libcamera's defaults
+_GREY_WORLD_OWNER = "grey_world"
+_AWB_ZONE_MIN_PIXELS = 16
+_AWB_ZONE_MIN_G = 32  # 16-bit scale
+_AWB_MIN_ZONES = 10
+_AWB_TRIM_FRACTION = 0.25
+_WB_GAIN_RANGE = (0.5, 4.0)
+_WB_SPEED = 0.25  # per stats frame
+_WB_EPSILON = 0.005
+
+
+def grey_world_gains(zones: np.ndarray) -> tuple[float, float] | None:
+    """(red, blue) gains equalising lit AWB zones, middle half by G/R and by G/B."""
+    zones = zones.astype(np.float64)
+    counted = zones[:, 3]
+    lit = counted >= _AWB_ZONE_MIN_PIXELS
+    means = zones[lit, :3] / counted[lit, None]
+    means = means[means[:, 1] >= _AWB_ZONE_MIN_G]
+    if len(means) <= _AWB_MIN_ZONES:
+        return None
+    r, g, b = means.T
+    trim = int(len(means) * _AWB_TRIM_FRACTION)
+    middle = slice(trim, len(means) - trim)
+    by_r = np.argsort(g / (r + 1))[middle]
+    by_b = np.argsort(g / (b + 1))[middle]
+    gain_r = g[by_r].sum() / (r[by_r].sum() + 1)
+    gain_b = g[by_b].sum() / (b[by_b].sum() + 1)
+    lo, hi = _WB_GAIN_RANGE
+    return float(np.clip(gain_r, lo, hi)), float(np.clip(gain_b, lo, hi))
 
 
 @dataclass
@@ -93,6 +125,10 @@ class CameraEngine:
         self._main_size: tuple[int, int] | None = None
         self._raw = False
         self.control_state = ControlState()
+        self.grey_world = False  # software AWB in place of libcamera's while auto
+        self._grey_world_on = False  # grey_world in effect: auto WB on a colour sensor
+        self._wb_gains: tuple[float, float] | None = None  # smoothed (red, blue)
+        self._wb_applied: tuple[float, float] | None = None
         self.stats_output = False  # ISP statistics in metadata
         self._stats_owners: set[str] = set()
         # Latch histogram because stats arrive below frame rate.
@@ -332,9 +368,29 @@ class CameraEngine:
                 c = self._clamped(key, v)
                 setattr(st, key, type(v)(c) if c is not None else None)
 
+    def set_grey_world(self, enabled: bool) -> None:
+        """Pick software grey world over libcamera AWB while white balance is auto."""
+        self.grey_world = bool(enabled)
+        self._apply_controls()
+
+    def _sync_grey_world(self) -> None:
+        """Hold the stats blob only while grey world drives white balance."""
+        on = (
+            self.grey_world
+            and self.control_state.colour_temp is None
+            and "colour_temp" in self.control_ranges()
+        )
+        if on == self._grey_world_on:
+            return
+        self._grey_world_on = on
+        self._wb_gains = None
+        self._wb_applied = None
+        self.set_stats_output(on, owner=_GREY_WORLD_OWNER)
+
     def _apply_controls(self) -> None:
         if self.picam2 is None:
             return
+        self._sync_grey_world()
         st = self.control_state
         ctrls: dict = {}
         # 0 = auto, 1 = manual (libcamera split AE API, always present on the fork).
@@ -344,7 +400,12 @@ class CameraEngine:
         ctrls["AnalogueGainMode"] = 0 if st.gain is None else 1
         if st.gain is not None:
             ctrls["AnalogueGain"] = float(st.gain)
-        if "colour_temp" in self.control_ranges():
+        if self._grey_world_on:
+            ctrls["AwbEnable"] = False
+            # A restart wipes pending controls, so the last gains go again
+            if self._wb_applied is not None:
+                ctrls["ColourGains"] = self._wb_applied
+        elif "colour_temp" in self.control_ranges():
             ctrls["AwbEnable"] = st.colour_temp is None
             if st.colour_temp is not None:
                 ctrls["ColourTemperature"] = int(st.colour_temp)
@@ -448,6 +509,40 @@ class CameraEngine:
         return np.frombuffer(raw, dtype=np.uint32, count=_AGC_HIST_BINS, offset=_AGC_HIST_OFFSET)
 
     @staticmethod
+    def awb_zones(metadata: dict) -> np.ndarray | None:
+        """32x32 AWB zones as rows of R sum, G sum, B sum and pixel count."""
+        blob = metadata.get("PispStatsOutput")
+        if not blob:
+            return None
+        raw = bytes(blob)
+        if len(raw) < _AWB_ZONES * 16:
+            return None
+        return np.frombuffer(raw, dtype=np.uint32, count=_AWB_ZONES * 4).reshape(-1, 4)
+
+    def _grey_world_step(self, metadata: dict) -> None:
+        """Ease gains toward the grey world target, push once they moved past epsilon."""
+        zones = self.awb_zones(metadata)
+        target = grey_world_gains(zones) if zones is not None else None
+        if target is None:
+            return
+        cur = self._wb_gains
+        if cur is None:
+            gains = target
+        else:
+            gains = tuple(c + (t - c) * _WB_SPEED for c, t in zip(cur, target, strict=True))
+        self._wb_gains = gains
+        applied = self._wb_applied
+        if applied is not None and all(
+            abs(g - a) <= _WB_EPSILON for g, a in zip(gains, applied, strict=True)
+        ):
+            return
+        self._wb_applied = gains
+        try:
+            self.picam2.set_controls({"ColourGains": gains})
+        except Exception:
+            log.exception("grey world ColourGains update failed")
+
+    @staticmethod
     def cdaf_focus(metadata: dict) -> np.ndarray | None:
         """8x8 grid of CDAF focus figures of merit."""
         blob = metadata.get("PispStatsOutput")
@@ -510,6 +605,8 @@ class CameraEngine:
             hist = self.agc_histogram(md)
             if hist is not None:
                 self.latest_histogram = hist
+        if self._grey_world_on:
+            self._grey_world_step(md)
         if not self._first_frame_seen:
             self._first_frame_seen = True
             boot_time = time.clock_gettime(time.CLOCK_BOOTTIME)
