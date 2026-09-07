@@ -6,8 +6,6 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
-from typing import ClassVar, NamedTuple
 
 from .. import network, updater
 from ..camera import CameraEngine
@@ -24,7 +22,8 @@ from ..settings import SettingsStore
 from ..stats import RpiStats
 from . import icons
 from .about_dialog import AboutCard
-from .control_sheet import ControlSheet, MonitorSheet, fmt_ct, fmt_exposure, fmt_gain
+from .chips import CTRL_SPEC, chip_sample, chip_text, fmt_ct, fmt_exposure, fmt_gain
+from .control_sheet import ControlSheet, MonitorSheet
 from .covers import BootCover, SwitchCover
 from .log_panel import LogPanel
 from .mode_dialog import ModeCard
@@ -47,23 +46,7 @@ _ACCENT_OFF = "#d7dae0"
 _PAINT_MS = 80
 
 
-class _ChipSpec(NamedTuple):
-    """One camera-control chip: label, icon, metadata source, formatting."""
-
-    label: str
-    glyph: str
-    md_key: str
-    fmt: Callable[[float], str]
-    sample: str  # widest realistic value, pins chip width
-
-
 class MainWindow(QtWidgets.QMainWindow):
-    _CTRL_SPEC: ClassVar[dict[str, _ChipSpec]] = {
-        "exposure_us": _ChipSpec("Exp", "shutter_speed", "ExposureTime", fmt_exposure, "888.8 ms"),
-        "gain": _ChipSpec("Gain", "iso", "AnalogueGain", fmt_gain, "88.88x"),
-        "colour_temp": _ChipSpec("WB", "wb_sunny", "ColourTemperature", fmt_ct, "8888 K"),
-    }
-
     def __init__(
         self,
         engine: CameraEngine,
@@ -183,7 +166,7 @@ class MainWindow(QtWidgets.QMainWindow):
             sheet.setVisible(False)
             sheet.apply_profile(self._profile)
         self._match_sheet_heights()
-        for key in self._CTRL_SPEC:
+        for key in CTRL_SPEC:
             self._sheets[key].changed.connect(lambda v, k=key: self._on_control_changed(k, v))
         monitor = self._sheets["monitor"]
         monitor.changed.connect(self._on_monitor_changed)
@@ -208,7 +191,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Control chips: live value on button, amber when manual, click opens sheet.
         # Born bare, _populate_static renders icon and placeholder before first paint.
         self._ctrl_buttons: dict[str, QtWidgets.QPushButton] = {
-            key: QtWidgets.QPushButton() for key in self._CTRL_SPEC
+            key: QtWidgets.QPushButton() for key in CTRL_SPEC
         }
         self.monitor_btn = QtWidgets.QPushButton(icons.icon("stroke_partial", px), " Monitor")
         self._sheet_buttons = dict(self._ctrl_buttons, monitor=self.monitor_btn)
@@ -483,7 +466,7 @@ class MainWindow(QtWidgets.QMainWindow):
         reading rather than flashing the placeholder.
         """
         md = self.engine.telemetry.metadata or {}
-        for key, spec in self._CTRL_SPEC.items():
+        for key, spec in CTRL_SPEC.items():
             value = md.get(spec.md_key)
             if value is None:
                 value = self._chip_values.get(key)
@@ -495,9 +478,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _render_chip(self, key: str, value: float | None) -> None:
         """Value text ("--" until metadata) and manual accent. Compact drops label."""
-        spec = self._CTRL_SPEC[key]
-        body = spec.fmt(value) if value is not None else "--"
-        text = f" {body}" if self._profile.compact else f" {spec.label} {body}"
+        spec = CTRL_SPEC[key]
+        text = chip_text(spec, value, self._profile.compact)
         btn = self._ctrl_buttons[key]
         if btn.text() != text:
             btn.setText(text)
@@ -507,10 +489,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _reserve_chip_widths(self) -> None:
         """Pin each chip to its widest realistic value so live data never moves the row."""
-        for key, spec in self._CTRL_SPEC.items():
+        for key, spec in CTRL_SPEC.items():
             btn = self._ctrl_buttons[key]
             btn.ensurePolished()  # sizeHint must measure with the QSS font
-            sample = f" {spec.sample}" if self._profile.compact else f" {spec.label} {spec.sample}"
+            sample = chip_sample(spec, self._profile.compact)
             current = btn.text()
             btn.setText(sample)
             btn.setMinimumWidth(btn.sizeHint().width())

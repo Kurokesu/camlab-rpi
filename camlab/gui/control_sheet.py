@@ -22,24 +22,6 @@ from .widgets import SegmentedSelector, repolish
 _STEPS = 1000
 
 
-def fmt_exposure(us: float) -> str:
-    if us >= 1_000_000:
-        return f"{us / 1_000_000:.2f} s"
-    if us >= 10000:
-        return f"{us / 1000:.1f} ms"
-    if us >= 1000:
-        return f"{us / 1000:.2f} ms"
-    return f"{round(us)} \u00b5s"
-
-
-def fmt_gain(gain: float) -> str:
-    return f"{gain:.2f}x"
-
-
-def fmt_ct(kelvin: float) -> str:
-    return f"{round(kelvin)} K"
-
-
 class JumpSlider(QtWidgets.QSlider):
     """Absolute pointing: press and drag put handle at cursor.
 
