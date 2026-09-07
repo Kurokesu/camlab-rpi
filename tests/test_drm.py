@@ -25,6 +25,41 @@ def test_has_dsi_connector_ignores_status(fake_drm):
     assert drm.has_dsi_connector() is True
 
 
+def test_dsi_display_needs_touchscreen(fake_drm, fake_input):
+    # Bare connector with no panel wired. A mouse reads 0, a pointer prop reads 1.
+    fake_drm({"DSI-2": "connected"})
+    fake_input({"event0": "0", "event1": "1"})
+    assert drm.has_dsi_display() is False
+
+
+def test_dsi_display_with_touchscreen(fake_drm, fake_input):
+    fake_drm({"DSI-2": "connected"})
+    fake_input({"event0": "0", "event8": "2"})
+    assert drm.has_dsi_display() is True
+
+
+def test_touchscreen_alone_is_not_a_dsi_display(fake_drm, fake_input):
+    fake_drm({"HDMI-A-1": "connected"})
+    fake_input({"event8": "2"})
+    assert drm.has_dsi_display() is False
+
+
+def test_malformed_properties_ignored(fake_drm, fake_input):
+    fake_drm({"DSI-2": "connected"})
+    fake_input({"event0": "junk"})
+    assert drm.has_dsi_display() is False
+
+
+def test_dsi_display_survives_touch_readd(fake_drm, fake_input):
+    # Applying the calibration matrix re-adds the device. A live re-read would
+    # flip to False and blank the panel.
+    fake_drm({"DSI-2": "connected"})
+    root = fake_input({"event8": "2"})
+    assert drm.has_dsi_display() is True
+    (root / "event8" / "device" / "properties").unlink()
+    assert drm.has_dsi_display() is True
+
+
 def test_dsi1_blocks_cam0(fake_drm):
     fake_drm({"DSI-1": "connected"})
     assert drm.dsi_blocked_ports() == {"cam0"}

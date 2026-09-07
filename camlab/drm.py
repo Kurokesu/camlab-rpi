@@ -10,11 +10,15 @@ from __future__ import annotations
 
 import logging
 import os
+from functools import cache
 from pathlib import Path
 
 log = logging.getLogger(__name__)
 
 DRM_ROOT = Path(os.environ.get("CAMLAB_DRM_ROOT", "/sys/class/drm"))
+INPUT_ROOT = Path(os.environ.get("CAMLAB_INPUT_ROOT", "/sys/class/input"))
+
+_INPUT_PROP_DIRECT = 1 << 1
 
 
 def connected_connectors() -> set[str]:
@@ -33,6 +37,24 @@ def has_dsi_connector() -> bool:
     """True when a DSI connector exists (a panel overlay is bound).
     DSI has no hotplug detect, so this is static within a boot."""
     return any(DRM_ROOT.glob("card*-DSI-*"))
+
+
+@cache
+def has_dsi_display() -> bool:
+    """True when a DSI display is attached.
+    Touch calibration re-adds the input device, so a live sample can miss it."""
+    return has_dsi_connector() and _has_touchscreen()
+
+
+def _has_touchscreen() -> bool:
+    """Any input device reporting INPUT_PROP_DIRECT."""
+    for props in INPUT_ROOT.glob("event*/device/properties"):
+        try:
+            if int(props.read_text().strip(), 16) & _INPUT_PROP_DIRECT:
+                return True
+        except (OSError, ValueError):
+            continue
+    return False
 
 
 def dsi_blocked_ports() -> set[str]:
