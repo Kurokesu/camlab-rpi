@@ -16,7 +16,6 @@ import logging
 import math
 import os
 import time
-from typing import ClassVar
 
 os.environ.setdefault("PYOPENGL_PLATFORM", "egl")
 
@@ -24,12 +23,6 @@ from OpenGL.EGL.EXT.image_dma_buf_import import (
     EGL_DMA_BUF_PLANE0_FD_EXT,
     EGL_DMA_BUF_PLANE0_OFFSET_EXT,
     EGL_DMA_BUF_PLANE0_PITCH_EXT,
-    EGL_DMA_BUF_PLANE1_FD_EXT,
-    EGL_DMA_BUF_PLANE1_OFFSET_EXT,
-    EGL_DMA_BUF_PLANE1_PITCH_EXT,
-    EGL_DMA_BUF_PLANE2_FD_EXT,
-    EGL_DMA_BUF_PLANE2_OFFSET_EXT,
-    EGL_DMA_BUF_PLANE2_PITCH_EXT,
     EGL_LINUX_DMA_BUF_EXT,
     EGL_LINUX_DRM_FOURCC_EXT,
 )
@@ -40,7 +33,6 @@ from OpenGL.EGL.VERSION.EGL_1_0 import (
     EGL_NONE,
     EGL_WIDTH,
     eglGetCurrentDisplay,
-    eglGetProcAddress,
 )
 from OpenGL.error import Error as OpenGLError
 from OpenGL.GL import shaders
@@ -109,7 +101,11 @@ from OpenGL.GLES3.VERSION.GLES3_3_0 import GL_R8, GL_RED, GL_RG, GL_RG8, glBindV
 # Raw entry point: PyOpenGL wrapper caches array per-context keyed by
 # eglGetCurrentContext(), reads 0 inside QOpenGLWidget and raises.
 from OpenGL.raw.GLES2.VERSION.GLES2_2_0 import glVertexAttribPointer
-from picamera2.previews.gl_helpers import str_to_fourcc
+from picamera2.previews.gl_helpers import (
+    Buffer,
+    glEGLImageTargetTexture2DOES,
+    str_to_fourcc,
+)
 
 from .qt import QOpenGLWidget, QtCore, QtGui
 
@@ -341,23 +337,6 @@ def _compile(src: str, kind):
     return sh[0] if isinstance(sh, tuple) else sh
 
 
-# glEGLImageTargetTexture2DOES resolved by hand: PyOpenGL's lazy loader
-# refuses it inside Qt's context (its cached GL extension probe predates the
-# context), so ask EGL for the pointer directly.
-_egl_image_target_fn = None
-
-
-def _egl_image_target_texture(target, image) -> None:
-    global _egl_image_target_fn
-    if _egl_image_target_fn is None:
-        ptr = eglGetProcAddress(b"glEGLImageTargetTexture2DOES")
-        addr = ctypes.cast(ptr, ctypes.c_void_p).value if ptr else None
-        if not addr:
-            raise RuntimeError("glEGLImageTargetTexture2DOES unavailable")
-        _egl_image_target_fn = ctypes.CFUNCTYPE(None, ctypes.c_uint32, ctypes.c_void_p)(addr)
-    _egl_image_target_fn(int(target), ctypes.cast(image, ctypes.c_void_p))
-
-
 def _import_luma(display, fd: int, width: int, height: int, stride: int) -> int:
     """Import plane 0 of a planar YUV dmabuf as an R8 2D texture."""
     attribs = [
@@ -385,100 +364,27 @@ def _import_luma(display, fd: int, width: int, height: int, stride: int) -> int:
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
-    _egl_image_target_texture(GL_TEXTURE_2D, image)
+    glEGLImageTargetTexture2DOES(GL_TEXTURE_2D, image)
     eglDestroyImageKHR(display, image)
     return texture
 
 
-class _Buffer:
-    """One camera dmabuf imported as an external GL texture (zero-copy)."""
+class _Buffer(Buffer):
+    """picamera2's dmabuf import, plus an R8 view of luma for the assist shaders."""
 
     luma_warned = False
 
-    # libcamera format string -> DRM fourcc (24-bit formats unsupported).
-    FMT_MAP: ClassVar[dict[str, str]] = {
-        "XRGB8888": "XR24",
-        "XBGR8888": "XB24",
-        "YUYV": "YUYV",
-        "UYVY": "UYVY",
-        "YUV420": "YU12",
-        "YVU420": "YV12",
-    }
-
     def __init__(self, display, completed_request, max_texture_size):
+        super().__init__(display, completed_request, max_texture_size)
         picam2 = completed_request.picam2
         stream = picam2.stream_map[picam2.display_stream_name]
-        fb = completed_request.request.buffers[stream]
-
         cfg = stream.configuration
-        pixel_format = str(cfg.pixel_format)
-        if pixel_format not in self.FMT_MAP:
-            raise RuntimeError(f"format {pixel_format} not supported by GlViewfinder")
-        fmt = str_to_fourcc(self.FMT_MAP[pixel_format])
-        w, h = cfg.size.width, cfg.size.height
-        if w > max_texture_size or h > max_texture_size:
-            raise RuntimeError(f"maximum supported viewfinder size is {max_texture_size}")
-        if pixel_format in ("YUV420", "YVU420"):
-            h2 = h // 2
-            stride2 = cfg.stride // 2
-            attribs = [
-                EGL_WIDTH,
-                w,
-                EGL_HEIGHT,
-                h,
-                EGL_LINUX_DRM_FOURCC_EXT,
-                fmt,
-                EGL_DMA_BUF_PLANE0_FD_EXT,
-                fb.planes[0].fd,
-                EGL_DMA_BUF_PLANE0_OFFSET_EXT,
-                0,
-                EGL_DMA_BUF_PLANE0_PITCH_EXT,
-                cfg.stride,
-                EGL_DMA_BUF_PLANE1_FD_EXT,
-                fb.planes[0].fd,
-                EGL_DMA_BUF_PLANE1_OFFSET_EXT,
-                h * cfg.stride,
-                EGL_DMA_BUF_PLANE1_PITCH_EXT,
-                stride2,
-                EGL_DMA_BUF_PLANE2_FD_EXT,
-                fb.planes[0].fd,
-                EGL_DMA_BUF_PLANE2_OFFSET_EXT,
-                h * cfg.stride + h2 * stride2,
-                EGL_DMA_BUF_PLANE2_PITCH_EXT,
-                stride2,
-                EGL_NONE,
-            ]
-        else:
-            attribs = [
-                EGL_WIDTH,
-                w,
-                EGL_HEIGHT,
-                h,
-                EGL_LINUX_DRM_FOURCC_EXT,
-                fmt,
-                EGL_DMA_BUF_PLANE0_FD_EXT,
-                fb.planes[0].fd,
-                EGL_DMA_BUF_PLANE0_OFFSET_EXT,
-                0,
-                EGL_DMA_BUF_PLANE0_PITCH_EXT,
-                cfg.stride,
-                EGL_NONE,
-            ]
-
-        image = eglCreateImageKHR(display, EGL_NO_CONTEXT, EGL_LINUX_DMA_BUF_EXT, None, attribs)
-        self.texture = glGenTextures(1)
-        glBindTexture(GL_TEXTURE_EXTERNAL_OES, self.texture)
-        glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-        glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
-        glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
-        glTexParameteri(GL_TEXTURE_EXTERNAL_OES, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
-        _egl_image_target_texture(GL_TEXTURE_EXTERNAL_OES, image)
-        eglDestroyImageKHR(display, image)
         # Peaking wants luma only and plane 0 holds it. R8 costs a plain fetch.
         self.luma = None
-        if pixel_format in ("YUV420", "YVU420"):
+        if str(cfg.pixel_format) in ("YUV420", "YVU420"):
+            fd = completed_request.request.buffers[stream].planes[0].fd
             try:
-                self.luma = _import_luma(display, fb.planes[0].fd, w, h, cfg.stride)
+                self.luma = _import_luma(display, fd, cfg.size.width, cfg.size.height, cfg.stride)
             except (OpenGLError, RuntimeError):
                 if not _Buffer.luma_warned:
                     _Buffer.luma_warned = True
