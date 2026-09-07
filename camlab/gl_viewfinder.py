@@ -391,12 +391,42 @@ class _Buffer(Buffer):
                     log.warning("luma plane import failed, peaking converts instead")
 
 
-class GlViewfinder(QOpenGLWidget):
-    """In-scene zero-copy viewfinder widget driving the picamera2 event loop."""
+class _DisplayStream:
+    """Display stream size and dmabuf imports, one set for every widget showing it."""
 
-    def __init__(self, picam2, parent=None, transform: int = 0, mirror: bool = False):
+    def __init__(self, picam2):
+        self.picam2 = picam2
+        self.buffers: dict = {}  # libcamera request -> _Buffer
+        self._stop_count = 0
+
+    def size(self) -> tuple[int, int]:
+        cfg = self.picam2.stream_map[self.picam2.camera_config["display"]].configuration
+        return cfg.size.width, cfg.size.height
+
+    def buffer_for(self, completed_request) -> _Buffer:
+        if completed_request.request not in self.buffers:
+            if self._stop_count != self.picam2.stop_count:
+                # Reconfigured: every cached request is stale, textures included.
+                for buffer in self.buffers.values():
+                    glDeleteTextures(1, [buffer.texture])
+                    if buffer.luma is not None:
+                        glDeleteTextures(1, [buffer.luma])
+                self.buffers = {}
+                self._stop_count = self.picam2.stop_count
+            self.buffers[completed_request.request] = _Buffer(
+                eglGetCurrentDisplay(), completed_request, int(glGetIntegerv(GL_MAX_TEXTURE_SIZE))
+            )
+        return self.buffers[completed_request.request]
+
+
+class GlFrameWidget(QOpenGLWidget):
+    """Draws the newest request shown to it. Orientation, frost and assists are per widget."""
+
+    def __init__(
+        self, stream: _DisplayStream, parent=None, transform: int = 0, mirror: bool = False
+    ):
         super().__init__(parent)
-        self.picamera2 = picam2
+        self._stream = stream
         if transform not in (0, 90, 180, 270):
             raise ValueError(f"transform must be 0, 90, 180 or 270 (got {transform})")
         self._transform = transform
@@ -406,9 +436,6 @@ class GlViewfinder(QOpenGLWidget):
         # Pure black pillarboxes: picture reads as natural focus target, blend into dark bench.
         self._bg = (0.0, 0.0, 0.0, 1.0)
         self.current_request = None
-        self.own_current = False
-        self._buffers: dict = {}  # libcamera request -> _Buffer
-        self._stop_count = 0
         self._frosted = False
         self._frost_broken = False
         self._import_err_logged = False
@@ -421,53 +448,11 @@ class GlViewfinder(QOpenGLWidget):
         self._quad = (ctypes.c_float * 8)(0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0)
         self._target_size: tuple[int, int] | None = None
 
-        picam2.attach_preview(None)
-        self._notifier = QtCore.QSocketNotifier(
-            picam2.notifyme_r, QtCore.QSocketNotifier.Type.Read, self
-        )
-        self._notifier.activated.connect(self._handle_requests)
-        self.running = True
-        self.destroyed.connect(lambda: self._teardown())
-
-    # picamera2 event-loop contract
-    def _handle_requests(self) -> None:
-        if not self.running:
-            return
-        self.picamera2.notifymeread.read()
-        self.picamera2.process_requests(self)
-
-    def render_request(self, completed_request) -> None:
-        """Called by picamera2 with each frame to display (GUI thread).
-
-        Pull model: hold only the newest request (the previous one goes back
-        to the pipeline) and make sure one repaint is scheduled. The paint
-        draws whatever request is newest when it runs, so a stream faster
-        than the display collapses to latest-frame-wins and the camera rate
-        is never throttled by the screen.
-        """
-        if self.current_request is not None and self.own_current:
-            self.current_request.release()
+    def show_request(self, completed_request) -> None:
         self.current_request = completed_request
-        self.own_current = completed_request.config["buffer_count"] > 1
-        if self.own_current:
-            self.current_request.acquire()
         # update() coalesces (Qt paints once per compositor frame callback),
         # so no explicit pacing is needed here.
         self.update()
-
-    def _teardown(self) -> None:
-        if not self.running:
-            return
-        self.running = False
-        self._notifier.setEnabled(False)
-        if self.current_request is not None and self.own_current:
-            self.current_request.release()
-        self.current_request = None
-        self.picamera2.detach_preview()
-
-    def closeEvent(self, event) -> None:
-        self._teardown()
-        super().closeEvent(event)
 
     # frost
     def set_frosted(self, frosted: bool) -> None:
@@ -487,8 +472,6 @@ class GlViewfinder(QOpenGLWidget):
 
     # GL
     def initializeGL(self) -> None:
-        self._egl_display = eglGetCurrentDisplay()
-        self._max_texture_size = int(glGetIntegerv(GL_MAX_TEXTURE_SIZE))
         self._attr_locs: dict = {}
         self._prog_ext = self._build_program(_VERT, _FRAG_EXT)
         self._prog_copy = self._build_program(_VERT_PLAIN, _FRAG_2D)
@@ -499,9 +482,6 @@ class GlViewfinder(QOpenGLWidget):
         self._fbos = [int(f) for f in glGenFramebuffers(5)]
         self._texs = [int(t) for t in glGenTextures(5)]
         self._assist_sizes: dict[int, tuple[int, int]] = {}
-        # Context loss (e.g. reparenting a realized widget) invalidates every
-        # cached texture id along with the context they lived in.
-        self._buffers = {}
         self._target_size = None
 
     def _build_program(self, vsrc: str, fsrc: str, samplers: dict[str, int] | None = None):
@@ -571,7 +551,7 @@ class GlViewfinder(QOpenGLWidget):
         if req is None:
             return
         try:
-            buffer = self._buffer_for(req)
+            buffer = self._stream.buffer_for(req)
         except Exception:
             # Log once, not per frame (34 Hz would flood the journal).
             if not self._import_err_logged:
@@ -703,7 +683,7 @@ class GlViewfinder(QOpenGLWidget):
         self._use(self._prog_fx)
         loc = self._fx_locs
         # Step never finer than one source texel
-        sw, sh = self._displayed(*self._display_size())
+        sw, sh = self._displayed(*self._stream.size())
         sx, sy = self._peak_basis(min(vw, sw), min(vh, sh))
         glUniform2f(loc["stepX"], *sx)
         glUniform2f(loc["stepY"], *sy)
@@ -717,30 +697,11 @@ class GlViewfinder(QOpenGLWidget):
         # Wrapped epoch keeps mediump float precise (stripes drift, never jump).
         glUniform1f(loc["time"], (time.monotonic() - self._fx_t0) % 3600.0)
 
-    def _buffer_for(self, completed_request) -> _Buffer:
-        if completed_request.request not in self._buffers:
-            if self._stop_count != self.picamera2.stop_count:
-                # Reconfigured: every cached request is stale, textures included.
-                for buffer in self._buffers.values():
-                    glDeleteTextures(1, [buffer.texture])
-                    if buffer.luma is not None:
-                        glDeleteTextures(1, [buffer.luma])
-                self._buffers = {}
-                self._stop_count = self.picamera2.stop_count
-            self._buffers[completed_request.request] = _Buffer(
-                self._egl_display, completed_request, self._max_texture_size
-            )
-        return self._buffers[completed_request.request]
-
-    def _display_size(self) -> tuple[int, int]:
-        cfg = self.picamera2.stream_map[self.picamera2.camera_config["display"]].configuration
-        return cfg.size.width, cfg.size.height
-
     def _letterbox_viewport(self) -> tuple[int, int, int, int]:
         dpr = self.devicePixelRatioF()
         ww, wh = round(self.width() * dpr), round(self.height() * dpr)
         try:
-            iw, ih = self._display_size()
+            iw, ih = self._stream.size()
         except Exception:  # noqa: BLE001 no stream size yet, fill the widget
             return 0, 0, ww, wh
         iw, ih = self._displayed(iw, ih)
@@ -756,7 +717,7 @@ class GlViewfinder(QOpenGLWidget):
     def _draw_frosted(self, camera_texture: int, viewport) -> None:
         # camera -> A rotates while sampling, so A onward is already displayed
         # orientation. FBOs must match it or the frost squashes.
-        iw, ih = self._displayed(*self._display_size())
+        iw, ih = self._displayed(*self._stream.size())
         self._ensure_targets(iw, ih)
         (aw, ah), (bw, bh) = self._sizes[0], self._sizes[1]
         a_fbo, b_fbo, c_fbo = self._fbos[:3]
@@ -814,3 +775,62 @@ class GlViewfinder(QOpenGLWidget):
                 raise RuntimeError("frost framebuffer incomplete")
         glBindFramebuffer(GL_FRAMEBUFFER, self.defaultFramebufferObject())
         self._target_size = (width, height)
+
+
+class GlViewfinder(GlFrameWidget):
+    """In-scene zero-copy viewfinder widget driving the picamera2 event loop."""
+
+    def __init__(self, picam2, parent=None, transform: int = 0, mirror: bool = False):
+        super().__init__(_DisplayStream(picam2), parent, transform, mirror)
+        self.picamera2 = picam2
+        self.own_current = False
+
+        picam2.attach_preview(None)
+        self._notifier = QtCore.QSocketNotifier(
+            picam2.notifyme_r, QtCore.QSocketNotifier.Type.Read, self
+        )
+        self._notifier.activated.connect(self._handle_requests)
+        self.running = True
+        self.destroyed.connect(lambda: self._teardown())
+
+    def initializeGL(self) -> None:
+        super().initializeGL()
+        # Lost context takes shared imports with it, so drop them once here
+        self._stream.buffers = {}
+
+    # picamera2 event-loop contract
+    def _handle_requests(self) -> None:
+        if not self.running:
+            return
+        self.picamera2.notifymeread.read()
+        self.picamera2.process_requests(self)
+
+    def render_request(self, completed_request) -> None:
+        """Called by picamera2 with each frame to display (GUI thread).
+
+        Pull model: hold only the newest request (the previous one goes back
+        to the pipeline) and make sure one repaint is scheduled. The paint
+        draws whatever request is newest when it runs, so a stream faster
+        than the display collapses to latest-frame-wins and the camera rate
+        is never throttled by the screen.
+        """
+        if self.current_request is not None and self.own_current:
+            self.current_request.release()
+        self.own_current = completed_request.config["buffer_count"] > 1
+        if self.own_current:
+            completed_request.acquire()
+        self.show_request(completed_request)
+
+    def _teardown(self) -> None:
+        if not self.running:
+            return
+        self.running = False
+        self._notifier.setEnabled(False)
+        if self.current_request is not None and self.own_current:
+            self.current_request.release()
+        self.current_request = None
+        self.picamera2.detach_preview()
+
+    def closeEvent(self, event) -> None:
+        self._teardown()
+        super().closeEvent(event)
