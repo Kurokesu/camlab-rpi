@@ -29,6 +29,7 @@ _CODEPOINTS: dict[str, int] = {
     "close": 0xE5CD,
     "settings": 0xE8B8,
     "lan": 0xEB2F,
+    "monitor": 0xEF5B,
     "shutter_speed": 0xE43D,
     "iso": 0xE3F6,
     "wb_sunny": 0xE430,
