@@ -1,21 +1,26 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Output policy, cursor policy and panel backlight.
+"""Output layout, cursor policy and panel backlight.
 
-HDMI wins while connected, else DSI. Switching via wlr-randr. Cursor follows
-input events, not device presence (KVM would pin an arrow).
+Connected heads decide layout, display setting matters only when both are
+present. Switching via wlr-randr. Cursor follows input events, not
+device presence (KVM would pin an arrow).
 """
 
 from __future__ import annotations
 
 import logging
 import os
+import re
 import subprocess
+from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass
 from pathlib import Path
 
-from .drm import connected_connectors, has_dsi_connector
+from .drm import has_dsi_display
 from .qt import QtCore, QtGui, QtWidgets, Signal
+from .settings import DisplayMode
 
 log = logging.getLogger(__name__)
 
@@ -23,113 +28,258 @@ _WLR_TIMEOUT_S = 2.0
 
 # Debounce Qt screen-event burst before enforcing. Same beat after lets Qt pick up new topology.
 _SETTLE_MS = 300
-# Safety net for DRM changes Qt never reported.
-_POLL_MS = 2000
+
+# GPU render budget, larger output drops camera frames
+_MONITOR_MAX = (1920, 1080)
+# Nominal 60 reports as 59.94 or 60.03
+_MAX_REFRESH_HZ = 60.5
+
+_MODE_RE = re.compile(r"^(\d+)x(\d+) px, ([\d.]+) Hz(.*)$")
+_POS_RE = re.compile(r"^Position: (-?\d+),(-?\d+)$")
 
 
-def _is_hdmi(name: str) -> bool:
-    return name.startswith("HDMI-")
+@dataclass(frozen=True)
+class Mode:
+    width: int
+    height: int
+    refresh: float
+    preferred: bool = False
+    current: bool = False
+
+    @property
+    def size(self) -> tuple[int, int]:
+        return (self.width, self.height)
+
+    def arg(self) -> str:
+        return f"{self.width}x{self.height}@{self.refresh:.3f}Hz"
 
 
-def _wlr_outputs() -> dict[str, bool]:
-    """Compositor outputs as {name: enabled}, empty when wlr-randr fails."""
-    try:
-        proc = subprocess.run(
-            ["wlr-randr"], capture_output=True, text=True, timeout=_WLR_TIMEOUT_S, check=False
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        log.debug("wlr-randr unavailable: %s", exc)
-        return {}
-    if proc.returncode != 0:
-        log.debug("wlr-randr failed: %s", proc.stderr.strip())
-        return {}
-    outputs: dict[str, bool] = {}
-    current = None
-    for line in proc.stdout.splitlines():
+@dataclass(frozen=True)
+class Output:
+    name: str
+    enabled: bool
+    modes: tuple[Mode, ...] = ()
+    pos: tuple[int, int] = (0, 0)
+
+    @property
+    def current(self) -> Mode | None:
+        return next((m for m in self.modes if m.current), None)
+
+
+@dataclass(frozen=True)
+class Target:
+    name: str
+    mode: Mode | None
+    pos: tuple[int, int]
+
+
+@dataclass(frozen=True)
+class Layout:
+    on: tuple[Target, ...] = ()
+    off: tuple[str, ...] = ()
+    touch: tuple[float, ...] | None = None
+
+
+def _blocks(text: str) -> list[tuple[str, list[str]]]:
+    blocks: list[tuple[str, list[str]]] = []
+    for line in text.splitlines():
         if line and not line[0].isspace():
-            current = line.split(None, 1)[0]
-            outputs[current] = False
-        elif current is not None and line.strip().startswith("Enabled:"):
-            outputs[current] = line.split(":", 1)[1].strip() == "yes"
+            blocks.append((line.split(None, 1)[0], []))
+        elif blocks:
+            blocks[-1][1].append(line.strip())
+    return blocks
+
+
+def parse_outputs(text: str) -> dict[str, Output]:
+    """Cage lists connected sinks only."""
+    outputs: dict[str, Output] = {}
+    for name, body in _blocks(text):
+        enabled = False
+        pos = (0, 0)
+        modes: list[Mode] = []
+        for entry in body:
+            if entry.startswith("Enabled:"):
+                enabled = entry.split(":", 1)[1].strip() == "yes"
+                continue
+            found = _POS_RE.match(entry)
+            if found:
+                pos = (int(found[1]), int(found[2]))
+                continue
+            found = _MODE_RE.match(entry)
+            if found:
+                flags = found[4]
+                modes.append(
+                    Mode(
+                        int(found[1]),
+                        int(found[2]),
+                        float(found[3]),
+                        "preferred" in flags,
+                        "current" in flags,
+                    )
+                )
+        outputs[name] = Output(name, enabled, tuple(modes), pos)
     return outputs
 
 
-def enforce_output_policy() -> None:
-    """HDMI on and DSI off when HDMI connected, else DSI on. No Qt loop required."""
-    if not has_dsi_connector():  # HDMI-only rig: nothing to switch between
-        return
-    outputs = _wlr_outputs()
-    if not outputs:
-        return
-    # Require HDMI in both views before dropping panel. Avoids zero-output race.
-    hdmi = any(_is_hdmi(n) for n in connected_connectors()) and any(_is_hdmi(n) for n in outputs)
-    targets = [n for n in outputs if _is_hdmi(n) == hdmi]
-    if not targets:
-        return
-    # One config so compositor applies enables and disables together.
-    args: list[str] = []
-    for name in targets:
-        if not outputs[name]:
-            args += ["--output", name, "--on"]
-    for name in outputs:
-        if name not in targets and outputs[name]:
-            args += ["--output", name, "--off"]
-    if not args:
-        return
-    log.info("display switch: %s", " ".join(args))
+def pick_mode(modes: Iterable[Mode]) -> Mode | None:
+    """Falls back to preferred so sinks with no fitting mode still light."""
+    modes = tuple(modes)
+    fits = [
+        m
+        for m in modes
+        if m.width <= _MONITOR_MAX[0]
+        and m.height <= _MONITOR_MAX[1]
+        and m.refresh <= _MAX_REFRESH_HZ
+    ]
+    if fits:
+        return max(fits, key=lambda m: (m.width * m.height, m.refresh))
+    return next((m for m in modes if m.preferred), None)
+
+
+def native_mode(output: Output) -> Mode | None:
+    return output.current or next((m for m in output.modes if m.preferred), None)
+
+
+def touch_matrix(rect: tuple[int, int, int, int], bounds: tuple[int, int]) -> tuple[float, ...]:
+    """libinput calibration confining touch to rect (x, y, w, h) within bounds."""
+    x, y, w, h = rect
+    bw, bh = bounds
+    return (w / bw, 0.0, x / bw, 0.0, h / bh, y / bh)
+
+
+def classify(names: Iterable[str]) -> tuple[str | None, str | None, tuple[str, ...]]:
+    """Lowest HDMI name is the monitor, spare heads switch off."""
+    hdmi = sorted(n for n in names if n.startswith("HDMI-"))
+    dsi = sorted(n for n in names if n.startswith("DSI-"))
+    monitor = hdmi[0] if hdmi else None
+    return monitor, (dsi[0] if dsi else None), tuple(hdmi[1:])
+
+
+def plan_layout(mode: DisplayMode, outputs: Mapping[str, Output], dsi_display: bool) -> Layout:
+    monitor, panel, spare = classify(outputs)
+    # Cage lights DSI connector even with no panel wired
+    phantom = ()
+    if panel is not None and not dsi_display:
+        phantom, panel = (panel,), None
+
+    if monitor is None:
+        if panel is None:
+            return Layout()  # nothing to fall back to, phantom stays lit
+        return Layout(on=(Target(panel, None, (0, 0)),))
+
+    mon_mode = pick_mode(outputs[monitor].modes)
+    if panel is None:
+        return Layout(on=(Target(monitor, mon_mode, (0, 0)),), off=spare + phantom)
+
+    panel_target = Target(panel, None, (0, 0))
+    if mode is DisplayMode.BUILTIN:
+        return Layout(on=(panel_target,), off=spare + (monitor,))
+
+    if mode is DisplayMode.BOTH:
+        pw, ph = native_mode(outputs[panel]).size
+        mw, mh = mon_mode.size
+        return Layout(
+            on=(panel_target, Target(monitor, mon_mode, (pw, 0))),
+            off=spare,
+            touch=touch_matrix((0, 0, pw, ph), (pw + mw, max(ph, mh))),
+        )
+
+    return Layout(on=(Target(monitor, mon_mode, (0, 0)),), off=spare + (panel,))
+
+
+def _target_args(target: Target) -> list[str]:
+    args = ["--output", target.name, "--on", "--pos", f"{target.pos[0]},{target.pos[1]}"]
+    if target.mode is not None:
+        args += ["--mode", target.mode.arg()]
+    return args
+
+
+def _satisfied(output: Output | None, target: Target) -> bool:
+    if output is None or not output.enabled or output.pos != target.pos:
+        return False
+    return target.mode is None or output.current == target.mode
+
+
+def _wlr_randr(args: Iterable[str] = ()) -> str | None:
     try:
-        subprocess.run(
+        proc = subprocess.run(
             ["wlr-randr", *args],
             capture_output=True,
             text=True,
             timeout=_WLR_TIMEOUT_S,
-            check=True,
+            check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
-        log.error("wlr-randr switch failed: %s", exc)
-    except subprocess.CalledProcessError as exc:
-        log.error("wlr-randr switch failed: %s", exc.stderr)
+        log.debug("wlr-randr unavailable: %s", exc)
+        return None
+    if proc.returncode != 0:
+        log.error("wlr-randr failed: %s", proc.stderr.strip())
+        return None
+    return proc.stdout
+
+
+def apply_output_layout(mode: DisplayMode) -> None:
+    """Re-running is safe, nothing is written when layout already matches."""
+    report = _wlr_randr()
+    if report is None:
+        return
+    outputs = parse_outputs(report)
+    if not outputs:
+        return
+    layout = plan_layout(mode, outputs, has_dsi_display())
+
+    args: list[str] = []
+    for target in layout.on:
+        if not _satisfied(outputs.get(target.name), target):
+            args += _target_args(target)
+    if args:
+        log.info("display layout (%s): %s", mode, " ".join(args))
+        if _wlr_randr(args) is None:
+            return
+
+    stale = [n for n in layout.off if n in outputs and outputs[n].enabled]
+    if not stale:
+        return
+    if not layout.on or not _all_lit(layout.on):
+        log.error("keeping %s enabled, target outputs did not light", ", ".join(stale))
+        return
+    log.info("display off: %s", " ".join(stale))
+    _wlr_randr([a for n in stale for a in ("--output", n, "--off")])
+
+
+def _all_lit(targets: Iterable[Target]) -> bool:
+    """Confirm targets lit before anything is switched off."""
+    report = _wlr_randr()
+    if report is None:
+        return False
+    outputs = parse_outputs(report)
+    return all(n.name in outputs and outputs[n.name].enabled for n in targets)
 
 
 class DisplayManager(QtCore.QObject):
-    """Keeps exactly one output class enabled: HDMI when connected, else DSI."""
+    """Applies output layout at boot and after every hotplug settle."""
 
     # Active QScreen after every enforcement pass, no-ops included.
     display_changed = Signal(object)
 
-    def __init__(self, app: QtWidgets.QApplication):
+    def __init__(self, app: QtWidgets.QApplication, get_mode: Callable[[], DisplayMode]):
         super().__init__(app)
         self._app = app
-        self._drm_state: set[str] = set()
+        self._get_mode = get_mode
 
         self._settle = QtCore.QTimer(self)
         self._settle.setSingleShot(True)
         self._settle.setInterval(_SETTLE_MS)
         self._settle.timeout.connect(self._enforce)
 
-        self._poll = QtCore.QTimer(self)
-        self._poll.setInterval(_POLL_MS)
-        self._poll.timeout.connect(self._poll_drm)
-
     def start(self) -> None:
         """Connect hotplug signals and run the first enforcement pass."""
-        if not has_dsi_connector():  # nothing to switch between, just report
-            QtCore.QTimer.singleShot(0, self._emit_changed)
-            return
         self._app.screenAdded.connect(lambda _s: self._settle.start())
         self._app.screenRemoved.connect(lambda _s: self._settle.start())
-        self._drm_state = connected_connectors()
-        self._poll.start()
         self._settle.start()
 
-    def _poll_drm(self) -> None:
-        state = connected_connectors()
-        if state != self._drm_state:
-            self._drm_state = state
-            self._settle.start()
-
     def _enforce(self) -> None:
-        enforce_output_policy()
+        apply_output_layout(self._get_mode())
         QtCore.QTimer.singleShot(_SETTLE_MS, self._emit_changed)
 
     def _emit_changed(self) -> None:

@@ -12,7 +12,7 @@ import sys
 
 from .camera import CameraEngine
 from .config_manager import ConfigManager
-from .display import Backlight, CursorPolicy, DisplayManager, enforce_output_policy
+from .display import Backlight, CursorPolicy, DisplayManager, apply_output_layout
 from .dsi_panels import PanelRegistry
 from .gl_viewfinder import install_gles_format
 from .gui import fonts
@@ -87,9 +87,8 @@ def main(argv: list[str] | None = None) -> int:
     # inherit it, a real mouse needs a cursor it can see.
     os.environ.pop("XCURSOR_PATH", None)
 
-    # Settle HDMI versus DSI before Qt connects to the compositor, so layout profile
-    # and lores sizing see the final display.
-    enforce_output_policy()
+    # Settle outputs before Qt connects to compositor
+    apply_output_layout(settings.get_display())
 
     # Restore persisted panel brightness before anything renders.
     backlight = Backlight()
@@ -118,7 +117,7 @@ def main(argv: list[str] | None = None) -> int:
             log.error("camera configure failed: %s", exc)
 
     # CursorPolicy needs no handle: QApplication parentage keeps it alive.
-    display_manager = DisplayManager(app)
+    display_manager = DisplayManager(app, settings.get_display)
     CursorPolicy(app)
 
     win = MainWindow(
