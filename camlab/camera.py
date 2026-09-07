@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections import deque
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -52,6 +53,9 @@ _MAX_FRAME_US = 1_000_000
 
 # Flush controls when queued frames would add visible latency.
 _SLOW_FRAME_US = 100_000
+
+_MISSED_FRAME_GAP = 1.5  # frames
+_CALLBACK_SPACING_WINDOW = 16  # frames
 
 
 @dataclass
@@ -94,6 +98,9 @@ class CameraEngine:
         self.latest_histogram: np.ndarray | None = None
         self.telemetry = Telemetry()  # latest per-frame snapshot
         self._last_ts = 0  # previous SensorTimestamp (ns), for fps
+        # Wall clock between callbacks, to tell a stalled GUI from a stack skip.
+        self._last_cb = 0.0
+        self._cb_gaps: deque[float] = deque(maxlen=_CALLBACK_SPACING_WINDOW)
         self._seq_base = 0  # frame counter offset, continuous across flushes
         self._frame_since_start = False
         self._start_ts = 0.0
@@ -470,9 +477,14 @@ class CameraEngine:
             md = prev.metadata
         fps = prev.fps
         ts = md.get("SensorTimestamp")
+        now = time.monotonic()
+        if self._last_cb:
+            self._cb_gaps.append(now - self._last_cb)
+        self._last_cb = now
         if ts is not None:
             if self._last_ts and ts != self._last_ts:
                 fps = 1e9 / (ts - self._last_ts)
+                self._note_gap(ts - self._last_ts, md.get("FrameDuration"))
             self._last_ts = ts
         # Publish as one snapshot so readers get a consistent set.
         self.telemetry = Telemetry(frame=frame, fps=fps, metadata=md)
@@ -502,6 +514,25 @@ class CameraEngine:
                 except Exception:  # never let UI timing break capture
                     log.exception("first-frame callback failed")
 
+    def _note_gap(self, delta_ns: int, frame_us: int | None) -> None:
+        """Log a missed frame with the worst recent callback spacing.
+
+        Spacing near one frame means the stack skipped, several frames means
+        the GUI thread stalled and starved the sensor of buffers.
+        """
+        if not frame_us or not log.isEnabledFor(logging.DEBUG):
+            return
+        frames = delta_ns / (frame_us * 1000)
+        if frames < _MISSED_FRAME_GAP:
+            return
+        worst = max(self._cb_gaps, default=0.0)
+        log.debug(
+            "frame gap %.1f frames, worst callback spacing %.0f ms over last %d",
+            frames,
+            worst * 1e3,
+            len(self._cb_gaps),
+        )
+
     def start(self, *, reset_telemetry: bool = True) -> None:
         """Start capture. reset_telemetry=False keeps the snapshot and frame
         numbering for the mid-run flush restart."""
@@ -519,6 +550,8 @@ class CameraEngine:
             # continue the frame counter.
             self._seq_base = self.telemetry.frame + 1 if self.telemetry.frame is not None else 0
         self._last_ts = 0
+        self._last_cb = 0.0
+        self._cb_gaps.clear()
         self._frame_since_start = False
         self._start_ts = time.monotonic()
         self.picam2.pre_callback = self._pre_callback
