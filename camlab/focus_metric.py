@@ -89,7 +89,7 @@ class FocusSampler(QtCore.QObject):
 
     def _describe_once(self, md: dict, grid) -> None:
         """Log what the ISP offers, once, so a shifted blob layout is visible."""
-        if self._logged or not md:
+        if self._logged or "PispStatsOutput" not in md:
             return
         self._logged = True
         if grid is None:
