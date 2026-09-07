@@ -8,6 +8,7 @@
 #   - update shim, check and apply only (arguments are component ids, not packages)
 #   - poweroff (both a sensor swap and operator shutdown power the box off)
 #   - networking toggle (Settings dialog)
+#   - touch calibration (arguments are matrix numbers, validated by the script)
 
 CAMLAB_USER ALL=(root) NOPASSWD: /usr/local/bin/camlab-apply
 CAMLAB_USER ALL=(root) NOPASSWD: /usr/local/bin/camlab-update check
@@ -16,3 +17,4 @@ CAMLAB_USER ALL=(root) NOPASSWD: /usr/local/bin/camlab-update apply *
 CAMLAB_USER ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff --no-wall
 CAMLAB_USER ALL=(root) NOPASSWD: /usr/local/bin/camlabctl net on
 CAMLAB_USER ALL=(root) NOPASSWD: /usr/local/bin/camlabctl net off
+CAMLAB_USER ALL=(root) NOPASSWD: /usr/local/bin/camlabctl touch *

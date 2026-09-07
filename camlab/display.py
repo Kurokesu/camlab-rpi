@@ -26,6 +26,10 @@ log = logging.getLogger(__name__)
 
 _WLR_TIMEOUT_S = 2.0
 
+_CAMLABCTL = "/usr/local/bin/camlabctl"
+# Two udev triggers with settle per touchscreen
+_TOUCH_TIMEOUT_S = 5.0
+
 # Debounce Qt screen-event burst before enforcing. Same beat after lets Qt pick up new topology.
 _SETTLE_MS = 300
 
@@ -236,6 +240,8 @@ def apply_output_layout(mode: DisplayMode) -> None:
         log.info("display layout (%s): %s", mode, " ".join(args))
         if _wlr_randr(args) is None:
             return
+    if has_dsi_display():
+        _apply_touch(layout.touch)
 
     stale = [n for n in layout.off if n in outputs and outputs[n].enabled]
     if not stale:
@@ -245,6 +251,23 @@ def apply_output_layout(mode: DisplayMode) -> None:
         return
     log.info("display off: %s", " ".join(stale))
     _wlr_randr([a for n in stale for a in ("--output", n, "--off")])
+
+
+def _apply_touch(matrix: tuple[float, ...] | None) -> None:
+    """camlabctl owns the udev rule and skips when it already matches."""
+    args = ["clear"] if matrix is None else [f"{v:.6f}" for v in matrix]
+    try:
+        subprocess.run(
+            ["sudo", "-n", _CAMLABCTL, "touch", *args],
+            capture_output=True,
+            text=True,
+            timeout=_TOUCH_TIMEOUT_S,
+            check=True,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        log.error("touch calibration failed: %s", exc)
+    except subprocess.CalledProcessError as exc:
+        log.error("touch calibration failed: %s", exc.stderr.strip())
 
 
 def _all_lit(targets: Iterable[Target]) -> bool:

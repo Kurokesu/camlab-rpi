@@ -17,6 +17,7 @@
 #   camlabctl tap <x> <y>                click in live kiosk (needs wlrctl)
 #   camlabctl net <on|off|status>        toggle networking (off for production,
 #                                         on for SSH dev)
+#   camlabctl touch <a b c d e f>|clear  libinput calibration on touchscreens
 #   camlabctl rw                         boot writable next time
 #   camlabctl ro                         boot read-only next time
 #   camlabctl help
@@ -198,6 +199,48 @@ cmd_net() {
     esac
 }
 
+# Touch calibration confines panel touch to its own pane when the layout spans
+# a monitor too. Runtime rule, so a reboot starts clean.
+TOUCHMAP_RULE="/run/udev/rules.d/90-camlab-touchmap.rules"
+
+_touchscreens() {
+    local dev
+    for dev in /dev/input/event*; do
+        udevadm info -q property -n "$dev" 2>/dev/null | grep -qx 'ID_INPUT_TOUCHSCREEN=1' &&
+            echo "$dev"
+    done
+}
+
+# libinput reads the matrix at device add only
+_touch_readd() {
+    local devs dev
+    mapfile -t devs < <(_touchscreens)
+    sudo udevadm control --reload
+    for dev in "${devs[@]}"; do
+        sudo udevadm trigger --action=remove --settle "$dev"
+        sudo udevadm trigger --action=add --settle "$dev"
+    done
+}
+
+cmd_touch() {
+    if [ "${1:-}" = "clear" ]; then
+        [ -e "$TOUCHMAP_RULE" ] || return 0
+        sudo rm -f "$TOUCHMAP_RULE"
+        _touch_readd
+        return
+    fi
+    [ "$#" -eq 6 ] || die "touch: expected six matrix values or clear"
+    local v rule
+    for v in "$@"; do
+        [[ "$v" =~ ^-?[0-9]+(\.[0-9]+)?$ ]] || die "touch: '$v' is not a number"
+    done
+    rule="ENV{ID_INPUT_TOUCHSCREEN}==\"1\", ENV{LIBINPUT_CALIBRATION_MATRIX}=\"$*\""
+    [ "$(cat "$TOUCHMAP_RULE" 2>/dev/null)" != "$rule" ] || return 0
+    sudo install -d -m 0755 "$(dirname "$TOUCHMAP_RULE")"
+    printf '%s\n' "$rule" | sudo tee "$TOUCHMAP_RULE" >/dev/null
+    _touch_readd
+}
+
 # Read-only root toggle. overlayroot=disabled in cmdline.txt boots writable,
 # absent boots read-only. Flipping it needs the boot partition remounted rw and
 # takes effect on next reboot.
@@ -239,6 +282,7 @@ case "$cmd" in
     rec)            cmd_rec "$@" ;;
     tap)            cmd_tap "$@" ;;
     net)            cmd_net "$@" ;;
+    touch)          cmd_touch "$@" ;;
     rw)             cmd_rw ;;
     ro)             cmd_ro ;;
     -h|--help|help) help_text ;;

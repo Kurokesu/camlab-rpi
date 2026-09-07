@@ -5,6 +5,9 @@
 
 from __future__ import annotations
 
+import pytest
+
+from camlab import display
 from camlab.display import (
     Mode,
     Output,
@@ -205,3 +208,61 @@ def test_both_places_monitor_right_of_panel():
     )
     assert layout.off == ()
     assert layout.touch == touch_matrix((0, 0, 800, 480), (2720, 1080))
+
+
+@pytest.fixture
+def rig(monkeypatch):
+    """REPORT as the live compositor, every wlr-randr write and shim call recorded."""
+    calls: list[list[str]] = []
+
+    def wlr(args=()):
+        if args:
+            calls.append(["wlr-randr", *args])
+        return REPORT
+
+    monkeypatch.setattr(display, "_wlr_randr", wlr)
+    monkeypatch.setattr(display, "has_dsi_display", lambda: True)
+    monkeypatch.setattr(display.subprocess, "run", lambda cmd, **kw: calls.append(list(cmd)))
+    return calls
+
+
+TOUCH_SET = ["sudo", "-n", display._CAMLABCTL, "touch"] + [
+    f"{v:.6f}" for v in touch_matrix((0, 0, 800, 480), (2720, 1080))
+]
+TOUCH_CLEAR = ["sudo", "-n", display._CAMLABCTL, "touch", "clear"]
+
+
+def test_apply_both_is_touch_only_when_outputs_already_match(rig):
+    display.apply_output_layout(DisplayMode.BOTH)
+    assert rig == [TOUCH_SET]
+
+
+def test_apply_external_clears_touch_before_dropping_panel(rig):
+    display.apply_output_layout(DisplayMode.EXTERNAL)
+    assert rig == [
+        ["wlr-randr", "--output", "HDMI-A-1", "--on", "--pos", "0,0", "--mode", PICKED.arg()],
+        TOUCH_CLEAR,
+        ["wlr-randr", "--output", "DSI-2", "--off"],
+    ]
+
+
+def test_apply_builtin_drops_monitor(rig):
+    display.apply_output_layout(DisplayMode.BUILTIN)
+    assert rig == [TOUCH_CLEAR, ["wlr-randr", "--output", "HDMI-A-1", "--off"]]
+
+
+def test_apply_skips_touch_without_dsi_display(rig, monkeypatch):
+    monkeypatch.setattr(display, "has_dsi_display", lambda: False)
+    display.apply_output_layout(DisplayMode.BOTH)
+    assert rig == [
+        ["wlr-randr", "--output", "HDMI-A-1", "--on", "--pos", "0,0", "--mode", PICKED.arg()],
+        ["wlr-randr", "--output", "DSI-2", "--off"],
+    ]
+
+
+def test_apply_never_disables_when_target_did_not_light(rig, monkeypatch):
+    # Monitor reads disabled before and after the enable, panel must stay lit
+    dark_monitor = "Enabled: no".join(REPORT.rsplit("Enabled: yes", 1))
+    monkeypatch.setattr(display, "_wlr_randr", lambda args=(): dark_monitor)
+    display.apply_output_layout(DisplayMode.EXTERNAL)
+    assert rig == [TOUCH_CLEAR]
