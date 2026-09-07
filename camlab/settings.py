@@ -38,6 +38,11 @@ class DisplayMode(StrEnum):
     BOTH = "both"
 
 
+class AwbMode(StrEnum):
+    GREY = "grey"
+    LIBCAMERA = "libcamera"
+
+
 class MonitorState(NamedTuple):
     """Monitor sheet toggles plus zebra clip threshold."""
 
@@ -201,6 +206,23 @@ class SettingsStore:
         data = self._load()
         data["version"] = _VERSION
         data.setdefault("ui", {})["display"] = str(value)
+        return self._atomic_write(data)
+
+    def get_awb(self) -> AwbMode:
+        try:
+            return AwbMode((self._load().get("ui") or {}).get("awb"))
+        except ValueError:
+            return AwbMode.GREY
+
+    def set_awb(self, mode: str) -> bool:
+        try:
+            value = AwbMode(mode)
+        except ValueError:
+            log.warning("unknown AWB mode %r - ignoring", mode)
+            return False
+        data = self._load()
+        data["version"] = _VERSION
+        data.setdefault("ui", {})["awb"] = str(value)
         return self._atomic_write(data)
 
     def get_backlight(self) -> int | None:
