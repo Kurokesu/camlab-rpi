@@ -813,6 +813,7 @@ class MainWindow(QtWidgets.QMainWindow):
             backlight_pct=backlight_pct,
             on_apply_network=self._apply_network,
             on_backlight=self._on_backlight,
+            on_grey_world=self.engine.set_grey_world,
             on_cancel=self._close_modal,
             on_about=self._open_about,
         )

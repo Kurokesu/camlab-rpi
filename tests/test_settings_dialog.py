@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Settings card Display row, built offscreen without camera or compositor."""
+"""Settings card Display and Auto WB rows, built offscreen without camera or compositor."""
 
 from __future__ import annotations
 
@@ -15,9 +15,10 @@ pytest.importorskip("PyQt6")
 from camlab.gui import settings_dialog
 from camlab.gui.settings_dialog import SettingsCard
 from camlab.qt import QtWidgets
-from camlab.settings import DisplayMode, SettingsStore
+from camlab.settings import AwbMode, DisplayMode, SettingsStore
 
 DISPLAY_LABELS = ["External", "Built-in", "Both"]
+AWB_LABELS = ["Grey world", "libcamera"]
 
 
 @pytest.fixture(scope="module")
@@ -41,12 +42,20 @@ def panel_rig(qapp, monkeypatch):
     return applied
 
 
-def _card(store: SettingsStore) -> SettingsCard:
+@pytest.fixture
+def monitor_only(qapp, monkeypatch):
+    """No built-in display and networking up, so only the always-on rows build."""
+    monkeypatch.setattr(settings_dialog, "has_dsi_display", lambda: False)
+    monkeypatch.setattr(settings_dialog.network, "is_enabled", lambda: True)
+
+
+def _card(store: SettingsStore, on_grey_world=lambda _on: None) -> SettingsCard:
     return SettingsCard(
         store,
         backlight_pct=None,
         on_apply_network=lambda _on: None,
         on_backlight=lambda _pct: True,
+        on_grey_world=on_grey_world,
         on_cancel=lambda: None,
     )
 
@@ -82,3 +91,24 @@ def test_display_row_absent_on_monitor_only_rig(panel_rig, store, monkeypatch):
     card = _card(store)
     assert "Display:" not in _labels(card)
     assert panel_rig == []
+
+
+def test_awb_row_lists_algorithms_and_reflects_store(monitor_only, store):
+    store.set_awb(AwbMode.LIBCAMERA)
+    card = _card(store)
+    assert "Auto WB:" in _labels(card)
+    segments = card.awb_sel.findChildren(QtWidgets.QPushButton)
+    assert [b.text() for b in segments] == AWB_LABELS
+    assert card.awb_sel.current_value() is AwbMode.LIBCAMERA
+
+
+def test_awb_row_defaults_to_grey_world(monitor_only, store):
+    assert _card(store).awb_sel.current_value() is AwbMode.GREY
+
+
+def test_awb_pick_persists_then_applies(monitor_only, store):
+    seen: list[tuple[bool, AwbMode]] = []
+    card = _card(store, on_grey_world=lambda on: seen.append((on, store.get_awb())))
+    card.awb_sel.button(AwbMode.LIBCAMERA).click()
+    card.awb_sel.button(AwbMode.GREY).click()
+    assert seen == [(False, AwbMode.LIBCAMERA), (True, AwbMode.GREY)]

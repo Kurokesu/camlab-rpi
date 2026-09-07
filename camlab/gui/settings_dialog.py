@@ -3,9 +3,9 @@
 
 """Settings card: app-level system options, one row per setting.
 
-Brightness and display choice when a built-in display is present, networking
-toggle and a drill-in to About. Apply only acts on changed rows. Brightness
-and display apply live.
+Brightness and display choice when a built-in display is present, auto white
+balance algorithm, networking toggle and a drill-in to About. Apply only acts
+on changed rows. Brightness, display and auto WB apply live.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from .. import network
 from ..display import BACKLIGHT_FLOOR_PCT, apply_output_layout
 from ..drm import has_dsi_display
 from ..qt import Qt, QtWidgets
-from ..settings import DisplayMode, SettingsStore
+from ..settings import AwbMode, DisplayMode, SettingsStore
 from . import icons
 from .control_sheet import JumpSlider
 from .widgets import SegmentedSelector, hline
@@ -31,6 +31,7 @@ class SettingsCard(QtWidgets.QFrame):
         backlight_pct: int | None,
         on_apply_network: Callable[[bool], None],
         on_backlight: Callable[[int], bool],
+        on_grey_world: Callable[[bool], None],
         on_cancel: Callable[[], None],
         on_about: Callable[[], None] | None = None,
     ):
@@ -40,6 +41,7 @@ class SettingsCard(QtWidgets.QFrame):
         self._settings = settings
         self._on_apply_network = on_apply_network
         self._on_backlight = on_backlight
+        self._on_grey_world = on_grey_world
         self._on_cancel = on_cancel
         self._net_initial = network.is_enabled()
 
@@ -84,6 +86,20 @@ class SettingsCard(QtWidgets.QFrame):
             disp_row.addWidget(disp_label)
             disp_row.addWidget(self.display_sel, 1)
             form.addRow("Display:", disp_row)
+
+        awb_label = QtWidgets.QLabel()
+        awb_label.setPixmap(icons.pixmap("wb_sunny", _ICON_PX, "#8a909b"))
+        awb_row = QtWidgets.QHBoxLayout()
+        awb_row.setSpacing(8)
+        self.awb_sel = SegmentedSelector()
+        self.awb_sel.set_options(
+            [("Grey world", AwbMode.GREY), ("libcamera", AwbMode.LIBCAMERA)],
+            current=settings.get_awb(),
+        )
+        self.awb_sel.changed.connect(self._on_awb_changed)
+        awb_row.addWidget(awb_label)
+        awb_row.addWidget(self.awb_sel, 1)
+        form.addRow("Auto WB:", awb_row)
 
         net_label = QtWidgets.QLabel()
         net_label.setPixmap(
@@ -146,6 +162,11 @@ class SettingsCard(QtWidgets.QFrame):
         # Persist first, hotplug settle re-applies from the store
         self._settings.set_display(mode)
         apply_output_layout(mode)
+
+    def _on_awb_changed(self) -> None:
+        mode = self.awb_sel.current_value()
+        self._settings.set_awb(mode)
+        self._on_grey_world(mode is AwbMode.GREY)
 
     def _refresh_apply(self) -> None:
         """Apply is live only when a selection changed."""
