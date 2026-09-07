@@ -707,7 +707,7 @@ class GlViewfinder(QOpenGLWidget):
         sx, sy = self._peak_basis(min(vw, sw), min(vh, sh))
         glUniform2f(loc["stepX"], *sx)
         glUniform2f(loc["stepY"], *sy)
-        # Guide is display oriented, so the same step unrotated, y flipped
+        # Guide is display oriented. A wider step here cancels the edge in f - b
         glUniform2f(loc["guideX"], 1.0 / max(vw, 1), 0.0)
         glUniform2f(loc["guideY"], 0.0, -1.0 / max(vh, 1))
         glUniform1f(loc["gain"], gain)
