@@ -21,6 +21,7 @@ import json
 import logging
 import os
 import tempfile
+from enum import StrEnum
 from pathlib import Path
 from typing import NamedTuple
 
@@ -30,8 +31,11 @@ _VERSION = 1
 
 _ZEBRA_THR_DEFAULT = 0.95
 
-DISPLAY_MODES = ("external", "builtin", "both")
-DISPLAY_DEFAULT = "external"
+
+class DisplayMode(StrEnum):
+    EXTERNAL = "external"
+    BUILTIN = "builtin"
+    BOTH = "both"
 
 
 class MonitorState(NamedTuple):
@@ -182,17 +186,21 @@ class SettingsStore:
         ui["zebra_threshold"] = float(state.zebra_threshold)
         return self._atomic_write(data)
 
-    def get_display(self) -> str:
-        value = (self._load().get("ui") or {}).get("display")
-        return value if value in DISPLAY_MODES else DISPLAY_DEFAULT
+    def get_display(self) -> DisplayMode:
+        try:
+            return DisplayMode((self._load().get("ui") or {}).get("display"))
+        except ValueError:
+            return DisplayMode.EXTERNAL
 
     def set_display(self, mode: str) -> bool:
-        if mode not in DISPLAY_MODES:
+        try:
+            value = DisplayMode(mode)
+        except ValueError:
             log.warning("unknown display mode %r - ignoring", mode)
             return False
         data = self._load()
         data["version"] = _VERSION
-        data.setdefault("ui", {})["display"] = mode
+        data.setdefault("ui", {})["display"] = str(value)
         return self._atomic_write(data)
 
     def get_backlight(self) -> int | None:
