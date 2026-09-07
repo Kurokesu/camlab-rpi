@@ -105,13 +105,18 @@ def forced_screen() -> tuple[int, int] | None:
     return int(w), int(h)
 
 
-def profile_for_screen(screen) -> UiProfile:
+def profile_for_rect(rect) -> UiProfile:
+    """Density for the screen rect the UI lands on, REGULAR when unknown."""
     forced = forced_screen()
     if forced is not None:
         return COMPACT if forced[1] <= _COMPACT_MAX_HEIGHT else REGULAR
-    if screen is None:
+    if rect is None:
         return REGULAR
-    return COMPACT if screen.geometry().height() <= _COMPACT_MAX_HEIGHT else REGULAR
+    return COMPACT if rect.height() <= _COMPACT_MAX_HEIGHT else REGULAR
+
+
+def profile_for_screen(screen) -> UiProfile:
+    return profile_for_rect(None if screen is None else screen.geometry())
 
 
 _STYLE = """
