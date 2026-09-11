@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Rendered by service.sh (CAMLAB_USER / CAMLAB_REPO_DIR substituted).
+# Rendered by service.sh (CAMLAB_USER / CAMLAB_APP_DIR substituted).
 # camlab GUI fullscreen under Cage kiosk on tty1.
 
 [Unit]
@@ -13,7 +13,7 @@ Conflicts=getty@tty1.service
 Type=simple
 User=CAMLAB_USER
 PAMName=camlab
-WorkingDirectory=CAMLAB_REPO_DIR
+WorkingDirectory=CAMLAB_APP_DIR
 
 # Persistent state (mode/fps selection). Read-only root keeps this on data partition.
 StateDirectory=camlab

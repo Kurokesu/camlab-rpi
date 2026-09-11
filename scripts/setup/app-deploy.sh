@@ -26,7 +26,7 @@ done
 require_root
 
 REPO_DIR="$(resolve_repo_dir)"
-APP_DIR="/opt/camlab"
+APP_DIR="$CAMLAB_APP_DIR"
 
 # Swap below deletes APP_DIR, keep cwd out
 cd /

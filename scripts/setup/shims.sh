@@ -34,7 +34,7 @@ REPO_DIR="$(resolve_repo_dir)"
 header "Installing privilege shims for $CAMLAB_USER"
 
 log "Installing /usr/local/bin/camlab-apply"
-sed -e "s|CAMLAB_REPO_DIR|$REPO_DIR|g" \
+sed -e "s|CAMLAB_APP_DIR|$CAMLAB_APP_DIR|g" \
     "$REPO_DIR/scripts/camlab-apply.sh" > /usr/local/bin/camlab-apply
 chmod 0755 /usr/local/bin/camlab-apply
 
