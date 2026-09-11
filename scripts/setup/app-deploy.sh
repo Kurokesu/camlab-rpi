@@ -28,6 +28,9 @@ require_root
 REPO_DIR="$(resolve_repo_dir)"
 APP_DIR="/opt/camlab"
 
+# Swap below deletes APP_DIR, keep cwd out
+cd /
+
 # Dev-clone clutter to prune from the copy
 mapfile -t DEV_CLUTTER < <(awk '$2 == "export-ignore" { sub(/\/$/, "", $1); print $1 }' \
     "$REPO_DIR/.gitattributes" 2>/dev/null)
