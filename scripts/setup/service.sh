@@ -38,7 +38,7 @@ save_camlab_user
 REPO_DIR="$(resolve_repo_dir)"
 
 header "Installing camlab.service"
-log "repo=$REPO_DIR user=$CAMLAB_USER uid=$CAMLAB_UID enable-at-boot=$ENABLE_AT_BOOT"
+log "app=$CAMLAB_APP_DIR user=$CAMLAB_USER uid=$CAMLAB_UID enable-at-boot=$ENABLE_AT_BOOT"
 
 systemctl stop camlab.service 2>/dev/null || true
 
@@ -50,7 +50,7 @@ fi
 
 sed \
     -e "s|CAMLAB_USER|$CAMLAB_USER|g" \
-    -e "s|CAMLAB_REPO_DIR|$REPO_DIR|g" \
+    -e "s|CAMLAB_APP_DIR|$CAMLAB_APP_DIR|g" \
     "$REPO_DIR/deploy/camlab.service" \
     > /etc/systemd/system/camlab.service
 log "Rendered /etc/systemd/system/camlab.service"

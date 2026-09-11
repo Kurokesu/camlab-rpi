@@ -30,6 +30,9 @@ fi
 CAMLAB_USER_FILE="${CAMLAB_USER_FILE:-/var/lib/camlab-setup/user}"
 CAMLAB_UNIT="${CAMLAB_UNIT:-/etc/systemd/system/camlab.service}"
 
+# Unit and shims run deployed tree
+CAMLAB_APP_DIR="${CAMLAB_APP_DIR:-/opt/camlab}"
+
 _camlab_user() {
     local user
     if [ -n "${CAMLAB_USER:-}" ]; then echo "$CAMLAB_USER"; return; fi

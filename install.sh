@@ -75,7 +75,7 @@ fi
 log "Install user: $CAMLAB_USER (uid=$CAMLAB_UID)"
 
 # Fixed app location. app-deploy.sh skips copy when run from $APP_DIR.
-APP_DIR="/opt/camlab"
+APP_DIR="$CAMLAB_APP_DIR"
 "$REPO_DIR/scripts/setup/app-deploy.sh"
 
 # Primitives run from $APP_DIR. Kernel trim before drivers. Overlay-root last.

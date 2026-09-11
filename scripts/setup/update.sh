@@ -32,7 +32,7 @@ UNIT="camlab-update.service"
 # Rendered aside, so an update boot re-running this cannot truncate its own shim.
 log "Installing /usr/local/bin/camlab-update"
 tmp_shim="$(mktemp)"
-sed -e "s|CAMLAB_REPO_DIR|$REPO_DIR|g" \
+sed -e "s|CAMLAB_APP_DIR|$CAMLAB_APP_DIR|g" \
     "$REPO_DIR/scripts/camlab-update.sh" > "$tmp_shim"
 install -m 0755 "$tmp_shim" /usr/local/bin/camlab-update
 rm -f "$tmp_shim"
