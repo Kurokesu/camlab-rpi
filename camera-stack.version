@@ -6,7 +6,8 @@
 # Versions are floors. Ceiling adds a trailing dot, so range covers Debian
 # revision rebuilds of same fork release
 
-LIBCAMERA_VERSION="1:0.7.2+rpt20260817+krks2"
+LIBCAMERA_VERSION="1:0.7.2+rpt20260817+krks3"
+# libcamera-ipa needs no pin, libcamera0.7 depends on its exact version
 LIBCAMERA_PACKAGES="libcamera0.7 python3-libcamera"
 
 RPICAM_APPS_VERSION="1:1.13.0+krks1"

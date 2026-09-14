@@ -67,21 +67,28 @@ fi
 # shellcheck source=../../camera-stack.version
 source "$(resolve_repo_dir)/camera-stack.version"
 
-in_range() { dpkg --compare-versions "$1" ge "$2" && dpkg --compare-versions "$1" lt "$2."; }
-
 RELATIONS=()
 STALE=()
+AHEAD=()
 for pin in "$LIBCAMERA_VERSION $LIBCAMERA_PACKAGES" \
            "$RPICAM_APPS_VERSION $RPICAM_APPS_PACKAGES"; do
     read -r floor packages <<<"$pin"
     for pkg in $packages; do
         RELATIONS+=("$pkg (>= $floor)" "$pkg (<< $floor.)")
         have="$(dpkg-query -Wf '${Version}' "$pkg" 2>/dev/null)" || have=""
-        in_range "${have:-0}" "$floor" || STALE+=("$pkg")
+        if dpkg --compare-versions "${have:-0}" lt "$floor"; then
+            STALE+=("$pkg")
+        elif dpkg --compare-versions "$have" ge "$floor."; then
+            AHEAD+=("$pkg")
+        fi
     done
 done
 
-if [ "${#STALE[@]}" -gt 0 ]; then
+if [ "${#AHEAD[@]}" -gt 0 ]; then
+    # Downgrading would drop rpicam-apps, which needs matching libcamera ABI
+    warn "Camera stack ahead of pin, left alone: ${AHEAD[*]}"
+    warn "Pin is $LIBCAMERA_VERSION / $RPICAM_APPS_VERSION in camera-stack.version"
+elif [ "${#STALE[@]}" -gt 0 ]; then
     log "Pinning camera stack: ${STALE[*]}"
     apt_get satisfy -y --no-install-recommends "${RELATIONS[@]}"
 else
