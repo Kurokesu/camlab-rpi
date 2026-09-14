@@ -91,14 +91,9 @@ for sensor in "${SENSORS[@]}"; do
 done
 
 # dkms only recommends gcc and recommends are off here.
-mapfile -t MISSING < <(missing_packages gcc "${PACKAGES[@]}")
-
-if [ "${#MISSING[@]}" -gt 0 ]; then
-    log "Installing: ${MISSING[*]}"
-    apt_get install -y "${MISSING[@]}"
-else
-    log "Drivers already installed: ${PACKAGES[*]}"
-fi
+mapfile -t MISSING < <(missing_packages gcc)
+# Drivers every run, so an outdated one upgrades
+apt_get install -y "${MISSING[@]}" "${PACKAGES[@]}"
 
 for sensor in "${SENSORS[@]}"; do
     if [ -f "$FW_OVERLAYS/${sensor}.dtbo" ]; then
