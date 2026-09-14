@@ -32,23 +32,14 @@ header "Installing camlab apt dependencies"
 ARCHIVE_SOURCES="/etc/apt/sources.list.d/kurokesu.sources"
 ARCHIVE_KEYRING="/etc/apt/keyrings/kurokesu-archive-keyring.gpg"
 
-# Installing from apt already enabled it, and a refresh costs a full index fetch.
 enable_archive() {
     if [ ! -f "$ARCHIVE_SOURCES" ] || [ ! -f "$ARCHIVE_KEYRING" ]; then
         log "Enabling Kurokesu apt archive..."
         local setup
         setup="$(mktemp)"
         curl -fsSL https://apt.kurokesu.com/setup.sh -o "$setup"
-        sh "$setup" --update
+        sh "$setup"
         rm -f "$setup"
-        return
-    fi
-
-    # Enabled but never fetched, so apt cannot see the packages yet.
-    local lists=(/var/lib/apt/lists/apt.kurokesu.com_*_Packages*)
-    if [ ! -e "${lists[0]}" ]; then
-        log "Kurokesu apt archive enabled, fetching index..."
-        apt_get update
         return
     fi
 
@@ -57,10 +48,19 @@ enable_archive() {
 
 enable_archive
 
+# Refresh every run
+apt_get update
+
 # eatmydata first (plain apt-get) so apt_get can use it below.
 if ! command -v eatmydata >/dev/null 2>&1; then
     log "Installing eatmydata..."
     apt-get install -y eatmydata
+fi
+
+# Deb holds stack range and app packages as Depends, leave them to apt
+if [ -z "$(missing_packages camlab-rpi)" ]; then
+    log "Done. Dependencies came with camlab-rpi."
+    exit 0
 fi
 
 # Stack first, or picamera2 pulls apt's candidate bindings past the pin
@@ -89,14 +89,19 @@ else
 fi
 
 # One pass, recommends off.
-# Pinned recommends: python3-opengl, qt6-wayland, awb-nn. wlr-randr for HDMI/DSI switch.
-# python3-pil draws boot splash text.
-mapfile -t MISSING < <(missing_packages \
-    python3-picamera2 \
-    python3-pyqt6 python3-opengl \
-    python3-yaml python3-pil \
-    cage wlr-randr \
-    qt6-wayland awb-nn)
+APP_PACKAGES=(
+    awb-nn
+    cage
+    python3-opengl
+    python3-picamera2
+    python3-pil
+    python3-pyqt6
+    python3-yaml
+    qt6-wayland
+    wlr-randr
+)
+
+mapfile -t MISSING < <(missing_packages "${APP_PACKAGES[@]}")
 
 if [ "${#MISSING[@]}" -gt 0 ]; then
     log "Installing packages: ${MISSING[*]}"
@@ -104,5 +109,8 @@ if [ "${#MISSING[@]}" -gt 0 ]; then
 else
     log "Packages already installed."
 fi
+
+# Mark manual, or autoremove reclaims what a removed package left auto
+apt-mark manual "${APP_PACKAGES[@]}"
 
 log "Done. All apt dependencies installed."
