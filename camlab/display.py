@@ -33,7 +33,7 @@ _TOUCH_TIMEOUT_S = 5.0
 # Debounce Qt screen-event burst before enforcing. Same beat after lets Qt pick up new topology.
 _SETTLE_MS = 300
 
-# GPU render budget, larger output drops camera frames
+# GPU render budget, larger output makes the viewfinder miss frames
 _MONITOR_MAX = (1920, 1080)
 # Nominal 60 reports as 59.94 or 60.03
 _MAX_REFRESH_HZ = 60.5
