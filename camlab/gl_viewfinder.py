@@ -592,8 +592,8 @@ class GlFrameWidget(QOpenGLWidget):
         vx, vy, vw, vh = self._letterbox_viewport()
         if self._frosted:
             try:
-                self._draw_frosted(texture, (vx, vy, vw, vh))
-                return
+                if self._draw_frosted(texture, (vx, vy, vw, vh)):
+                    return
             except Exception:
                 # Broken frost must never kill the viewfinder: back to sharp for good.
                 log.exception("frost render failed, disabling")
@@ -783,10 +783,17 @@ class GlFrameWidget(QOpenGLWidget):
         return (ww - w) // 2, (wh - h) // 2, w, h
 
     # frost chain (camera -> 1/4 -> 1/8 -> Gaussian ping-pong -> screen)
-    def _draw_frosted(self, camera_texture: int, viewport) -> None:
+    def _draw_frosted(self, camera_texture: int, viewport) -> bool:
+        """False when the source size is not known yet, so the caller draws plain.
+
+        Same reason as the assist pass, the caller's catch latches frost off.
+        """
+        size = self._stream_size()
+        if size is None:
+            return False
         # camera -> A rotates while sampling, so A onward is already displayed
         # orientation. FBOs must match it or the frost squashes.
-        iw, ih = self._displayed(*self._stream.size())
+        iw, ih = self._displayed(*size)
         self._ensure_targets(iw, ih)
         (aw, ah), (bw, bh) = self._sizes[0], self._sizes[1]
         a_fbo, b_fbo, c_fbo = self._fbos[:3]
@@ -821,6 +828,7 @@ class GlFrameWidget(QOpenGLWidget):
         self._use(self._prog_copy)
         glBindTexture(GL_TEXTURE_2D, b_tex)
         glDrawArrays(GL_TRIANGLE_FAN, 0, 4)
+        return True
 
     def _ensure_targets(self, width: int, height: int) -> None:
         """(Re)allocate blur textures when the display stream size changes."""
