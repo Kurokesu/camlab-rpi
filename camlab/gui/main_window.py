@@ -297,6 +297,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._refit_timer.setSingleShot(True)
         self._refit_timer.setInterval(500)
         self._refit_timer.timeout.connect(self._refit_lores)
+        # Same settle as the refit, a profile switch measures mid-resize otherwise
+        self._refit_timer.timeout.connect(self._check_chrome_fit)
 
     def _watch_screens(self) -> None:
         # Re-assert fullscreen whenever screen topology changes.
@@ -958,7 +960,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self._apply_profile(profile)
         self._resync_fullscreen()
         self._refit_timer.start()
-        QtCore.QTimer.singleShot(0, self._check_chrome_fit)
 
     def _check_chrome_fit(self) -> None:
         """Chrome wider than the screen clips silently, so say so loudly."""
