@@ -321,6 +321,11 @@ _FRAG_BLUR = """
 """
 
 
+def _guide_size(width: int, height: int) -> tuple[int, int]:
+    """Peaking guide grid for a source of this size, half resolution each way."""
+    return max(1, width // 2), max(1, height // 2)
+
+
 def install_gles_format() -> None:
     """Make GLES the app-wide default context type (call before QApplication).
 
@@ -399,11 +404,34 @@ class _DisplayStream:
     def __init__(self, picam2):
         self.picam2 = picam2
         self.buffers: dict = {}  # libcamera request -> _Buffer
+        # Heads paint in no fixed order, so the guide carries the frame it holds
+        self.frame_seq = 0
+        self.guide_seq = -1
+        self._guide_texture: int | None = None
+        self._guide_key: tuple[int, bool] | None = None
         self._stop_count = 0
 
     def size(self) -> tuple[int, int]:
         cfg = self.picam2.stream_map[self.picam2.camera_config["display"]].configuration
         return cfg.size.width, cfg.size.height
+
+    def reset(self) -> None:
+        """Drop every shared GL object, a new context inherits none of them."""
+        self.buffers = {}
+        self.guide_seq = -1
+        self._guide_texture = None
+        self._guide_key = None
+
+    def guide_for(self, key: tuple[int, bool]) -> int | None:
+        """Shared guide texture for heads showing orientation key, None for the rest.
+
+        First head to peak claims it. A turned head reads its grid along other
+        axes, so it gets no share and keeps its own.
+        """
+        if self._guide_key is None:
+            self._guide_key = key
+            self._guide_texture = int(glGenTextures(1))
+        return self._guide_texture if self._guide_key == key else None
 
     def buffer_for(self, completed_request) -> _Buffer:
         if completed_request.request not in self.buffers:
@@ -588,37 +616,56 @@ class GlFrameWidget(QOpenGLWidget):
 
     # assist chain (luma -> guide -> marks over the frame)
     def _draw_fx(self, buffer, viewport) -> None:
-        vx, vy, vw, vh = viewport
         self._ensure_fx_programs()
+        source = self._displayed(*self._stream.size())
         luma, gain = buffer.luma, _LUMA_GAIN
         if luma is None:
-            luma, gain = self._render_luma(buffer.texture, vw, vh), 1.0
+            luma, gain = self._render_luma(buffer.texture, *self._stream.size()), 1.0
         glActiveTexture(GL_TEXTURE0 + 2)
         glBindTexture(GL_TEXTURE_2D, luma)
         glActiveTexture(GL_TEXTURE0)
-        if self._peaking:
-            gw, gh = max(1, vw // 2), max(1, vh // 2)
-            self._ensure_target(3, gw, gh, GL_RG8, GL_RG, GL_LINEAR)
-            glBindFramebuffer(GL_FRAMEBUFFER, self._fbos[3])
-            glViewport(0, 0, gw, gh)
-            self._use(self._prog_guide)
-            sx, sy = self._peak_basis(gw, gh)
-            glUniform2f(self._guide_locs["stepX"], *sx)
-            glUniform2f(self._guide_locs["stepY"], *sy)
-            glUniform1f(self._guide_locs["gain"], gain)
-            glDrawArrays(GL_TRIANGLE_FAN, 0, 4)
-            glBindFramebuffer(GL_FRAMEBUFFER, self.defaultFramebufferObject())
-        glViewport(vx, vy, vw, vh)
-        self._use_fx(vw, vh, gain)
+        guide = self._draw_guide(source, gain) if self._peaking else self._texs[3]
+        glViewport(*viewport)
+        self._use_fx(source, gain)
         glActiveTexture(GL_TEXTURE0 + 1)
-        glBindTexture(GL_TEXTURE_2D, self._texs[3])
+        glBindTexture(GL_TEXTURE_2D, guide)
         glActiveTexture(GL_TEXTURE0)
         glBindTexture(GL_TEXTURE_EXTERNAL_OES, buffer.texture)
         glDrawArrays(GL_TRIANGLE_FAN, 0, 4)
 
+    def _draw_guide(self, source: tuple[int, int], gain: float) -> int:
+        """Guide texture to sample marks against, drawn unless a head got there first.
+
+        Grid comes off the source, so heads sharing it resolve the same edges
+        whatever size each draws the picture.
+        """
+        gw, gh = _guide_size(*source)
+        shared = self._stream.guide_for((self._transform, self._mirror))
+        if shared is None:
+            self._ensure_target(3, self._texs[3], gw, gh, GL_RG8, GL_RG, GL_LINEAR)
+            self._render_guide(gw, gh, gain)
+            return self._texs[3]
+        # Fresh storage is empty, so an earlier stamp means nothing
+        fresh = self._ensure_target(3, shared, gw, gh, GL_RG8, GL_RG, GL_LINEAR)
+        if fresh or self._stream.guide_seq != self._stream.frame_seq:
+            self._render_guide(gw, gh, gain)
+            self._stream.guide_seq = self._stream.frame_seq
+        return shared
+
+    def _render_guide(self, gw: int, gh: int, gain: float) -> None:
+        glBindFramebuffer(GL_FRAMEBUFFER, self._fbos[3])
+        glViewport(0, 0, gw, gh)
+        self._use(self._prog_guide)
+        sx, sy = self._peak_basis(gw, gh)
+        glUniform2f(self._guide_locs["stepX"], *sx)
+        glUniform2f(self._guide_locs["stepY"], *sy)
+        glUniform1f(self._guide_locs["gain"], gain)
+        glDrawArrays(GL_TRIANGLE_FAN, 0, 4)
+        glBindFramebuffer(GL_FRAMEBUFFER, self.defaultFramebufferObject())
+
     def _render_luma(self, camera_texture: int, width: int, height: int) -> int:
         """Convert camera texture to an R8 target, for formats with no plane."""
-        self._ensure_target(4, width, height, GL_R8, GL_RED, GL_LINEAR)
+        self._ensure_target(4, self._texs[4], width, height, GL_R8, GL_RED, GL_LINEAR)
         glBindFramebuffer(GL_FRAMEBUFFER, self._fbos[4])
         glViewport(0, 0, width, height)
         self._use(self._prog_luma)
@@ -661,37 +708,42 @@ class GlFrameWidget(QOpenGLWidget):
         glUniform3f(glGetUniformLocation(self._prog_fx, "peakColor"), *_PEAK_COLOR)
         glUniform1f(glGetUniformLocation(self._prog_fx, "peakThr"), _PEAK_THR)
 
-    def _ensure_target(self, slot: int, width: int, height: int, internal, fmt, filt) -> None:
-        """(Re)allocate an assist target when the letterboxed viewport changes."""
-        if self._assist_sizes.get(slot) == (width, height):
-            return
-        glBindTexture(GL_TEXTURE_2D, self._texs[slot])
+    def _ensure_target(
+        self, slot: int, texture: int, width: int, height: int, internal, fmt, filt
+    ) -> bool:
+        """(Re)allocate an assist target, True when its storage is new.
+
+        Framebuffers are never shared between contexts, so a head hangs a shared
+        texture off one of its own.
+        """
+        if self._assist_sizes.get(slot) == (texture, width, height):
+            return False
+        glBindTexture(GL_TEXTURE_2D, texture)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filt)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filt)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)
         glTexImage2D(GL_TEXTURE_2D, 0, internal, width, height, 0, fmt, GL_UNSIGNED_BYTE, None)
         glBindFramebuffer(GL_FRAMEBUFFER, self._fbos[slot])
-        glFramebufferTexture2D(
-            GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, self._texs[slot], 0
-        )
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0)
         if glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE:
             raise RuntimeError("assist framebuffer incomplete")
         glBindFramebuffer(GL_FRAMEBUFFER, self.defaultFramebufferObject())
-        self._assist_sizes[slot] = (width, height)
+        self._assist_sizes[slot] = (texture, width, height)
+        return True
 
-    def _use_fx(self, vw: int, vh: int, gain: float) -> None:
+    def _use_fx(self, source: tuple[int, int], gain: float) -> None:
         """Activate the assist (peaking/zebra) program with per-frame uniforms."""
         self._use(self._prog_fx)
         loc = self._fx_locs
-        # Step never finer than one source texel
-        sw, sh = self._displayed(*self._stream.size())
-        sx, sy = self._peak_basis(min(vw, sw), min(vh, sh))
+        # One source texel, so every head weighs an edge alike
+        sw, sh = source
+        sx, sy = self._peak_basis(sw, sh)
         glUniform2f(loc["stepX"], *sx)
         glUniform2f(loc["stepY"], *sy)
-        # Guide is display oriented. A wider step here cancels the edge in f - b
-        glUniform2f(loc["guideX"], 1.0 / max(vw, 1), 0.0)
-        glUniform2f(loc["guideY"], 0.0, -1.0 / max(vh, 1))
+        # Guide is half the source. A wider step here cancels the edge in f - b
+        glUniform2f(loc["guideX"], 1.0 / max(sw, 1), 0.0)
+        glUniform2f(loc["guideY"], 0.0, -1.0 / max(sh, 1))
         glUniform1f(loc["gain"], gain)
         glUniform1f(loc["peaking"], 1.0 if self._peaking else 0.0)
         glUniform1f(loc["zebra"], 1.0 if self._zebra else 0.0)
@@ -805,8 +857,8 @@ class GlViewfinder(GlFrameWidget):
 
     def initializeGL(self) -> None:
         super().initializeGL()
-        # Lost context takes shared imports with it, so drop them once here
-        self._stream.buffers = {}
+        # Lost context takes the shared objects with it, so drop them once here
+        self._stream.reset()
 
     # picamera2 event-loop contract
     def _handle_requests(self) -> None:
@@ -829,6 +881,7 @@ class GlViewfinder(GlFrameWidget):
         self.own_current = completed_request.config["buffer_count"] > 1
         if self.own_current:
             completed_request.acquire()
+        self._stream.frame_seq += 1
         self.show_request(completed_request)
         self.frame.emit(completed_request)
 
