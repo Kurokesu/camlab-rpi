@@ -21,18 +21,6 @@ INPUT_ROOT = Path(os.environ.get("CAMLAB_INPUT_ROOT", "/sys/class/input"))
 _INPUT_PROP_DIRECT = 1 << 1
 
 
-def connected_connectors() -> set[str]:
-    """Connector names (HDMI-A-1, DSI-2, ...) whose DRM status is connected."""
-    names = set()
-    for status in DRM_ROOT.glob("card*-*/status"):
-        try:
-            if status.read_text().strip() == "connected":
-                names.add(status.parent.name.split("-", 1)[1])
-        except OSError:
-            continue
-    return names
-
-
 def has_dsi_connector() -> bool:
     """True when a DSI connector exists (a panel overlay is bound).
     DSI has no hotplug detect, so this is static within a boot."""
