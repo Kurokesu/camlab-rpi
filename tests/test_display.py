@@ -1,11 +1,12 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Output layout table, wlr-randr parsing, mode choice, touch matrix and topology."""
+"""Output layout, wlr-randr parsing, mode choice, touch matrix, topology and cursor policy."""
 
 from __future__ import annotations
 
 import logging
+import os
 from types import SimpleNamespace
 
 import pytest
@@ -23,7 +24,7 @@ from camlab.display import (
     plan_layout,
     touch_matrix,
 )
-from camlab.qt import QtCore
+from camlab.qt import QtCore, QtWidgets
 from camlab.settings import DisplayMode
 
 REPORT = """DSI-2 "(null) (null) (DSI-2)"
@@ -377,3 +378,59 @@ def test_manager_emits_topology_from_app_screens():
     manager.topology_changed.connect(seen.append)
     manager._emit_changed()
     assert seen == [Topology(panel=PANEL_RECT, monitor=MONITOR_RECT, bounds=UNION_RECT)]
+
+
+@pytest.fixture(scope="module")
+def qapp():
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    return QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+
+
+class CursorApp(QtCore.QObject):
+    """QApplication stand-in recording installed event filters."""
+
+    def __init__(self):
+        super().__init__()
+        self.filters: list[QtCore.QObject] = []
+
+    def installEventFilter(self, obj) -> None:
+        self.filters.append(obj)
+
+    def removeEventFilter(self, obj) -> None:
+        self.filters.remove(obj)
+
+    def setOverrideCursor(self, _cursor) -> None:
+        pass
+
+    def restoreOverrideCursor(self) -> None:
+        pass
+
+
+@pytest.fixture
+def cursor_rig(qapp, monkeypatch):
+    """Revealed CursorPolicy over a stand-in app, both touchscreen probes scripted."""
+
+    def build(dsi: bool, listed: bool) -> tuple[CursorApp, display.CursorPolicy]:
+        monkeypatch.setattr(display, "has_dsi_display", lambda: dsi)
+        monkeypatch.setattr(display, "_touchscreen_attached", lambda: listed)
+        app = CursorApp()
+        policy = display.CursorPolicy(app)
+        policy._set_visible(True)
+        return app, policy
+
+    return build
+
+
+def test_cursor_filter_survives_a_touch_device_readd(cursor_rig):
+    app, policy = cursor_rig(dsi=True, listed=False)
+    assert app.filters == [policy]
+
+
+def test_cursor_filter_stays_for_a_touchscreen_off_the_panel(cursor_rig):
+    app, policy = cursor_rig(dsi=False, listed=True)
+    assert app.filters == [policy]
+
+
+def test_cursor_filter_retires_with_no_touchscreen_anywhere(cursor_rig):
+    app, _policy = cursor_rig(dsi=False, listed=False)
+    assert app.filters == []
