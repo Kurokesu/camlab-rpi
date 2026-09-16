@@ -25,6 +25,7 @@ from .modes import (
     enumerate_modes,
     fps_to_frame_duration,
     plan_lores_size,
+    plan_main_size,
 )
 from .qt import QtCore
 
@@ -193,7 +194,7 @@ class CameraEngine:
             raise RuntimeError("camera not opened")
         self.fps_fixed = bool(fps_fixed)
         sensor_size = tuple(mode.size)
-        main_size = sensor_size if main_size is None else tuple(main_size)
+        main_size = plan_main_size(sensor_size) if main_size is None else tuple(main_size)
         self._main_size = main_size
         self._raw = bool(raw)
         lores_size = plan_lores_size(main_size, tuple(avail_size))
