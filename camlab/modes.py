@@ -30,6 +30,8 @@ _FPS_EPS = 0.5
 # Lores alignment. Even size avoids fractional scaling artifacts.
 _LORES_ALIGN = 2
 
+_STREAM_MAX_PIXELS = 1920 * 1080
+
 
 @dataclass(frozen=True)
 class SensorMode:
@@ -175,19 +177,34 @@ def resolve_initial_mode(modes: list[SensorMode], saved: dict | None) -> tuple[S
     return default_mode(modes)
 
 
+def _budget_scale(size: tuple[int, int]) -> float:
+    """Scale that brings size within the stream budget."""
+    w, h = size
+    return min(1.0, (_STREAM_MAX_PIXELS / (w * h)) ** 0.5)
+
+
+def _scaled(size: tuple[int, int], scale: float) -> tuple[int, int]:
+    """Size scaled down, aligned even."""
+    out = []
+    for value in size:
+        scaled = max(_LORES_ALIGN, round(value * scale))
+        out.append(min(scaled - scaled % _LORES_ALIGN, value))
+    return (out[0], out[1])
+
+
+def plan_main_size(sensor_size: tuple[int, int]) -> tuple[int, int]:
+    """Preview main size, sensor readout brought within the stream budget."""
+    return _scaled(sensor_size, _budget_scale(sensor_size))
+
+
 def plan_lores_size(main_size: tuple[int, int], avail_size: tuple[int, int]) -> tuple[int, int]:
     """Largest lores size with main aspect ratio that fits viewfinder area.
 
     Lores stream is what the GL widget shows. We keep it at the main aspect
-    ratio (so the ISP scale is undistorted) and never upscale beyond main.
+    ratio, so the ISP scale is undistorted.
     """
     mw, mh = main_size
     aw, ah = avail_size
     if aw <= 0 or ah <= 0:
         aw, ah = 1280, 720
-    scale = min(aw / mw, ah / mh, 1.0)
-    lw = max(_LORES_ALIGN, int(mw * scale))
-    lh = max(_LORES_ALIGN, int(mh * scale))
-    lw -= lw % _LORES_ALIGN
-    lh -= lh % _LORES_ALIGN
-    return (min(lw, mw), min(lh, mh))
+    return _scaled(main_size, min(aw / mw, ah / mh, _budget_scale(main_size)))
