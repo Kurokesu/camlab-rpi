@@ -24,7 +24,7 @@ from camlab.display import (
     plan_layout,
     touch_matrix,
 )
-from camlab.qt import QtCore, QtWidgets
+from camlab.qt import QtCore, QtWidgets, Signal
 from camlab.settings import DisplayMode
 
 REPORT = """DSI-2 "(null) (null) (DSI-2)"
@@ -378,6 +378,81 @@ def test_manager_emits_topology_from_app_screens():
     manager.topology_changed.connect(seen.append)
     manager._emit_changed()
     assert seen == [Topology(panel=PANEL_RECT, monitor=MONITOR_RECT, bounds=UNION_RECT)]
+
+
+class ScreenStub(QtCore.QObject):
+    """QScreen stand-in with the one signal DisplayManager watches."""
+
+    geometryChanged = Signal(object)
+
+
+class HotplugApp(QtCore.QObject):
+    """QApplication stand-in: screen signals over a mutable screen list."""
+
+    screenAdded = Signal(object)
+    screenRemoved = Signal(object)
+
+    def __init__(self, *screens: ScreenStub):
+        super().__init__()
+        self.lit = list(screens)
+
+    def screens(self) -> list[ScreenStub]:
+        return list(self.lit)
+
+    def plug(self, screen: ScreenStub) -> None:
+        self.lit.append(screen)
+        self.screenAdded.emit(screen)
+
+
+class SettleSpy:
+    """Debounce timer stand-in, counting arms instead of firing."""
+
+    def __init__(self):
+        self.arms = 0
+
+    def start(self) -> None:
+        self.arms += 1
+
+
+def _spied(app: HotplugApp) -> tuple[display.DisplayManager, SettleSpy]:
+    """Manager with the debounce swapped for a spy."""
+    manager = display.DisplayManager(app, lambda: DisplayMode.EXTERNAL)
+    spy = SettleSpy()
+    manager._settle = spy
+    return manager, spy
+
+
+NEW_GEOMETRY = QtCore.QRect(0, 0, 1280, 720)
+
+
+def test_mode_change_on_a_live_output_runs_the_pass():
+    screen = ScreenStub()
+    manager, spy = _spied(HotplugApp(screen))
+    manager.start()
+    assert spy.arms == 1
+    screen.geometryChanged.emit(NEW_GEOMETRY)
+    assert spy.arms == 2
+
+
+def test_mode_change_on_a_hotplugged_output_runs_the_pass():
+    app = HotplugApp()
+    manager, spy = _spied(app)
+    manager.start()
+    screen = ScreenStub()
+    app.plug(screen)
+    screen.geometryChanged.emit(NEW_GEOMETRY)
+    assert spy.arms == 3
+
+
+def test_every_screen_signal_arms_the_one_debounce():
+    screen = ScreenStub()
+    app = HotplugApp(screen)
+    manager, spy = _spied(app)
+    manager.start()
+    app.screenRemoved.emit(screen)
+    screen.geometryChanged.emit(NEW_GEOMETRY)
+    screen.geometryChanged.emit(NEW_GEOMETRY)
+    assert spy.arms == 4
 
 
 @pytest.fixture(scope="module")

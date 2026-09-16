@@ -308,7 +308,7 @@ class Topology:
 
 
 class DisplayManager(QtCore.QObject):
-    """Applies output layout at boot and after every hotplug settle."""
+    """Applies output layout at boot and after every screen change settles."""
 
     # Topology after every enforcement pass, no-ops and empty screen lists included.
     topology_changed = Signal(object)
@@ -324,10 +324,20 @@ class DisplayManager(QtCore.QObject):
         self._settle.timeout.connect(self._enforce)
 
     def start(self) -> None:
-        """Connect hotplug signals and run the first enforcement pass."""
-        self._app.screenAdded.connect(lambda _s: self._settle.start())
+        """Connect screen signals and run the first enforcement pass."""
+        self._app.screenAdded.connect(self._on_screen_added)
         self._app.screenRemoved.connect(lambda _s: self._settle.start())
+        for screen in self._app.screens():
+            self._watch_geometry(screen)
         self._settle.start()
+
+    def _on_screen_added(self, screen) -> None:
+        self._watch_geometry(screen)
+        self._settle.start()
+
+    def _watch_geometry(self, screen) -> None:
+        # A mode change on a live output needs the same pass as a head coming or going
+        screen.geometryChanged.connect(lambda _g: self._settle.start())
 
     def _enforce(self) -> None:
         apply_output_layout(self._get_mode())
