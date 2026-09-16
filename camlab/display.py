@@ -337,6 +337,11 @@ class DisplayManager(QtCore.QObject):
         self.topology_changed.emit(Topology.from_screens(self._app.screens()))
 
 
+def _touchscreen_attached() -> bool:
+    touch = QtGui.QInputDevice.DeviceType.TouchScreen
+    return any(d.type() == touch for d in QtGui.QInputDevice.devices())
+
+
 class CursorPolicy(QtCore.QObject):
     """Blank the cursor until a real mouse moves, re-blank it on touch.
 
@@ -383,8 +388,8 @@ class CursorPolicy(QtCore.QObject):
             self._app.setOverrideCursor(QtGui.QCursor(QtCore.Qt.CursorShape.BlankCursor))
 
     def _maybe_retire(self) -> None:
-        touch = QtGui.QInputDevice.DeviceType.TouchScreen
-        if any(d.type() == touch for d in QtGui.QInputDevice.devices()):
+        # Cached panel answer first, camlabctl's touch re-add thins Qt's live list
+        if has_dsi_display() or _touchscreen_attached():
             return
         self._app.removeEventFilter(self)
 
