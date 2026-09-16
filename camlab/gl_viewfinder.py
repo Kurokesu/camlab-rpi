@@ -602,8 +602,8 @@ class GlFrameWidget(QOpenGLWidget):
                 glBindFramebuffer(GL_FRAMEBUFFER, self.defaultFramebufferObject())
         if self._peaking or self._zebra:
             try:
-                self._draw_fx(buffer, (vx, vy, vw, vh))
-                return
+                if self._draw_fx(buffer, (vx, vy, vw, vh)):
+                    return
             except Exception:
                 # Assists are optional: never let one take the viewfinder down.
                 log.exception("assist render failed, disabling")
@@ -615,12 +615,20 @@ class GlFrameWidget(QOpenGLWidget):
         glDrawArrays(GL_TRIANGLE_FAN, 0, 4)
 
     # assist chain (luma -> guide -> marks over the frame)
-    def _draw_fx(self, buffer, viewport) -> None:
+    def _draw_fx(self, buffer, viewport) -> bool:
+        """False when the source size is not known yet, so the caller draws plain.
+
+        Returning rather than raising keeps a reconfigure from tripping the
+        caller's catch, which switches assists off for the session.
+        """
+        size = self._stream_size()
+        if size is None:
+            return False
         self._ensure_fx_programs()
-        source = self._displayed(*self._stream.size())
+        source = self._displayed(*size)
         luma, gain = buffer.luma, _LUMA_GAIN
         if luma is None:
-            luma, gain = self._render_luma(buffer.texture, *self._stream.size()), 1.0
+            luma, gain = self._render_luma(buffer.texture, *size), 1.0
         glActiveTexture(GL_TEXTURE0 + 2)
         glBindTexture(GL_TEXTURE_2D, luma)
         glActiveTexture(GL_TEXTURE0)
@@ -632,6 +640,14 @@ class GlFrameWidget(QOpenGLWidget):
         glActiveTexture(GL_TEXTURE0)
         glBindTexture(GL_TEXTURE_EXTERNAL_OES, buffer.texture)
         glDrawArrays(GL_TRIANGLE_FAN, 0, 4)
+        return True
+
+    def _stream_size(self) -> tuple[int, int] | None:
+        """Stream size, None while the camera is between configurations."""
+        try:
+            return self._stream.size()
+        except Exception:  # noqa: BLE001 no size to report between configurations
+            return None
 
     def _draw_guide(self, source: tuple[int, int], gain: float) -> int:
         """Guide texture to sample marks against, drawn unless a head got there first.
@@ -754,11 +770,10 @@ class GlFrameWidget(QOpenGLWidget):
     def _letterbox_viewport(self) -> tuple[int, int, int, int]:
         dpr = self.devicePixelRatioF()
         ww, wh = round(self.width() * dpr), round(self.height() * dpr)
-        try:
-            iw, ih = self._stream.size()
-        except Exception:  # noqa: BLE001 no stream size yet, fill the widget
+        size = self._stream_size()
+        if size is None:  # nothing to letterbox against yet, fill the widget
             return 0, 0, ww, wh
-        iw, ih = self._displayed(iw, ih)
+        iw, ih = self._displayed(*size)
         if iw * wh > ww * ih:
             w = ww
             h = w * ih // iw
