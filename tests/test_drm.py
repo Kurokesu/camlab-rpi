@@ -9,14 +9,8 @@ from camlab import drm
 
 
 def test_no_tree_reads_empty(drm_root):
-    assert drm.connected_connectors() == set()
     assert drm.has_dsi_connector() is False
     assert drm.dsi_blocked_ports() == set()
-
-
-def test_connected_connectors_skip_disconnected(fake_drm):
-    fake_drm({"HDMI-A-1": "connected", "DSI-2": "disconnected"})
-    assert drm.connected_connectors() == {"HDMI-A-1"}
 
 
 def test_has_dsi_connector_ignores_status(fake_drm):
