@@ -1,0 +1,47 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 UAB Kurokesu
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Put the vc4 card first in WLR_DRM_DEVICES, then exec the command given.
+#
+# wlroots makes the first KMS device primary and drives every other output
+# through a cross-device copy. udev enumerates the DSI panel ahead of vc4, which
+# leaves the monitor paying that copy. Inverting it costs the panel far less,
+# since it is the smaller output.
+#
+# Card numbers follow probe order, so they are resolved here rather than pinned.
+# /dev/dri/by-path is no use, its vc4 name contains a colon and the variable is
+# colon separated.
+
+set -eu
+
+# Connector directories exist only on cards that can drive an output. v3d is
+# render only and wlroots rejects it.
+drives_output() {
+	for conn in "$1"/"$2"-*; do
+		[ -e "$conn" ] && return 0
+	done
+	return 1
+}
+
+vc4=""
+rest=""
+for card in /sys/class/drm/card[0-9]*; do
+	[ -e "$card" ] || continue
+	name="${card##*/}"
+	case "$name" in *-*) continue ;; esac
+	drives_output "$card" "$name" || continue
+	if grep -qx 'DRIVER=vc4-drm' "$card/device/uevent" 2>/dev/null; then
+		vc4="$vc4:/dev/dri/$name"
+	else
+		rest="$rest:/dev/dri/$name"
+	fi
+done
+
+# Order is only worth stating when vc4 shares the machine with another card
+if [ -n "$vc4" ] && [ -n "$rest" ]; then
+	WLR_DRM_DEVICES="${vc4#:}$rest"
+	export WLR_DRM_DEVICES
+fi
+
+exec "$@"

@@ -59,6 +59,9 @@ CURSOR_DIR=/usr/local/lib/camlab/cursors
 python3 "$REPO_DIR/deploy/blank-cursor.py" "$CURSOR_DIR"
 log "Wrote blank cursor theme to $CURSOR_DIR (XCURSOR_PATH in the unit)"
 
+install -D -m 0755 "$REPO_DIR/deploy/drm-order" /usr/local/lib/camlab/drm-order
+log "Installed /usr/local/lib/camlab/drm-order (vc4 first, ExecStart wrapper)"
+
 cat > /etc/pam.d/camlab <<'PAMEOF'
 auth       required pam_unix.so
 auth       required pam_env.so
