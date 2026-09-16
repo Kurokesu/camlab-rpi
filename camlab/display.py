@@ -125,16 +125,18 @@ def parse_outputs(text: str) -> dict[str, Output]:
     return outputs
 
 
+def _within_budget(mode: Mode) -> bool:
+    return (
+        mode.width <= _MONITOR_MAX[0]
+        and mode.height <= _MONITOR_MAX[1]
+        and mode.refresh <= _MAX_REFRESH_HZ
+    )
+
+
 def pick_mode(modes: Iterable[Mode]) -> Mode | None:
     """Falls back to preferred so sinks with no fitting mode still light."""
     modes = tuple(modes)
-    fits = [
-        m
-        for m in modes
-        if m.width <= _MONITOR_MAX[0]
-        and m.height <= _MONITOR_MAX[1]
-        and m.refresh <= _MAX_REFRESH_HZ
-    ]
+    fits = [m for m in modes if _within_budget(m)]
     if fits:
         return max(fits, key=lambda m: (m.width * m.height, m.refresh))
     return next((m for m in modes if m.preferred), None)
@@ -171,19 +173,25 @@ def plan_layout(mode: DisplayMode, outputs: Mapping[str, Output], dsi_display: b
             return Layout()  # nothing to fall back to, phantom stays lit
         return Layout(on=(Target(panel, None, (0, 0)),))
 
+    if panel is not None and mode is DisplayMode.BUILTIN:
+        return Layout(on=(Target(panel, None, (0, 0)),), off=spare + (monitor,))
+
     mon_mode = pick_mode(outputs[monitor].modes)
+    if mon_mode is not None and not _within_budget(mon_mode):
+        log.warning(
+            "%s has no mode within %dx%d, driving %s past budget",
+            monitor,
+            *_MONITOR_MAX,
+            mon_mode.arg(),
+        )
     if panel is None:
         return Layout(on=(Target(monitor, mon_mode, (0, 0)),), off=spare + phantom)
-
-    panel_target = Target(panel, None, (0, 0))
-    if mode is DisplayMode.BUILTIN:
-        return Layout(on=(panel_target,), off=spare + (monitor,))
 
     if mode is DisplayMode.BOTH:
         pw, ph = native_mode(outputs[panel]).size
         mw, mh = mon_mode.size
         return Layout(
-            on=(panel_target, Target(monitor, mon_mode, (pw, 0))),
+            on=(Target(panel, None, (0, 0)), Target(monitor, mon_mode, (pw, 0))),
             off=spare,
             touch=touch_matrix((0, 0, pw, ph), (pw + mw, max(ph, mh))),
         )

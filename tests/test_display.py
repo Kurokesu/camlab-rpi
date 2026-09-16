@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace
 
 import pytest
@@ -69,6 +70,9 @@ MONITOR_MODES = (
 )
 MONITOR = Output("HDMI-A-1", True, MONITOR_MODES, pos=(800, 0))
 PICKED = Mode(1920, 1080, 60.0, current=True)
+
+UHD = Mode(3840, 2160, 60.0, preferred=True)
+UHD_MONITOR = Output("HDMI-A-1", True, (Mode(3840, 2160, 30.0), UHD))
 
 
 def _outputs(*outs: Output) -> dict[str, Output]:
@@ -212,6 +216,27 @@ def test_both_places_monitor_right_of_panel():
     )
     assert layout.off == ()
     assert layout.touch == touch_matrix((0, 0, 800, 480), (2720, 1080))
+
+
+def test_monitor_past_budget_still_lights_and_says_so(caplog):
+    with caplog.at_level(logging.WARNING, logger="camlab.display"):
+        layout = plan_layout(DisplayMode.EXTERNAL, _outputs(UHD_MONITOR), dsi_display=False)
+    assert layout.on == (Target("HDMI-A-1", UHD, (0, 0)),)
+    assert "HDMI-A-1" in caplog.text
+    assert UHD.arg() in caplog.text
+
+
+def test_monitor_within_budget_is_quiet(caplog):
+    with caplog.at_level(logging.WARNING, logger="camlab.display"):
+        plan_layout(DisplayMode.EXTERNAL, _outputs(MONITOR), dsi_display=False)
+    assert caplog.records == []
+
+
+def test_builtin_is_quiet_about_the_monitor_it_switches_off(caplog):
+    with caplog.at_level(logging.WARNING, logger="camlab.display"):
+        layout = plan_layout(DisplayMode.BUILTIN, _outputs(PANEL, UHD_MONITOR), dsi_display=True)
+    assert layout.off == ("HDMI-A-1",)
+    assert caplog.records == []
 
 
 @pytest.fixture
