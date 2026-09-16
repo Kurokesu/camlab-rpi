@@ -20,6 +20,8 @@ StateDirectory=camlab
 StateDirectoryMode=0750
 
 TTYPath=/dev/tty1
+# Drop tty1 scrollback around each run, so stop leaves black screen not stale text
+TTYVTDisallocate=yes
 StandardInput=tty-fail
 StandardOutput=journal
 StandardError=journal
