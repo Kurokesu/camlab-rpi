@@ -11,8 +11,7 @@ import pytest
 
 pytest.importorskip("PyQt6")
 
-from test_dmesg import CAMERA_STACK, FAILURES, PROBE_FAILURE
-from test_stack import logged
+from conftest import CAMERA_STACK, FAILURES, PROBE_FAILURE, logged
 
 from camlab import dmesg, stack
 from camlab.gui.log_panel import LogPanel

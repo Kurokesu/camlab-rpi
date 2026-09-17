@@ -15,7 +15,7 @@ import pytest
 pytest.importorskip("picamera2")
 pytest.importorskip("PyQt6")
 
-from test_dmesg import PROBE_FAILURE
+from conftest import PROBE_FAILURE
 
 from camlab import dmesg
 from camlab.gui.main_window import MainWindow
