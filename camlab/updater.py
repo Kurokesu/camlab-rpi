@@ -609,7 +609,7 @@ def run() -> str:
         error = error or f"relock failed: {exc}"
     _record_run(ids, error)
     _save_log()
-    progress.finish("Restarting")
+    progress.finish("Rebooting")
     return error
 
 
