@@ -27,15 +27,15 @@ class StatusStrip(QtWidgets.QFrame):
         lay.setSpacing(_GAP)
 
         # Per-frame telemetry at 10 Hz, sensor temperature split off behind a hairline.
-        self._tele_box = QtWidgets.QWidget(self)
-        self.telemetry_lbl = QtWidgets.QLabel(self._tele_box)
+        self._tele_row = QtWidgets.QWidget(self)
+        self.telemetry_lbl = QtWidgets.QLabel(self._tele_row)
         self.telemetry_lbl.setObjectName("telemetry")
-        self._temp_sep = QtWidgets.QFrame(self._tele_box)
+        self._temp_sep = QtWidgets.QFrame(self._tele_row)
         self._temp_sep.setObjectName("vsep")
         self._temp_sep.setFixedSize(1, 11)
-        self.temp_lbl = QtWidgets.QLabel(self._tele_box)
+        self.temp_lbl = QtWidgets.QLabel(self._tele_row)
         self.temp_lbl.setObjectName("telemetry")
-        trow = QtWidgets.QHBoxLayout(self._tele_box)
+        trow = QtWidgets.QHBoxLayout(self._tele_row)
         trow.setContentsMargins(0, 0, 0, 0)
         trow.setSpacing(10)
         trow.addWidget(self.telemetry_lbl)
@@ -65,7 +65,7 @@ class StatusStrip(QtWidgets.QFrame):
 
         lay.addWidget(self._left)
         lay.addStretch(1)
-        lay.addWidget(self._tele_box)
+        lay.addWidget(self._tele_row)
         lay.addStretch(1)
         lay.addWidget(self._right)
 
