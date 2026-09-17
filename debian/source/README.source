@@ -30,6 +30,14 @@ relations into ${camlab:StackDepends} and presence-checked rest into
 ${camlab:AppDepends}, so a deb and a clone install cannot drift. Build
 fails without that file.
 
+Trixie only, codename stored once in main's apt-packages. It reaches
+preinst as #OS_CODENAME# through dh_installdeb and install.sh reads same
+key, so a release bump moves one file.
+
+preinst is the whole OS gate. Archive serves camlab-rpi to trixie only,
+so apt finds nothing on bookworm, and a bare dpkg -i of a downloaded
+deb is the one path bypassing it.
+
 Unlike the driver repos, this branch is deliberately detached from
 Kurokesu/ci while app packaging stabilizes: workflows carry their own
 build, sign and publish logic and call nothing remote. The sign step mirrors

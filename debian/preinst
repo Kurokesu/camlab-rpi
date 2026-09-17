@@ -1,0 +1,22 @@
+#!/bin/sh
+set -e
+
+# Codename from apt-packages, substituted by dh_installdeb, the same floor
+# install.sh applies to a clone install. Archive serves camlab-rpi to trixie
+# only, so apt on a bookworm unit finds nothing, and this covers a bare
+# dpkg -i of a downloaded deb, which bypasses the archive entirely
+case "$1" in
+    install|upgrade)
+        # shellcheck source=/dev/null
+        . /etc/os-release
+        if [ "${VERSION_CODENAME:-}" != "#OS_CODENAME#" ]; then
+            echo "camlab-rpi: unsupported OS: ${PRETTY_NAME:-unknown}," \
+                 "need Raspberry Pi OS Lite (#OS_CODENAME# 64-bit)" >&2
+            exit 1
+        fi
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

@@ -18,12 +18,23 @@ APP_DEPENDS := $(shell . ./apt-packages && \
 	printf '%s\n' $$APP_PACKAGES $$PICAMERA2_PACKAGES \
 	| awk '{ printf "%s%s", sep, $$0; sep = ", " }')
 
+# Blank codename ships a preinst comparing VERSION_CODENAME against an
+# empty string, refusing every normal system and passing where it is unset
+OS_CODENAME := $(shell . ./apt-packages && printf '%s' "$$OS_CODENAME")
+ifeq ($(OS_CODENAME),)
+$(error apt-packages must set OS_CODENAME)
+endif
+
 %:
 	dh $@
 
 override_dh_gencontrol:
 	dh_gencontrol -- -V'camlab:StackDepends=$(STACK_DEPENDS)' \
 		-V'camlab:AppDepends=$(APP_DEPENDS)'
+
+# Same key gates a bare dpkg -i, preinst carries #OS_CODENAME#
+override_dh_installdeb:
+	dh_installdeb -DOS_CODENAME=$(OS_CODENAME)
 
 # Interpreted Python tree, nothing to compile at packaging time.
 # Bytecode is generated on target by postinst.
