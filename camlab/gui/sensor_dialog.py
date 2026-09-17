@@ -113,8 +113,10 @@ class SensorCard(QtWidgets.QFrame):
         self._update_notes(current_name)
         self._sync_wiring_note()
 
-        hint = QtWidgets.QLabel("Power off and unplug RPi before rewiring")
+        hint = QtWidgets.QLabel("Shutdown and unplug RPi before rewiring")
         hint.setObjectName("modalHint")
+        hint.setProperty("sev", "warning")
+        hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         buttons = QtWidgets.QHBoxLayout()
         cancel_btn = QtWidgets.QPushButton("Cancel")
