@@ -27,6 +27,10 @@ Network toggle (GUI Settings or `camlabctl net`) persists across reboots. Turnin
 
 `sudo scripts/setup/app-deploy.sh && camlabctl restart` redeploys code without re-running full setup.
 
+## Upgrades
+
+Upgrades are manual. `boot.sh` masks apt timers and `unattended-upgrades` is absent, so package state moves only on `apt upgrade`. Treat that as a re-validation step. Kernel stays on `apt-mark hold` so apt cannot swap it under DKMS drivers, lift it with `kernel.sh --unhold`.
+
 ## Running the app
 
 Run directly under a Cage session with `python3 -m camlab`. Sensors are defined in `camlab/data/sensors.yaml`. CSI port is set in a managed block in `/boot/firmware/config.txt`. Boot is tuned by `scripts/setup/boot.sh` (run during install, `--revert` undoes it). Each script under `scripts/setup/` is self-documenting (`--help`) and safe to re-run.
