@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""CameraEngine - Picamera2 wrapper for bench viewfinder.
+"""CameraEngine - Picamera2 wrapper for viewfinder.
 
 Owns Picamera2 instance, mode enumeration, control state, software grey world
 AWB and coalesced pipeline flush. raw carries sensor mode, main is full-res ISP,
@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from picamera2 import Picamera2
 
+from . import stack
 from .gl_viewfinder import GlViewfinder
 from .modes import (
     SensorMode,
@@ -163,6 +164,8 @@ class CameraEngine:
         self.info = dict(infos[camera_num])
         self.picam2 = Picamera2(camera_num)
         self.modes = enumerate_modes(self.picam2.sensor_modes)
+        for note in stack.mismatches(self.picam2.camera_manager.version):
+            log.warning("%s", note)
         log.info(
             "camera opened: %s (%s) with %d modes",
             self.info.get("Model", ""),

@@ -2,9 +2,8 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Install camlab APT dependencies: Kurokesu apt archive, camera stack pinned by
-# camera-stack.version, Python preview/GUI stack (picamera2 + PyQt6 + OpenGL)
-# and Cage.
+# Install camlab APT dependencies: Kurokesu apt archive then everything
+# listed in apt-packages, camera stack pinned and the rest by presence.
 # Safe to re-run. Requires sudo.
 #
 # Usage: sudo scripts/setup/deps.sh
@@ -63,9 +62,10 @@ if [ -z "$(missing_packages camlab-rpi)" ]; then
     exit 0
 fi
 
-# Stack first, or picamera2 pulls apt's candidate bindings past the pin
-# shellcheck source=../../camera-stack.version
-source "$(resolve_repo_dir)/camera-stack.version"
+REPO="$(resolve_repo_dir)"
+
+# shellcheck source=../../apt-packages
+source "$REPO/apt-packages"
 
 RELATIONS=()
 STALE=()
@@ -87,7 +87,7 @@ done
 if [ "${#AHEAD[@]}" -gt 0 ]; then
     # Downgrading would drop rpicam-apps, which needs matching libcamera ABI
     warn "Camera stack ahead of pin, left alone: ${AHEAD[*]}"
-    warn "Pin is $LIBCAMERA_VERSION / $RPICAM_APPS_VERSION in camera-stack.version"
+    warn "Pin is $LIBCAMERA_VERSION / $RPICAM_APPS_VERSION in apt-packages"
 elif [ "${#STALE[@]}" -gt 0 ]; then
     log "Pinning camera stack: ${STALE[*]}"
     apt_get satisfy -y --no-install-recommends "${RELATIONS[@]}"
@@ -95,20 +95,11 @@ else
     log "Camera stack already matches the pin."
 fi
 
-# One pass, recommends off.
-APP_PACKAGES=(
-    awb-nn
-    cage
-    python3-opengl
-    python3-picamera2
-    python3-pil
-    python3-pyqt6
-    python3-yaml
-    qt6-wayland
-    wlr-randr
-)
+# After the stack, or picamera2 pulls apt's candidate bindings past the pin
+# shellcheck disable=SC2206  # test_stack_pin.py asserts names are glob-free
+UNPINNED=($APP_PACKAGES $PICAMERA2_PACKAGES)
 
-mapfile -t MISSING < <(missing_packages "${APP_PACKAGES[@]}")
+mapfile -t MISSING < <(missing_packages "${UNPINNED[@]}")
 
 if [ "${#MISSING[@]}" -gt 0 ]; then
     log "Installing packages: ${MISSING[*]}"
@@ -118,6 +109,6 @@ else
 fi
 
 # Mark manual, or autoremove reclaims what a removed package left auto
-apt-mark manual "${APP_PACKAGES[@]}"
+apt-mark manual "${UNPINNED[@]}"
 
 log "Done. All apt dependencies installed."

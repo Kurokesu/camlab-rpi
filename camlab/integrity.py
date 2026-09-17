@@ -25,6 +25,7 @@ DEFAULT_PATTERNS: dict[str, str] = {
     "frame_timeout": r"(?i)\b(timed out|timeout)\b|Dequeue timer|no buffers",
     "frame_drop": r"(?i)dropp(ed|ing) (a )?frame|frame drop",
     "v4l2_error": r"(?i)\bVIDIOC_\w+ failed|Failed to queue buffer|Failed to start",
+    "stack_pairing": r"camera stack:",
 }
 
 CATEGORY_LABELS: dict[str, str] = {
@@ -34,6 +35,7 @@ CATEGORY_LABELS: dict[str, str] = {
     "frame_timeout": "Frame timeout",
     "frame_drop": "Dropped frame",
     "v4l2_error": "V4L2 error",
+    "stack_pairing": "Stack pairing",
     "kernel_driver": "Kernel driver",
 }
 
@@ -46,6 +48,7 @@ CATEGORY_SEVERITY: dict[str, str] = {
     "kernel_driver": "error",
     "frame_timeout": "warning",
     "frame_drop": "warning",
+    "stack_pairing": "warning",
 }
 
 # libcamera prefixes each line with a level word (e.g. "... ERROR RPI ...").

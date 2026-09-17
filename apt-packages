@@ -1,14 +1,32 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Camera stack this camlab release was validated against.
-#
-# Versions are floors. Ceiling adds a trailing dot, so range covers Debian
-# revision rebuilds of same fork release
+# camlab apt package dependencies and supported OS. Sourced by install.sh and
+# scripts/setup/deps.sh, rendered into deb Depends by debian/rules
 
-LIBCAMERA_VERSION="1:0.7.2+rpt20260817+krks3"
+# Supported Raspberry Pi OS release. Gates install.sh and reaches the deb
+# preinst through debian/rules
+OS_CODENAME="trixie"
+
+# Floor pins for libcamera and rpicam-apps Kurokesu forks
 # libcamera-ipa needs no pin, libcamera0.7 depends on its exact version
 LIBCAMERA_PACKAGES="libcamera0.7 python3-libcamera"
+LIBCAMERA_VERSION="1:0.7.2+rpt20260817+krks3"
 
-RPICAM_APPS_VERSION="1:1.13.0+krks1"
 RPICAM_APPS_PACKAGES="librpicam-app1 rpicam-apps-core"
+RPICAM_APPS_VERSION="1:1.13.0+krks1"
+
+# Not pinned, Raspberry Pi archive serves one version. Recorded for drift checks
+PICAMERA2_PACKAGES="python3-picamera2"
+PICAMERA2_VERSION="0.3.37"
+
+APP_PACKAGES="
+awb-nn
+cage
+python3-opengl
+python3-pil
+python3-pyqt6
+python3-yaml
+qt6-wayland
+wlr-randr
+"
