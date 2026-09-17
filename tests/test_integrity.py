@@ -52,7 +52,7 @@ def test_foreign_line_stays_info(classifier, line):
     assert journal_priority(line, classifier) == 6
 
 
-def test_priority_follows_the_real_formatter(classifier):
+def test_priority_follows_real_formatter(classifier):
     """Catches a LOG_FORMAT change that stops _APP_LEVEL_RE matching own records."""
     record = logging.LogRecord("camlab.camera", logging.ERROR, __file__, 1, "boom", None, None)
     line = logging.Formatter(LOG_FORMAT, LOG_DATEFMT).format(record)

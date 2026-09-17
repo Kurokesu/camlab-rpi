@@ -40,7 +40,7 @@ def test_main_leaves_small_sensor_alone():
     assert plan_main_size((1920, 1080)) == (1920, 1080)
 
 
-def test_main_keeps_aspect_within_a_pixel():
+def test_main_keeps_aspect_within_pixel():
     w, h = plan_main_size((3840, 2160))
     assert abs(w / h - 3840 / 2160) < 0.01
 
@@ -54,11 +54,11 @@ def test_lores_stays_within_main(sensor):
 
 
 @pytest.mark.parametrize(("sensor", "expected"), LORES_1080P.values(), ids=list(LORES_1080P))
-def test_budget_leaves_a_1080p_head_alone(sensor, expected):
+def test_budget_leaves_1080p_head_alone(sensor, expected):
     assert plan_lores_size(plan_main_size(sensor), AVAIL_1080P) == expected
 
 
-def test_budget_binds_on_a_larger_head():
+def test_budget_binds_on_larger_head():
     lores = plan_lores_size(plan_main_size((3840, 2160)), AVAIL_1440P)
     assert lores == (1920, 1080)
 

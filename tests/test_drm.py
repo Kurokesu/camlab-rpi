@@ -32,7 +32,7 @@ def test_dsi_display_with_touchscreen(fake_drm, fake_input):
     assert drm.has_dsi_display() is True
 
 
-def test_touchscreen_alone_is_not_a_dsi_display(fake_drm, fake_input):
+def test_touchscreen_alone_is_not_dsi_display(fake_drm, fake_input):
     fake_drm({"HDMI-A-1": "connected"})
     fake_input({"event8": "2"})
     assert drm.has_dsi_display() is False

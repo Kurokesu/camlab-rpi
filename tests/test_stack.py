@@ -63,7 +63,7 @@ def test_missing_pin_file_says_nothing(tmp_path, monkeypatch):
     assert stack.mismatches("v0.0.1") == []
 
 
-def test_component_the_pin_omits_is_skipped(pin):
+def test_component_missing_from_pin_is_skipped(pin):
     """A deployed tree can carry a pin file older than the code reading it."""
     pin(LIBCAMERA_VERSION=PINNED)
     assert stack.mismatches(LOADED) == []

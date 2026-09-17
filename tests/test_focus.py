@@ -43,18 +43,18 @@ class TestFocusMetric:
         engine.telemetry.metadata = {"grid": grid}
         sampler.poll()
 
-    def test_center_score_reads_the_middle_cells(self):
+    def test_center_score_reads_middle_cells(self):
         grid = np.ones((8, 8), dtype=np.uint64)
         grid[3:5, 3:5] = 100
         assert center_score(grid) == pytest.approx(100.0)
 
-    def test_the_metric_is_the_center_of_the_grid(self):
+    def test_metric_is_center_of_grid(self):
         sampler, engine, got = self._sampler()
         for value in (100, 200, 150):
             self._feed(sampler, engine, value)
         assert [s.raw for s in got] == [100.0, 200.0, 150.0]
 
-    def test_a_missing_blob_holds_the_last_reading(self):
+    def test_missing_blob_holds_last_reading(self):
         """libcamera can skip the blob on a frame, and a blink reads as a fault."""
         sampler, engine, got = self._sampler()
         self._feed(sampler, engine, 100)
@@ -82,7 +82,7 @@ class TestFocusMetric:
         assert engine.stats == [(True, "focus"), (False, "focus")]
         assert not sampler.sampling
 
-    def test_switching_a_readout_on_rewinds_the_peak(self):
+    def test_switching_readout_on_rewinds_peak(self):
         """Or a new reading is judged against a scene its owner never saw."""
         sampler, engine, got = self._sampler()
         sampler.set_sampling(True, "map")

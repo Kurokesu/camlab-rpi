@@ -71,12 +71,12 @@ class TestEstimator:
         got = grey_world_gains(zones(64, GREY / 2, GREY, GREY / 3))
         assert got == pytest.approx((2.0, 3.0), abs=1e-2)
 
-    def test_outer_quarters_drop_a_coloured_object(self):
+    def test_outer_quarters_drop_coloured_object(self):
         red_object = zones(20, GREY * 3, GREY, GREY)
         got = grey_world_gains(np.vstack([zones(80, GREY, GREY, GREY), red_object]))
         assert got == pytest.approx((1.0, 1.0), abs=1e-3)
 
-    def test_outliers_beyond_the_trim_leak_in(self):
+    def test_outliers_beyond_trim_leak_in(self):
         red_object = zones(40, GREY * 3, GREY, GREY)
         got = grey_world_gains(np.vstack([zones(60, GREY, GREY, GREY), red_object]))
         assert got[0] < 0.9
@@ -91,13 +91,13 @@ class TestEstimator:
         assert grey_world_gains(zones(camera._AWB_MIN_ZONES, GREY, GREY, GREY)) is None
         assert grey_world_gains(zones(camera._AWB_MIN_ZONES + 1, GREY, GREY, GREY)) is not None
 
-    def test_gains_clamp_to_the_practical_range(self):
+    def test_gains_clamp_to_practical_range(self):
         lo, hi = camera._WB_GAIN_RANGE
         assert grey_world_gains(zones(64, GREY / 20, GREY, GREY * 20)) == (hi, lo)
 
 
 class TestEngine:
-    def test_awb_zones_read_the_head_of_the_blob(self):
+    def test_awb_zones_read_head_of_blob(self):
         got = CameraEngine.awb_zones(blob(zones(3, 1, 2, 3, pixels=4)))
         assert got.shape == (camera._AWB_ZONES, 4)
         assert got[2].tolist() == [4, 8, 12, 4]
@@ -111,7 +111,7 @@ class TestEngine:
         assert "ColourTemperature" not in picam2.pushed[-1]
         assert engine.stats_output
 
-    def test_libcamera_awb_is_the_default_and_releases_stats(self):
+    def test_libcamera_awb_is_default_and_releases_stats(self):
         engine, picam2 = _engine()
         engine._apply_controls()
         assert picam2.pushed[-1]["AwbEnable"] is True
@@ -131,7 +131,7 @@ class TestEngine:
         assert engine.stats_output
         assert "ColourTemperature" not in picam2.pushed[-1]
 
-    def test_mono_sensor_is_a_noop(self):
+    def test_mono_sensor_is_noop(self):
         engine, picam2 = _engine({"StatsOutputEnable": (False, True, False)})
         engine.set_grey_world(True)
         assert "AwbEnable" not in picam2.pushed[-1]
@@ -163,7 +163,7 @@ class TestEngine:
         _frame(engine, blob(zones(3, GREY, GREY, GREY)))
         assert _gains(picam2) == []
 
-    def test_restart_reasserts_the_last_gains(self):
+    def test_restart_reasserts_last_gains(self):
         engine, picam2 = _engine()
         engine.set_grey_world(True)
         _frame(engine, blob(zones(64, GREY / 2, GREY, GREY)))

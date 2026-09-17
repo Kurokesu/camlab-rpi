@@ -66,11 +66,11 @@ def test_reconfigure_drops_every_import(stream):
         ((1, 1), (1, 1)),
     ],
 )
-def test_guide_size_halves_the_source(source, expect):
+def test_guide_size_halves_source(source, expect):
     assert gl_viewfinder._guide_size(*source) == expect
 
 
-def test_heads_showing_one_orientation_share_the_guide(stream):
+def test_heads_showing_one_orientation_share_guide(stream):
     display_stream, _, _ = stream
     panel = display_stream.guide_for((0, False))
     monitor = display_stream.guide_for((0, False))
@@ -78,14 +78,14 @@ def test_heads_showing_one_orientation_share_the_guide(stream):
     assert monitor == panel
 
 
-def test_turned_head_gets_no_share_of_the_guide(stream):
+def test_turned_head_gets_no_share_of_guide(stream):
     display_stream, _, _ = stream
     assert display_stream.guide_for((0, False)) is not None
     assert display_stream.guide_for((90, False)) is None
     assert display_stream.guide_for((0, True)) is None
 
 
-def test_reset_lets_a_new_context_claim_the_guide(stream):
+def test_reset_lets_new_context_claim_guide(stream):
     display_stream, _, _ = stream
     first = display_stream.guide_for((0, False))
     display_stream.guide_seq = display_stream.frame_seq
