@@ -5,7 +5,7 @@
 
 Reading is unprivileged. Writing shells out to camlabctl net via sudo
 (scoped in deploy/camlab-sudoers), which owns the mechanics: mask/unmask
-plus persistence on a read-only box.
+plus persistence on a read-only root.
 """
 
 from __future__ import annotations

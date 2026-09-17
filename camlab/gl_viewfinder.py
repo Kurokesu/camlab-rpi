@@ -463,7 +463,7 @@ class GlFrameWidget(QOpenGLWidget):
         # Preview only, captures are untouched. A booth wants a mirror to frame
         # against, not flipped stills.
         self._mirror = bool(mirror)
-        # Pure black pillarboxes: picture reads as natural focus target, blend into dark bench.
+        # Pure black pillarboxes blend into dark UI, so picture reads as natural focus target
         self._bg = (0.0, 0.0, 0.0, 1.0)
         self.current_request = None
         self._frosted = False
@@ -564,7 +564,7 @@ class GlFrameWidget(QOpenGLWidget):
 
     @staticmethod
     def _reset_gl_state() -> None:
-        """Return Qt's context to GLES defaults our passes rely on."""
+        """Return Qt's context to GLES defaults this widget's passes rely on."""
         glBindVertexArray(0)
         glBindBuffer(GL_ARRAY_BUFFER, 0)
         glActiveTexture(GL_TEXTURE0)

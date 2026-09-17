@@ -44,7 +44,7 @@ APT_CONF="/etc/apt/apt.conf.d/99camlab"
 # Cmdline tokens for a kiosk panel. One token at a time so overlayroot
 # and tokens owned by other scripts survive. quiet and logo.nologo both
 # suppress the kernel fullscreen logo (splash.sh), so they are removed. The
-# fullscreen logo keeps the console clean on its own (bench verified).
+# fullscreen logo keeps the console clean on its own (verified on hardware).
 # mousepoll=0 honours the interval each mouse asks for.
 CMDLINE_ADD=(
     vt.global_cursor_default=0

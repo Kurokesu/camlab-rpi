@@ -3,7 +3,7 @@
 
 """Roboto as UI font.
 
-Bundled (assets/Roboto-*.ttf) rather than installed, so every box renders the
+Bundled (assets/Roboto-*.ttf) rather than installed, so every unit renders the
 same. Medium backs the 500 weight rules in style.py. Missing faces leave Qt on
 its own default.
 """

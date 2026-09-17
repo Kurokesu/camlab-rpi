@@ -18,7 +18,7 @@ from . import icons
 from .style import GLASS_BG, GLASS_BORDER, UiProfile
 from .widgets import SegmentedSelector, repolish
 
-# Slider resolution. 1000 steps is finer than any bench display is wide.
+# Slider resolution. 1000 steps is finer than DSI panel width
 _STEPS = 1000
 
 

@@ -6,7 +6,7 @@
 # kiosk GUI, exact commands only:
 #   - config-write shim (managed block in config.txt)
 #   - update shim, check and apply only (arguments are component ids, not packages)
-#   - poweroff (both a sensor swap and operator shutdown power the box off)
+#   - poweroff (both a sensor swap and operator shutdown power the unit off)
 #   - networking toggle (Settings dialog)
 #   - touch calibration (arguments are matrix numbers, validated by the script)
 
