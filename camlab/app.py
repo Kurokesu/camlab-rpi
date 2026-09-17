@@ -10,6 +10,7 @@ import os
 import signal
 import sys
 
+from . import dmesg
 from .camera import CameraEngine
 from .config_manager import ConfigManager
 from .display import Backlight, CursorPolicy, DisplayManager, Topology, apply_output_layout
@@ -66,7 +67,7 @@ def main(argv: list[str] | None = None) -> int:
     _setup_logging()
 
     # Splice stderr before libcamera/Picamera2 init so IPA child inherits it.
-    classifier = LogClassifier()
+    classifier = LogClassifier(dmesg.PATTERNS)
     capture = NullCapture() if os.environ.get("CAMLAB_NO_CAPTURE") else StderrCapture(classifier)
 
     registry = SensorRegistry.load()

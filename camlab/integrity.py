@@ -34,6 +34,7 @@ CATEGORY_LABELS: dict[str, str] = {
     "frame_timeout": "Frame timeout",
     "frame_drop": "Dropped frame",
     "v4l2_error": "V4L2 error",
+    "kernel_driver": "Kernel driver",
 }
 
 # Severity fallback, used when a matched line carries no libcamera level token.
@@ -42,6 +43,7 @@ CATEGORY_SEVERITY: dict[str, str] = {
     "register_tags": "error",
     "csi_crc": "error",
     "v4l2_error": "error",
+    "kernel_driver": "error",
     "frame_timeout": "warning",
     "frame_drop": "warning",
 }
