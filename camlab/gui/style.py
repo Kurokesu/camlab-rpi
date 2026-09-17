@@ -33,7 +33,6 @@ class UiProfile:
     font_px: int
     sheet_value_font_px: int
     modal_title_font_px: int
-    modal_hint_font_px: int
     icon_px: int
     slider_dial_px: int
     slider_groove_px: int
@@ -54,7 +53,6 @@ REGULAR = UiProfile(
     font_px=13,
     sheet_value_font_px=14,
     modal_title_font_px=16,
-    modal_hint_font_px=12,
     icon_px=21,
     slider_dial_px=18,
     slider_groove_px=6,
@@ -77,7 +75,6 @@ COMPACT = UiProfile(
     font_px=16,
     sheet_value_font_px=16,
     modal_title_font_px=18,
-    modal_hint_font_px=13,
     icon_px=22,
     slider_dial_px=28,
     slider_groove_px=8,
@@ -190,7 +187,7 @@ QFrame#modalCard QPushButton#segment:focus { background: #2f3949; }
 QFrame#modalCard QPushButton#segment:checked:focus { background: #45526a; }
 QLabel#modalTitle { font-weight: 500; color: #e8eaed; }
 QLabel#modalText { color: #aeb4bf; }
-QLabel#modalHint { color: #9aa1ac; }
+QLabel#modalHint[sev="warning"] { color: #e5c07b; }
 """
 
 # Hover is mouse-only feedback: tap parks synthesized mouse on widget, pinning :hover until next tap.
@@ -246,7 +243,6 @@ QPushButton#segment {{ padding: {p.segment_pad[0]}px {p.segment_pad[1]}px; }}
 QCheckBox::indicator {{ width: {p.checkbox_px}px; height: {p.checkbox_px}px; }}
 QLabel#sheetValue {{ font-size: {p.sheet_value_font_px}px; }}
 QLabel#modalTitle {{ font-size: {p.modal_title_font_px}px; }}
-QLabel#modalHint {{ font-size: {p.modal_hint_font_px}px; }}
 """
 
 
