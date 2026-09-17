@@ -6,6 +6,7 @@
 # never needs. Disables Bluetooth in config.txt (managed block) and masks unused
 # systemd units (network-wait, BT, ModemManager, cloud-init, apt timers).
 # Silences the console for kiosk boot (quiet cmdline, no getty on tty1, no wall).
+# Lifts Pi kernel 62 Hz mouse polling clamp.
 # Turns apt recommends off so upgrades stay lean.
 # Deliberately left alone: journald/logind/avahi and networking.
 # Safe to re-run. Requires sudo. Changes take hold after a reboot.
@@ -40,12 +41,14 @@ CMDLINE_TXT="$FW_DIR/cmdline.txt"
 CONSOLE_DROPIN="/etc/systemd/system.conf.d/camlab-console.conf"
 APT_CONF="/etc/apt/apt.conf.d/99camlab"
 
-# Cmdline tokens for a quiet kiosk panel. One token at a time so overlayroot
+# Cmdline tokens for a kiosk panel. One token at a time so overlayroot
 # and tokens owned by other scripts survive. quiet and logo.nologo both
 # suppress the kernel fullscreen logo (splash.sh), so they are removed. The
 # fullscreen logo keeps the console clean on its own (bench verified).
+# mousepoll=0 honours the interval each mouse asks for.
 CMDLINE_ADD=(
     vt.global_cursor_default=0
+    usbhid.mousepoll=0
 )
 CMDLINE_REMOVE=(
     console=tty1
@@ -188,7 +191,7 @@ stage_console() {
         local t
         for t in "${CMDLINE_REMOVE[@]}"; do cmdline_remove "$CMDLINE_TXT" "$t"; done
         for t in "${CMDLINE_ADD[@]}"; do cmdline_add "$CMDLINE_TXT" "$t"; done
-        log "cmdline.txt: quiet kiosk tokens applied"
+        log "cmdline.txt: kiosk tokens applied"
     else
         warn "$CMDLINE_TXT missing, skipping cmdline quiet"
     fi
