@@ -31,9 +31,8 @@ from .qt import QtCore
 
 log = logging.getLogger(__name__)
 
-# libcamera advertises ColourTemperature as 100-100000 K, far beyond any tuning
-# curve. Widest ct_curve across supported sensors runs 2220 to 9400 K, so this
-# band encloses every one of them.
+# Widest ct_curve across supported sensors runs 2220 to 9400 K.
+# Travel past a sensor's own curve is clamped by IPA
 _CT_UI_RANGE = (2000, 10000)
 
 # Sentinel so set_control_state can tell "not passed" from "None = auto".
