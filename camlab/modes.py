@@ -4,7 +4,7 @@
 """Sensor mode catalog and selection (pure, no Picamera2/Qt).
 
 A mode is one raw sensor output: packed format, size, bit depth, max fps.
-Operator picks via Resolution --> Bit depth --> FPS. Bench rates (24, 30, 60,
+Operator picks via Resolution --> Bit depth --> FPS. Standard rates (24, 30, 60,
 120) capped by mode and MAX_FPS, plus sensor max when it sits between rates.
 Display never limits sensor rate. Default without a persisted pick: heaviest
 mode at DEFAULT_FPS.
@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-# Standard bench rates, lowest first. Sensor caps surface alongside these.
+# Standard rates, lowest first. Sensor caps surface alongside these
 BASE_FPS: tuple[float, ...] = (24.0, 30.0, 60.0, 120.0)
 
 # App ceiling. Higher rates run but start unreliably (AR0234 960x600 claims
@@ -83,7 +83,7 @@ def enumerate_modes(raw_modes) -> list[SensorMode]:
 
 
 def fps_options(max_fps: float) -> list[float]:
-    """FPS choices for a mode under bench policy.
+    """FPS choices camlab offers for a mode.
 
     eff = min(sensor max, MAX_FPS). At or below 24: one locked option. Above:
     standard rates that fit, plus eff when it sits between two rates

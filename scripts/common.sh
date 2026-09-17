@@ -2,12 +2,9 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Shared helpers sourced by install.sh, scripts/camlabctl.sh and scripts/setup/*.
-# Provides colored logging (log/warn/die/header), repo-root resolution and
-# camlab-owner detection that works under sudo.
+# Shared helpers sourced by install.sh and scripts/*
 
-# Terminal colors. Detect TTY on first source and pin via CAMLAB_COLOR, so
-# children keep colors after a parent redirects stdout through a tee pipe.
+# Pin TTY detection via CAMLAB_COLOR, so children keep colors behind a tee pipe
 if [ -z "${CAMLAB_COLOR:-}" ] && [ -t 1 ]; then
     export CAMLAB_COLOR=1
 fi
@@ -46,8 +43,7 @@ _camlab_user() {
 
 CAMLAB_USER="$(_camlab_user)"
 
-# Remember the owner for later root-only runs. Callers that render CAMLAB_USER
-# into a file call this once they know it is not root.
+# Remember owner for later root-only runs
 save_camlab_user() {
     [ "$(id -u)" -eq 0 ] || return 0
     [ "$CAMLAB_USER" != "root" ] || return 0
@@ -57,15 +53,13 @@ save_camlab_user() {
 
 # shellcheck disable=SC2034  # read by sourcing scripts
 CAMLAB_UID="$(id -u "$CAMLAB_USER")"
-# shellcheck disable=SC2034
-CAMLAB_HOME="$(getent passwd "$CAMLAB_USER" | cut -d: -f6)"
 
 log()    { echo -e "${_C_GREEN}[${CAMLAB_TAG}]${_C_RESET} $*"; }
 warn()   { echo -e "${_C_YELLOW}[${CAMLAB_TAG}]${_C_RESET} $*" >&2; }
 die()    { echo -e "${_C_RED}[${CAMLAB_TAG}]${_C_RESET} $*" >&2; exit 1; }
 header() { echo; echo -e "${_C_CYAN}=== $* ===${_C_RESET}"; echo; }
 
-# Repo root from a caller at scripts/setup/*. BASH_SOURCE[1] is the caller path.
+# Repo root from a caller one level under scripts/. BASH_SOURCE[1] is the caller
 resolve_repo_dir() {
     (cd "$(dirname "${BASH_SOURCE[1]}")/../.." && pwd)
 }
@@ -99,9 +93,8 @@ missing_packages() {
 
 # Write via a temp file in the same dir, so readers never see a half-written
 # boot-critical file. Mode of an existing file is preserved. An unchanged file is
-# left alone, convergence runs this over config.txt on the FAT partition.
-# 1 when the last atomic_write changed the file, for callers that log about it.
-CAMLAB_WROTE=0
+# left alone, convergence runs this over config.txt on the FAT partition
+CAMLAB_WROTE=0  # 1 when last atomic_write changed the file
 
 atomic_write() {
     local path="$1" content="$2" tmp

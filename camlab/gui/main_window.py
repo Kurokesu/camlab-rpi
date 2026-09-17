@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""MainWindow - fullscreen bench UI: viewfinder + status strip + controls + log."""
+"""MainWindow - fullscreen UI: viewfinder + status strip + controls + log."""
 
 from __future__ import annotations
 
@@ -459,9 +459,7 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         # Not every sensor offers SensorTemperature. None keeps the last reading.
         self.status.set_temperature(md.get("SensorTemperature"))
-        # Engine latches ISP histogram off any frame carrying stats, survives frames
-        # without blob (libcamera skips some above 30 fps). Overlays drop the push
-        # while hidden.
+        # Engine latches the ISP histogram, libcamera skips stats blob above 30 fps
         if self.engine.latest_histogram is not None:
             self.viewfinder_area.update_histogram(self.engine.latest_histogram)
         if self.focus_sampler.sampling:
@@ -471,8 +469,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _render_chips(self) -> None:
         """Chips carry live values, open sheet tracks value in auto.
 
-        Metadata drops keys across a pipeline restart, so a gap keeps the last
-        reading rather than flashing the placeholder.
+        Metadata drops keys across a pipeline restart, so a gap keeps the last reading.
         """
         md = self.engine.telemetry.metadata or {}
         for key, spec in CTRL_SPEC.items():
@@ -520,8 +517,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._sync_log_button(checked)
 
     def _sync_log_button(self, checked: bool) -> None:
-        # Same button closes panel: open state reads as pressed toggle and relabels.
-        # Closed, carries severity tint so trouble shows unopened.
+        # One button both ways, pressed and relabelled when open, severity tinted when closed.
         # Integrity ticks mostly re-report the same severity, skip those.
         compact = self._profile.compact
         state = (checked, self._sev, compact, self._profile.icon_px)
@@ -655,7 +651,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _on_escape(self) -> None:
         # Close frontmost open layer, otherwise Escape is kill switch.
-        # Immediate poweroff, no confirm by design on power-cycle tool.
+        # Immediate poweroff, no confirm by design on a power-cycle tool
         if self._modal_active:
             self._close_modal()
         elif self._open_sheet is not None:
@@ -749,7 +745,7 @@ class MainWindow(QtWidgets.QMainWindow):
         sensor = self.registry.by_overlay(cur["overlay"]) if cur["overlay"] else None
         mono = self._is_mono(sensor, cur["options"])
         disp = self.config.get_current_display()
-        # No block but a live DSI connector: firmware-detected panel, not ours to manage.
+        # No display block but a live DSI connector: firmware brought the panel up
         locked_ports = dsi_blocked_ports() if not disp["present"] else set()
         current_display = self._display_name_current(disp)
         # Off-catalog block: its claimed port is fixed, the card locks it out.
@@ -810,7 +806,6 @@ class MainWindow(QtWidgets.QMainWindow):
                     detail += " The display change stuck, re-apply to undo it."
             self._show_message("Apply failed", detail)
             return
-        # Power down rather than reboot, rewiring needs the box off.
         poweroff()
 
     def _open_settings(self) -> None:
@@ -875,7 +870,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _arm_update(self, ids: list[str]) -> None:
         try:
             updater.request_apply(*ids)
-        except Exception as exc:  # noqa: BLE001 surface the failure, the box stays up
+        except Exception as exc:  # noqa: BLE001 surface the failure, the app stays up
             log.error("update apply failed: %s", exc)
             self._show_message("Update failed", str(exc))
 
@@ -916,7 +911,7 @@ class MainWindow(QtWidgets.QMainWindow):
         log.info("networking %s", "enabled" if enabled else "disabled")
 
     def _shutdown(self) -> None:
-        # No confirmation by design: power-cycle-heavy bench tool, save click.
+        # No confirmation by design: operators power-cycle constantly, save the click
         self.flush_settings()
         try:
             poweroff()
@@ -990,7 +985,6 @@ class MainWindow(QtWidgets.QMainWindow):
         for btn in self._chrome_btns:
             btn.setIconSize(QtCore.QSize(px, px))
         # Accents re-tint only on flips, clear the latch so icons rebuild at the new size.
-        # Chip widths are re-pinned by _populate_static via _reserve_chip_widths.
         for btn in self._sheet_buttons.values():
             btn.setProperty("manual", None)
         self.settings_btn.setIcon(icons.icon("settings", px))

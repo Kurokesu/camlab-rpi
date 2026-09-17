@@ -3,7 +3,6 @@
 
 """Collapsible log panel for captured camera-stack stderr.
 
-Integrity lines colored by severity with exclusive filter and running counts.
 Ring buffer lets filter re-render without re-tailing. Boot-to-viewfinder time in header.
 """
 
@@ -110,10 +109,8 @@ class LogPanel(QtWidgets.QWidget):
         self.update_integrity(IntegrityStats())
 
     def eventFilter(self, obj, ev) -> bool:
-        """Drop mouse events Qt synthesizes from finger drags.
-
-        QScroller uses touch stream. Text edit reads synthesized mouse as selection drag.
-        Real mouse still selects.
+        """Drop mouse events Qt synthesizes from finger drags, the text edit reads them
+        as a selection drag. QScroller scrolls off the touch stream, real mouse still selects.
         """
         if obj is self.view.viewport() and ev.type() in _POINTER_EVENTS:
             dev = ev.pointingDevice()
@@ -158,17 +155,14 @@ class LogPanel(QtWidgets.QWidget):
             return
         if not self._passes(sev):
             return
-        self._append_html(line, sev)
-        self._scroll_to_bottom()
-
-    def _passes(self, sev: str | None) -> bool:
-        return self._filter == "all" or sev == self._filter
-
-    def _append_html(self, line: str, sev: str | None) -> None:
         cur = QtGui.QTextCursor(self.view.document())
         cur.movePosition(QtGui.QTextCursor.MoveOperation.End)
         self._insert_line(cur, line, sev)
         self._trim()
+        self._scroll_to_bottom()
+
+    def _passes(self, sev: str | None) -> bool:
+        return self._filter == "all" or sev == self._filter
 
     @staticmethod
     def _insert_line(cur: QtGui.QTextCursor, line: str, sev: str | None) -> None:

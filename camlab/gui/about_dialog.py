@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""About card: versions this box runs, and the updates for them.
+"""About card: versions this unit runs, and the updates for them.
 
 Rows and blocked reason come from dpkg at open time, so the card works with
 networking off and never repeats what an older check recorded. Checking is a
@@ -89,7 +89,7 @@ class AboutCard(QtWidgets.QFrame):
         # the next button when Check disables itself mid-check.
         for btn in (self.check_btn, self.all_btn, back_btn):
             btn.setFocusPolicy(Qt.FocusPolicy.TabFocus)
-        # Every other button here reboots the box, so Enter lands on Back.
+        # Every other button here reboots the unit, so Enter lands on Back
         self.primary_button = back_btn
         buttons = QtWidgets.QHBoxLayout()
         buttons.addWidget(self.check_btn)
@@ -116,7 +116,7 @@ class AboutCard(QtWidgets.QFrame):
                 widget.deleteLater()
 
         pending = updater.pending_ids(self._state)
-        # A blocked box surveys like any other, so it shows what waits upstream and
+        # A blocked unit surveys like any other, so it shows what waits upstream and
         # leaves the operator to install it from outside camlab.
         offers = not self._blocked
         # Only worth its own button when it saves a reboot.
@@ -163,7 +163,7 @@ class AboutCard(QtWidgets.QFrame):
             return f"Updates off: {self._blocked}"
         if not self._online:
             return "Updates need network"
-        # Only a check can tell, so an unchecked box does not claim to be current.
+        # Only a check can tell, so an unchecked unit does not claim to be current
         if self._state.get("checked") and not updater.pending_ids(self._state):
             return "Up to date"
         if (self._state.get("last_run") or {}).get("error"):

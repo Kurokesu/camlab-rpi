@@ -59,7 +59,7 @@ def default_state_file() -> Path:
         return Path(override)
     state_dir = os.environ.get("STATE_DIRECTORY")
     if state_dir:
-        # systemd may pass a colon-separated list, first entry is ours.
+        # systemd may pass a colon-separated list, first entry is camlab's
         return Path(state_dir.split(":")[0]) / "state.json"
     return Path("/var/lib/camlab/state.json")
 

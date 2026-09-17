@@ -3,7 +3,7 @@
 #
 # One-shot read-only finaliser. Installed and enabled by scripts/setup/readonly.sh
 # but deliberately NOT run during install. It fires on the first boot AFTER
-# install, once the box has come up writable one last time so first-boot tasks
+# install, once the system has come up writable one last time so first-boot tasks
 # (resize2fs_once, host-key generation) settle. It then enables the overlay,
 # disables itself so it can never run again, and reboots once to bring the system
 # up read-only. ExecStart points at the finaliser script readonly.sh drops in.

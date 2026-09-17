@@ -193,7 +193,7 @@ cmd_net() {
                 act="$(systemctl is-active "$u" 2>/dev/null || true)"; [ -n "$act" ] || act="inactive"
                 printf "%-42s %s / %s\n" "$u" "$en" "$act"
             done
-            [ "$any" -eq 1 ] || log "no known network units present on this box"
+            [ "$any" -eq 1 ] || log "no known network units present"
             ;;
         *) die "net: expected on|off|status (got '$action')" ;;
     esac

@@ -58,7 +58,7 @@ END="# <<< camlab readonly <<<"
 REPO_DIR="$(resolve_repo_dir)"
 
 # Nothing to trim under an overlay root, and a card that lies about discard can
-# eat the boot files the finaliser writes. Writable boxes keep trimming.
+# eat the boot files the finaliser writes. A writable root keeps trimming
 stage_trim() {
     log "Stage: fstrim"
     if [ "$REVERT" -eq 1 ]; then
@@ -223,11 +223,11 @@ fi
 
 # Refuse lockdown unless /var/lib/camlab is writable.
 if ! mountpoint -q /var/lib/camlab; then
-    logger -t camlab-readonly "ABORT: /var/lib/camlab not mounted, leaving box writable"
+    logger -t camlab-readonly "ABORT: /var/lib/camlab not mounted, leaving root writable"
     exit 1
 fi
 if ! touch /var/lib/camlab/.write-probe 2>/dev/null; then
-    logger -t camlab-readonly "ABORT: /var/lib/camlab not writable, leaving box writable"
+    logger -t camlab-readonly "ABORT: /var/lib/camlab not writable, leaving root writable"
     exit 1
 fi
 rm -f /var/lib/camlab/.write-probe

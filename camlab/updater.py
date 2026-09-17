@@ -10,7 +10,7 @@ name from its caller:
     driver:<name>   driver_package from data/sensors.yaml
 
 Camera stack rides an app update through deb's Depends, pinned by
-camera-stack.version. About card lists a row per fork (stack_versions()).
+apt-packages. About card lists a row per fork (stack_versions()).
 
 Only a camlab-rpi that came from the archive gets updates, so hand-unpacked
 copies and forks get none (update_path()).
@@ -238,7 +238,7 @@ class Component:
 
 
 def components(registry: SensorRegistry | None = None) -> list[Component]:
-    """Updatable components on this box, app first."""
+    """Updatable components on this unit, app first."""
     reg = registry or SensorRegistry.load()
     drivers = {s.overlay: s.driver_package for s in reg if s.driver_package}
     out = [Component("app", APP_PACKAGE, (APP_PACKAGE,))]
@@ -279,7 +279,7 @@ def _unreadable_index(error: str) -> bool:
     if "could not be parsed" in low or "could not be opened" in low:
         return True
     # "Unable to parse package file X" also fires for dpkg's status file, which
-    # dropping an index cannot fix, so it has to name one of ours.
+    # dropping an index cannot fix, so it has to name this archive's index
     return "unable to parse" in low and _archive_key().replace("/", "_").lower() in low
 
 
@@ -300,7 +300,7 @@ def drop_lists() -> int:
 def refresh() -> None:
     """Refresh the archive index alone, so a slow Debian mirror cannot stall a check."""
     if not ARCHIVE_SOURCES.is_file():
-        raise UpdateError(f"{ARCHIVE_SOURCES} missing, archive not enabled on this box")
+        raise UpdateError(f"{ARCHIVE_SOURCES} missing, archive not enabled on this unit")
     _run(
         [
             "apt-get",
@@ -495,7 +495,7 @@ def broken_packages() -> list[str]:
 
 
 def configure_pending(progress: _Progress | None = None) -> None:
-    """Finish what dpkg started. Offline, so it heals a box this boot cannot update."""
+    """Finish what dpkg started. Offline, so it heals a unit this boot cannot update."""
     if progress and broken_packages():
         progress.step(0.0, "Finishing last update")
     subprocess.run(["dpkg", "--configure", "-a"], check=False)
@@ -600,7 +600,7 @@ def run() -> str:
             _install(sorted({p for i in ids for p in resolve(i).packages}), progress)
             progress.phase(0.70, 0.95, "Applying settings")
             converge(progress)
-        except Exception as exc:  # noqa: BLE001 whatever broke, the box still relocks
+        except Exception as exc:  # noqa: BLE001 whatever broke, root still relocks
             error = str(exc) or type(exc).__name__
     disarm()
     try:

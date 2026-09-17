@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # Installed by update.sh. Runs on the boot camlab-update apply armed, and only then.
-# Relock and reboot sit in ExecStopPost, so a killed run still leaves a locked box.
+# Relock and reboot sit in ExecStopPost, so a killed run still leaves the root locked
 
 [Unit]
 Description=camlab offline update
