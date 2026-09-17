@@ -22,12 +22,13 @@ Branch layout
                          ci.yml (branch validation) and release.yml
                          (tagged publish).
 
-Camera stack pin
-----------------
+Runtime dependencies
+--------------------
 
-debian/rules renders camera stack relations into ${camlab:StackDepends}
-from the source tree's camera-stack.version, so a deb and a clone install
-pin the same versions. Build fails without that file.
+debian/rules renders Depends from source tree's apt-packages, stack
+relations into ${camlab:StackDepends} and presence-checked rest into
+${camlab:AppDepends}, so a deb and a clone install cannot drift. Build
+fails without that file.
 
 Unlike the driver repos, this branch is deliberately detached from
 Kurokesu/ci while app packaging stabilizes: workflows carry their own

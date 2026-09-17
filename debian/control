@@ -9,20 +9,11 @@ Rules-Requires-Root: no
 
 Package: camlab-rpi
 Architecture: all
-# Mirrors what scripts/setup/deps.sh installs on main. Sync on every
-# release. Camera stack relations come from camera-stack.version
-# through debian/rules.
+# python3 is declared here rather than rendered, an interpreted tree
+# needs it and deps.sh leaves it to Raspberry Pi OS
 Depends: ${misc:Depends},
  python3,
- python3-picamera2,
- python3-pyqt6,
- python3-opengl,
- python3-yaml,
- python3-pil,
- cage,
- wlr-randr,
- qt6-wayland,
- awb-nn,
+ ${camlab:AppDepends},
  ${camlab:StackDepends}
 # camlab-setup installs drivers after kernel.sh prunes the
 # sibling kernel flavor.
