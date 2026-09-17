@@ -5,30 +5,18 @@
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+from conftest import logged
 
 from camlab import dmesg, stack
-from camlab.integrity import (
-    LOG_DATEFMT,
-    LOG_FORMAT,
-    IntegrityStats,
-    LogClassifier,
-    breakdown_text,
-)
+from camlab.integrity import IntegrityStats, LogClassifier, breakdown_text
 
 # What Picamera2.camera_manager.version reports, and the pin it pairs with
 LOADED = "v0.7.2+rpt20260817+krks3"
 PINNED = "1:0.7.2+rpt20260817+krks3"
-
-
-def logged(note: str) -> str:
-    """Note as _setup_logging renders it, which is the form the panel classifies."""
-    record = logging.LogRecord("camlab.camera", logging.WARNING, __file__, 1, note, None, None)
-    return logging.Formatter(LOG_FORMAT, LOG_DATEFMT).format(record)
 
 
 @pytest.fixture
