@@ -24,7 +24,7 @@ from camlab.display import (
     plan_layout,
     touch_matrix,
 )
-from camlab.qt import QtCore, QtWidgets, Signal
+from camlab.qt import QtCore, QtGui, QtWidgets, Signal
 from camlab.settings import DisplayMode
 
 REPORT = """DSI-2 "(null) (null) (DSI-2)"
@@ -462,11 +462,12 @@ def qapp():
 
 
 class CursorApp(QtCore.QObject):
-    """QApplication stand-in recording installed event filters."""
+    """QApplication stand-in recording cursor pushes and pops in order."""
 
     def __init__(self):
         super().__init__()
         self.filters: list[QtCore.QObject] = []
+        self.calls: list[str] = []
 
     def installEventFilter(self, obj) -> None:
         self.filters.append(obj)
@@ -475,37 +476,90 @@ class CursorApp(QtCore.QObject):
         self.filters.remove(obj)
 
     def setOverrideCursor(self, _cursor) -> None:
-        pass
+        self.calls.append("blank")
 
     def restoreOverrideCursor(self) -> None:
-        pass
+        self.calls.append("reveal")
+
+
+class FakePointer:
+    """Stand-in for QPointingDevice. Qt reuses one per seat, so replugs share it."""
+
+    def __init__(self, kind=QtGui.QInputDevice.DeviceType.Mouse):
+        self._kind = kind
+
+    def type(self):
+        return self._kind
+
+
+class FakeMove:
+    def __init__(self, device):
+        self._device = device
+
+    def type(self):
+        return QtCore.QEvent.Type.MouseMove
+
+    def pointingDevice(self):
+        return self._device
 
 
 @pytest.fixture
-def cursor_rig(qapp, monkeypatch):
-    """Revealed CursorPolicy over a stand-in app, both touchscreen probes scripted."""
+def cursor_rig(qapp, tmp_path):
+    """Freshly built CursorPolicy over a stand-in app, blanked as at startup."""
 
-    def build(dsi: bool, listed: bool) -> tuple[CursorApp, display.CursorPolicy]:
-        monkeypatch.setattr(display, "has_dsi_display", lambda: dsi)
-        monkeypatch.setattr(display, "_touchscreen_attached", lambda: listed)
+    def build() -> tuple[CursorApp, display.CursorPolicy]:
         app = CursorApp()
-        policy = display.CursorPolicy(app)
-        policy._set_visible(True)
+        policy = display.CursorPolicy(app, input_dir=str(tmp_path))
+        app.calls.clear()
         return app, policy
 
     return build
 
 
-def test_cursor_filter_survives_a_touch_device_readd(cursor_rig):
-    app, policy = cursor_rig(dsi=True, listed=False)
+def test_cursor_filter_stays_installed(cursor_rig):
+    app, policy = cursor_rig()
+    policy.eventFilter(None, FakeMove(FakePointer()))
     assert app.filters == [policy]
 
 
-def test_cursor_filter_stays_for_a_touchscreen_off_the_panel(cursor_rig):
-    app, policy = cursor_rig(dsi=False, listed=True)
-    assert app.filters == [policy]
+def test_first_mouse_move_reveals_the_cursor(cursor_rig):
+    app, policy = cursor_rig()
+    policy.eventFilter(None, FakeMove(FakePointer()))
+    assert app.calls == ["reveal"]
 
 
-def test_cursor_filter_retires_with_no_touchscreen_anywhere(cursor_rig):
-    app, _policy = cursor_rig(dsi=False, listed=False)
-    assert app.filters == []
+def test_further_moves_do_nothing(cursor_rig):
+    app, policy = cursor_rig()
+    mouse = FakePointer()
+    for _ in range(5):
+        policy.eventFilter(None, FakeMove(mouse))
+    assert app.calls == ["reveal"]
+
+
+def test_a_replug_gets_the_cursor_reapplied(cursor_rig):
+    app, policy = cursor_rig()
+    mouse = FakePointer()
+    policy.eventFilter(None, FakeMove(mouse))
+    app.calls.clear()
+    # Qt hands back the same pointer after a replug, so the input dir is the cue
+    policy._on_input_changed("/dev/input")
+    policy.eventFilter(None, FakeMove(mouse))
+    assert app.calls == ["blank", "reveal"]
+
+
+def test_a_replug_rearms_only_once(cursor_rig):
+    app, policy = cursor_rig()
+    mouse = FakePointer()
+    policy.eventFilter(None, FakeMove(mouse))
+    policy._on_input_changed("/dev/input")
+    for _ in range(4):
+        policy.eventFilter(None, FakeMove(mouse))
+    assert app.calls == ["reveal", "blank", "reveal"]
+
+
+def test_touch_never_summons_the_cursor(cursor_rig):
+    app, policy = cursor_rig()
+    finger = FakePointer(QtGui.QInputDevice.DeviceType.TouchScreen)
+    policy._on_input_changed("/dev/input")
+    policy.eventFilter(None, FakeMove(finger))
+    assert app.calls == []
