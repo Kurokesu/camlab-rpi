@@ -36,7 +36,7 @@ def test_paired_stack_says_nothing(pin):
     assert stack.mismatches(LOADED) == []
 
 
-def test_source_build_names_the_drift(pin):
+def test_source_build_names_drift(pin):
     """What /usr/local defeats every dpkg check with."""
     pin(LIBCAMERA_VERSION=PINNED, PICAMERA2_VERSION=stack._picamera2())
     assert stack.mismatches("v0.7.3") == [
@@ -44,7 +44,7 @@ def test_source_build_names_the_drift(pin):
     ]
 
 
-def test_picamera2_drift_names_the_loaded_version(pin):
+def test_picamera2_drift_names_loaded_version(pin):
     pin(LIBCAMERA_VERSION=PINNED, PICAMERA2_VERSION="0.3.99")
     assert stack.mismatches(LOADED) == [
         f"camera stack: picamera2 {stack._picamera2()}, validated against 0.3.99"
@@ -76,7 +76,7 @@ def test_shipped_pin_file_pairs_with_its_own_version():
     assert [note for note in notes if "libcamera" in note] == []
 
 
-def test_drift_line_classifies_as_a_warning(pin):
+def test_drift_line_classifies_as_warning(pin):
     """The trap: unclassified, a drift warning hides under the Warnings filter."""
     pin(LIBCAMERA_VERSION=PINNED)
     line = logged(stack.mismatches("v0.7.3")[0])
@@ -86,6 +86,6 @@ def test_drift_line_classifies_as_a_warning(pin):
     )
 
 
-def test_warning_breakdown_names_the_category():
+def test_warning_breakdown_names_category():
     stats = IntegrityStats(warnings=1, by_category={"stack_pairing": 1})
     assert "Stack pairing: 1" in breakdown_text(stats, "warning")

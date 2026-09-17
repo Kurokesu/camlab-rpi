@@ -33,14 +33,14 @@ def test_both_forks_pin_version_and_packages():
         assert env[f"{fork}_PACKAGES"].split()
 
 
-def test_versions_carry_the_fork_epoch():
+def test_versions_carry_fork_epoch():
     """An unepoched floor sorts below every fork build and pins nothing."""
     env = pins()
     for fork in FORKS:
         assert ":" in env[f"{fork}_VERSION"], fork
 
 
-def test_ceiling_admits_a_rebuild_and_stops_the_next_fork():
+def test_ceiling_admits_rebuild_and_stops_next_fork():
     """Trailing dot carries the whole ceiling, so prove it against real dpkg."""
     floor = pins()["LIBCAMERA_VERSION"]
     next_fork = re.sub(r"\d+$", lambda m: str(int(m.group()) + 1), floor)
@@ -59,7 +59,7 @@ def test_picamera2_is_named_once():
     assert set(pins()["PICAMERA2_PACKAGES"].split()).isdisjoint(app_packages())
 
 
-def test_app_packages_leave_fork_packages_to_the_pin():
+def test_app_packages_leave_fork_packages_to_pin():
     """A presence-checked fork package would land outside the pinned range."""
     forked = {pkg for fork in FORKS for pkg in pins()[f"{fork}_PACKAGES"].split()}
     assert forked.isdisjoint(app_packages())

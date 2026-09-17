@@ -42,7 +42,7 @@ def test_missing_camera_pushes_driver_lines(monkeypatch):
     assert win.fed == PROBE_FAILURE
 
 
-def test_scrape_asks_for_the_selected_overlay(monkeypatch):
+def test_scrape_asks_for_selected_overlay(monkeypatch):
     asked: list[str] = []
     monkeypatch.setattr(dmesg, "read", lambda module: asked.append(module) or [])
     MainWindow._report_driver_errors(stub("imx585"))
