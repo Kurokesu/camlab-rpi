@@ -23,6 +23,7 @@ _CODEPOINTS: dict[str, int] = {
     "error": 0xF8B6,
     "warning": 0xF083,
     "power_settings_new": 0xF8C7,
+    "restart_alt": 0xF053,
     "photo_camera": 0xE412,
     "terminal": 0xEB8E,
     "tune": 0xE429,

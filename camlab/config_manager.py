@@ -328,6 +328,10 @@ def poweroff() -> None:
     subprocess.run(["sudo", "systemctl", "poweroff", "--no-wall"], check=True)
 
 
+def reboot() -> None:
+    subprocess.run(["sudo", "systemctl", "reboot", "--no-wall"], check=True)
+
+
 def _require_root(cmd: str) -> bool:
     if os.geteuid() != 0:
         print(f"error: '{cmd}' must run as root (sudo)", file=sys.stderr)

@@ -6,10 +6,11 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 
 from .. import dmesg, network, updater
 from ..camera import CameraEngine
-from ..config_manager import ConfigManager, poweroff
+from ..config_manager import ConfigManager, poweroff, reboot
 from ..display import Backlight, DisplayManager, Topology
 from ..drm import dsi_blocked_ports
 from ..dsi_panels import PanelRegistry
@@ -30,6 +31,7 @@ from .log_panel import LogPanel
 from .mode_dialog import ModeCard
 from .monitor_view import MonitorView
 from .overlay import ModalOverlay, message_card
+from .power_card import PowerCard
 from .rpi_stats import field_texts
 from .sensor_dialog import SensorCard
 from .settings_dialog import SettingsCard
@@ -202,7 +204,7 @@ class MainWindow(QtWidgets.QMainWindow):
             icons.icon("power_settings_new", px, "#d98b80"), " Shutdown"
         )
         self.shutdown_btn.setObjectName("danger")
-        self.shutdown_btn.clicked.connect(self._shutdown)
+        self.shutdown_btn.clicked.connect(self._open_power_card)
 
         self._chrome_btns = (
             self.sensor_btn,
@@ -650,8 +652,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 primary.click()
 
     def _on_escape(self) -> None:
-        # Close frontmost open layer, otherwise Escape is kill switch.
-        # Immediate poweroff, no confirm by design on a power-cycle tool
+        # Close frontmost open layer, otherwise Escape opens the power card
         if self._modal_active:
             self._close_modal()
         elif self._open_sheet is not None:
@@ -659,7 +660,7 @@ class MainWindow(QtWidgets.QMainWindow):
         elif self.log_btn.isChecked():
             self.log_btn.setChecked(False)
         else:
-            self._shutdown()
+            self._open_power_card()
 
     # in-window modals: Cage renders separate top-level dialogs as a tiny unusable artifact
     def _open_modal(self, card) -> None:
@@ -910,14 +911,22 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         log.info("networking %s", "enabled" if enabled else "disabled")
 
-    def _shutdown(self) -> None:
-        # No confirmation by design: operators power-cycle constantly, save the click
+    def _open_power_card(self) -> None:
+        card = PowerCard(
+            on_reboot=lambda: self._power_action(reboot, "Reboot"),
+            on_shutdown=lambda: self._power_action(poweroff, "Shutdown"),
+            on_cancel=self._close_modal,
+        )
+        self._open_modal(card)
+
+    def _power_action(self, action: Callable[[], None], label: str) -> None:
+        self._close_modal()
         self.flush_settings()
         try:
-            poweroff()
+            action()
         except Exception as exc:  # noqa: BLE001
-            log.error("poweroff failed: %s", exc)
-            self._show_message("Shutdown failed", str(exc))
+            log.error("%s failed: %s", label.lower(), exc)
+            self._show_message(f"{label} failed", str(exc))
 
     # lifecycle
     def resizeEvent(self, event) -> None:
