@@ -40,7 +40,7 @@ def fill_pixels(fbsplash, canvas: np.ndarray, box, fraction: float) -> int:
     return int(np.all(canvas == fbsplash.INK, axis=2).sum())
 
 
-def test_fill_follows_the_fraction(fbsplash, canvas, logo):
+def test_fill_follows_fraction(fbsplash, canvas, logo):
     box = fbsplash.place(logo, 800, 600)
     assert fill_pixels(fbsplash, canvas, box, 0.0) == 0
     half = fill_pixels(fbsplash, canvas, box, 0.5)
@@ -60,7 +60,7 @@ def test_fraction_out_of_range_is_clamped(fbsplash, canvas, logo):
     assert fill_pixels(fbsplash, canvas, box, -1.0) == fill_pixels(fbsplash, canvas, box, 0.0)
 
 
-def test_bar_stays_on_a_short_framebuffer(fbsplash, logo):
+def test_bar_stays_on_short_framebuffer(fbsplash, logo):
     """A rotated panel leaves few rows, the bar must still land inside them."""
     canvas = np.zeros((32, 64, 3), np.uint8)
     box = fbsplash.place(logo, 64, 32)
@@ -68,7 +68,7 @@ def test_bar_stays_on_a_short_framebuffer(fbsplash, logo):
     assert np.any(np.all(canvas == fbsplash.INK, axis=2))
 
 
-def test_label_sits_above_the_bar(fbsplash, canvas, logo):
+def test_label_sits_above_bar(fbsplash, canvas, logo):
     """Reading order is wordmark, then what is happening, then how far along it is."""
     box = fbsplash.place(logo, 800, 600)
     label_top = fbsplash.block_top(box)
@@ -79,13 +79,13 @@ def test_label_sits_above_the_bar(fbsplash, canvas, logo):
     assert ink_rows[-1] >= bar_top
 
 
-def test_bundled_face_is_found_from_a_checkout(fbsplash):
+def test_bundled_face_is_found_from_checkout(fbsplash):
     """Installed it sits beside the script. Here it is the asset the GUI loads."""
     assert fbsplash.font_file() is not None
 
 
-def test_missing_font_drops_the_label_not_the_bar(fbsplash, canvas, logo, monkeypatch):
-    """A splash without text is poor. One without progress reads as a dead box."""
+def test_missing_font_drops_label_not_bar(fbsplash, canvas, logo, monkeypatch):
+    """A splash without text is poor. One without progress reads as a dead unit."""
     monkeypatch.setattr(fbsplash, "FONT_DIRS", ())
     box = fbsplash.place(logo, 800, 600)
     top = fbsplash.block_top(box)
@@ -94,6 +94,6 @@ def test_missing_font_drops_the_label_not_the_bar(fbsplash, canvas, logo, monkey
     assert np.any(np.all(canvas == fbsplash.INK, axis=2))
 
 
-def test_status_block_clears_the_wordmark(fbsplash, logo):
+def test_status_block_clears_wordmark(fbsplash, logo):
     box = fbsplash.place(logo, 800, 600)
     assert fbsplash.block_top(box) - (box[1] + box[3]) == box[3] // 2

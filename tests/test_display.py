@@ -138,7 +138,7 @@ def test_classify_lowest_hdmi_wins():
     assert classify(["HDMI-A-2", "DSI-2", "HDMI-A-1"]) == ("HDMI-A-1", "DSI-2", ("HDMI-A-2",))
 
 
-def test_classify_hdmi_a2_alone_is_the_monitor():
+def test_classify_hdmi_a2_alone_is_monitor():
     assert classify(["HDMI-A-2"]) == ("HDMI-A-2", None, ())
 
 
@@ -233,7 +233,7 @@ def test_monitor_within_budget_is_quiet(caplog):
     assert caplog.records == []
 
 
-def test_builtin_is_quiet_about_the_monitor_it_switches_off(caplog):
+def test_builtin_is_quiet_about_monitor_it_switches_off(caplog):
     with caplog.at_level(logging.WARNING, logger="camlab.display"):
         layout = plan_layout(DisplayMode.BUILTIN, _outputs(PANEL, UHD_MONITOR), dsi_display=True)
     assert layout.off == ("HDMI-A-1",)
@@ -425,7 +425,7 @@ def _spied(app: HotplugApp) -> tuple[display.DisplayManager, SettleSpy]:
 NEW_GEOMETRY = QtCore.QRect(0, 0, 1280, 720)
 
 
-def test_mode_change_on_a_live_output_runs_the_pass():
+def test_mode_change_on_live_output_runs_pass():
     screen = ScreenStub()
     manager, spy = _spied(HotplugApp(screen))
     manager.start()
@@ -434,7 +434,7 @@ def test_mode_change_on_a_live_output_runs_the_pass():
     assert spy.arms == 2
 
 
-def test_mode_change_on_a_hotplugged_output_runs_the_pass():
+def test_mode_change_on_hotplugged_output_runs_pass():
     app = HotplugApp()
     manager, spy = _spied(app)
     manager.start()
@@ -444,7 +444,7 @@ def test_mode_change_on_a_hotplugged_output_runs_the_pass():
     assert spy.arms == 3
 
 
-def test_every_screen_signal_arms_the_one_debounce():
+def test_every_screen_signal_arms_one_debounce():
     screen = ScreenStub()
     app = HotplugApp(screen)
     manager, spy = _spied(app)
@@ -522,7 +522,7 @@ def test_cursor_filter_stays_installed(cursor_rig):
     assert app.filters == [policy]
 
 
-def test_first_mouse_move_reveals_the_cursor(cursor_rig):
+def test_first_mouse_move_reveals_cursor(cursor_rig):
     app, policy = cursor_rig()
     policy.eventFilter(None, FakeMove(FakePointer()))
     assert app.calls == ["reveal"]
@@ -536,7 +536,7 @@ def test_further_moves_do_nothing(cursor_rig):
     assert app.calls == ["reveal"]
 
 
-def test_a_replug_gets_the_cursor_reapplied(cursor_rig):
+def test_replug_gets_cursor_reapplied(cursor_rig):
     app, policy = cursor_rig()
     mouse = FakePointer()
     policy.eventFilter(None, FakeMove(mouse))
@@ -547,7 +547,7 @@ def test_a_replug_gets_the_cursor_reapplied(cursor_rig):
     assert app.calls == ["blank", "reveal"]
 
 
-def test_a_replug_rearms_only_once(cursor_rig):
+def test_replug_rearms_only_once(cursor_rig):
     app, policy = cursor_rig()
     mouse = FakePointer()
     policy.eventFilter(None, FakeMove(mouse))
@@ -557,7 +557,7 @@ def test_a_replug_rearms_only_once(cursor_rig):
     assert app.calls == ["reveal", "blank", "reveal"]
 
 
-def test_touch_never_summons_the_cursor(cursor_rig):
+def test_touch_never_summons_cursor(cursor_rig):
     app, policy = cursor_rig()
     finger = FakePointer(QtGui.QInputDevice.DeviceType.TouchScreen)
     policy._on_input_changed("/dev/input")

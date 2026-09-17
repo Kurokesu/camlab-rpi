@@ -113,7 +113,7 @@ class TestReason:
         )
         assert updater._reason(text).startswith("E: Failed to fetch")
 
-    def test_without_an_error_line_the_last_one_stands(self):
+    def test_without_error_line_last_one_stands(self):
         assert updater._reason("dpkg: warning\nsomething went wrong\n") == "something went wrong"
 
     def test_no_output_reads_as_empty(self):
@@ -165,7 +165,7 @@ class TestPolicy:
 
 
 class TestArchivePackages:
-    def test_reads_the_archive_index_only(self, tmp_path: Path, monkeypatch):
+    def test_reads_archive_index_only(self, tmp_path: Path, monkeypatch):
         monkeypatch.setattr(updater, "APT_LISTS", tmp_path)
         (tmp_path / "apt.kurokesu.com_dists_trixie_main_binary-arm64_Packages").write_text(
             "Package: camlab-rpi\nVersion: 1.0.0\n\nPackage: libcamera0.7\nVersion: 1:0.7.1\n"
@@ -179,7 +179,7 @@ class TestArchivePackages:
         monkeypatch.setattr(updater, "APT_LISTS", tmp_path / "gone")
         assert updater.archive_packages() == set()
 
-    def test_staging_archive_path_becomes_the_index_prefix(self, tmp_path: Path, monkeypatch):
+    def test_staging_archive_path_becomes_index_prefix(self, tmp_path: Path, monkeypatch):
         monkeypatch.setattr(updater, "APT_LISTS", tmp_path)
         monkeypatch.setattr(updater, "ARCHIVE_URL", "file:///srv/camlab-staging")
         (tmp_path / "_srv_camlab-staging_dists_trixie_main_binary-arm64_Packages").write_text(
@@ -199,12 +199,12 @@ class TestComponents:
         package_sets({"camlab-rpi"}, {"camlab-rpi"})
         assert updater.components(registry)[0] == Component("app", "camlab-rpi", ("camlab-rpi",))
 
-    def test_driver_ids_follow_the_registry(self, registry, package_sets):
+    def test_driver_ids_follow_registry(self, registry, package_sets):
         package_sets(set(), set())
         ids = [c.id for c in updater.components(registry)]
         assert ids == ["app", "driver:ar0234", "driver:imx585"]
 
-    def test_sensor_without_a_package_gets_no_component(self, registry, package_sets):
+    def test_sensor_without_package_gets_no_component(self, registry, package_sets):
         package_sets(set(), set())
         assert "driver:ov5647" not in [c.id for c in updater.components(registry)]
 
@@ -213,7 +213,7 @@ class TestComponents:
         package_sets({"camlab-rpi", "libcamera0.7"}, {"camlab-rpi", "libcamera0.7"})
         assert "stack" not in [c.id for c in updater.components(registry)]
 
-    def test_stack_takes_the_rest_of_the_archive(self, package_sets):
+    def test_stack_takes_rest_of_archive(self, package_sets):
         package_sets(
             {"camlab-rpi", "ar0234-rpi-dkms", "libcamera0.7", "python3-libcamera"},
             {"camlab-rpi", "ar0234-rpi-dkms", "libcamera0.7", "python3-libcamera", "coreutils"},
@@ -249,7 +249,7 @@ class TestComponents:
         monkeypatch.setattr(updater, "_run", lambda cmd: pytest.fail("dpkg-query called"))
         assert updater.stack_versions([]) == {}
 
-    def test_resolve_maps_an_id_to_packages(self, registry, package_sets):
+    def test_resolve_maps_id_to_packages(self, registry, package_sets):
         package_sets(set(), set())
         assert updater.resolve("driver:ar0234", registry).packages == ("ar0234-rpi-dkms",)
 
@@ -285,7 +285,7 @@ class TestSurvey:
         }
         monkeypatch.setattr(updater, "package_states", lambda names: states)
 
-    def test_pending_rolls_up_to_the_component(self, registry):
+    def test_pending_rolls_up_to_component(self, registry):
         by_id = {c["id"]: c for c in updater.survey(registry)["components"]}
         assert by_id["driver:ar0234"]["pending"] is True
         assert by_id["app"]["pending"] is False
@@ -309,7 +309,7 @@ class TestInstalledVersions:
             "libcamera0.7": "1:0.7.1-4",
         }
 
-    def test_unknown_name_keeps_the_rest(self, monkeypatch):
+    def test_unknown_name_keeps_rest(self, monkeypatch):
         """dpkg-query exits 1 over a name it does not know, having printed the ones it does."""
         self.feed(monkeypatch, "installed camlab-rpi 1.0.0-1\n")
         assert updater.installed_versions(["camlab-rpi", "never-heard-of-it"]) == {
@@ -331,7 +331,7 @@ class TestInventory:
     """What About shows with networking off, so dpkg and uname are all it may ask."""
 
     @pytest.fixture(autouse=True)
-    def box(self, monkeypatch, package_sets):
+    def unit(self, monkeypatch, package_sets):
         package_sets(
             {
                 "camlab-rpi",
@@ -364,7 +364,7 @@ class TestInventory:
     def rows(self, registry) -> dict[str, dict]:
         return {r["id"]: r for r in updater.inventory(registry)}
 
-    def test_every_sensor_gets_a_row(self, registry):
+    def test_every_sensor_gets_its_own_row(self, registry):
         """Three driver rows and three missing sensors would read as three missing drivers."""
         assert [r["id"] for r in updater.inventory(registry)] == [
             "app",
@@ -380,7 +380,7 @@ class TestInventory:
         row = self.rows(registry)["driver:ov5647"]
         assert (row["installed"], row["updatable"]) == (updater.MAINLINE, False)
 
-    def test_driver_absent_from_the_box_says_so(self, registry):
+    def test_driver_absent_from_unit_says_so(self, registry):
         row = self.rows(registry)["driver:imx585"]
         assert (row["installed"], row["updatable"]) == (updater.ABSENT, False)
 
@@ -388,7 +388,7 @@ class TestInventory:
         row = self.rows(registry)["driver:ar0234"]
         assert (row["installed"], row["updatable"]) == ("0.1.0", True)
 
-    def test_kernel_is_the_running_one_and_never_updatable(self, registry):
+    def test_kernel_carries_running_release_and_never_updatable(self, registry):
         row = self.rows(registry)["kernel"]
         assert (row["installed"], row["updatable"]) == ("6.18.34+rpt-rpi-2712", False)
 
@@ -401,24 +401,24 @@ class TestInventory:
         )
         assert rows["stack:rpicam-apps"]["installed"] == "1.13.0+krks1"
 
-    def test_a_fork_row_is_labelled_by_its_source_package(self, registry):
+    def test_fork_row_is_labelled_by_its_source_package(self, registry):
         assert self.rows(registry)["stack:libcamera"]["label"] == "libcamera"
 
-    def test_an_epoch_stays_out_of_the_row(self, registry):
+    def test_epoch_stays_out_of_row(self, registry):
         """An epoch only orders apt's comparisons, so it is noise on a card."""
         assert ":" not in self.rows(registry)["stack:libcamera"]["installed"]
 
-    def test_a_first_packaging_revision_stays_out_of_the_row(self, registry):
+    def test_first_packaging_revision_stays_out_of_row(self, registry):
         """Revision 1 is the convention for a first build. A later one tells builds apart."""
         rows = self.rows(registry)
         assert rows["driver:ar0234"]["installed"] == "0.1.0"
         assert rows["stack:libcamera"]["installed"].endswith("-4")
 
-    def test_a_stack_dpkg_does_not_carry_adds_no_rows(self, registry):
+    def test_stack_missing_from_dpkg_adds_no_rows(self, registry):
         self.sources = {}
         assert [r["id"] for r in updater.inventory(registry) if r["id"].startswith("stack")] == []
 
-    def test_a_box_that_never_checked_still_answers(self, registry, tmp_path, monkeypatch):
+    def test_unit_that_never_checked_still_answers(self, registry, tmp_path, monkeypatch):
         """No update.json at all is the offline case the card exists for."""
         monkeypatch.setenv("CAMLAB_UPDATE_FILE", str(tmp_path / "update.json"))
         assert updater.read_state() == {}
@@ -427,7 +427,7 @@ class TestInventory:
 
 class TestCmdline:
     @pytest.fixture(autouse=True)
-    def readonly_box(self, tmp_path: Path, monkeypatch) -> Path:
+    def readonly_root(self, tmp_path: Path, monkeypatch) -> Path:
         cmdline = tmp_path / "cmdline.txt"
         cmdline.write_text("console=serial0,115200 root=PARTUUID=abc rootwait quiet\n")
         monkeypatch.setattr(updater, "CMDLINE", cmdline)
@@ -436,35 +436,35 @@ class TestCmdline:
         (tmp_path / "overlayroot.local.conf").touch()
         return cmdline
 
-    def test_unlock_appends_the_token(self, readonly_box: Path):
+    def test_unlock_appends_token(self, readonly_root: Path):
         updater.unlock_next_boot()
-        assert readonly_box.read_text().split()[-1] == updater.WRITABLE
+        assert readonly_root.read_text().split()[-1] == updater.WRITABLE
 
-    def test_unlock_twice_leaves_one_token(self, readonly_box: Path):
+    def test_unlock_twice_leaves_one_token(self, readonly_root: Path):
         updater.unlock_next_boot()
         updater.unlock_next_boot()
-        assert readonly_box.read_text().count(updater.WRITABLE) == 1
+        assert readonly_root.read_text().count(updater.WRITABLE) == 1
 
-    def test_relock_drops_it_and_keeps_the_rest(self, readonly_box: Path):
+    def test_relock_drops_it_and_keeps_rest(self, readonly_root: Path):
         updater.unlock_next_boot()
         updater.relock()
-        assert readonly_box.read_text().split() == [
+        assert readonly_root.read_text().split() == [
             "console=serial0,115200",
             "root=PARTUUID=abc",
             "rootwait",
             "quiet",
         ]
 
-    def test_relock_without_the_token_is_a_no_op(self, readonly_box: Path):
-        before = readonly_box.read_text().split()
+    def test_relock_without_token_is_no_op(self, readonly_root: Path):
+        before = readonly_root.read_text().split()
         updater.relock()
-        assert readonly_box.read_text().split() == before
+        assert readonly_root.read_text().split() == before
 
-    def test_writable_box_keeps_cmdline_untouched(self, readonly_box: Path, monkeypatch):
+    def test_writable_root_keeps_cmdline_untouched(self, readonly_root: Path, monkeypatch):
         """No overlay config means the root is already writable, nothing to flip."""
-        monkeypatch.setattr(updater, "OVERLAY_CONF", readonly_box.parent / "absent")
+        monkeypatch.setattr(updater, "OVERLAY_CONF", readonly_root.parent / "absent")
         updater.unlock_next_boot()
-        assert updater.WRITABLE not in readonly_box.read_text()
+        assert updater.WRITABLE not in readonly_root.read_text()
 
 
 class TestArm:
@@ -475,21 +475,21 @@ class TestArm:
         monkeypatch.setattr(updater, "update_path", lambda states=None: "")
         monkeypatch.setattr(updater, "resolve", fake_resolve)
 
-    def test_plan_records_the_ids(self):
+    def test_plan_records_ids(self):
         updater.arm(["app", "driver:ar0234"])
         assert updater.read_plan()["ids"] == ["app", "driver:ar0234"]
 
-    def test_arm_refuses_without_an_update_path(self, monkeypatch):
+    def test_arm_refuses_without_update_path(self, monkeypatch):
         monkeypatch.setattr(updater, "update_path", lambda states=None: "tarball install")
         with pytest.raises(UpdateError, match="tarball install"):
             updater.arm(["app"])
 
-    def test_disarm_clears_the_plan(self):
+    def test_disarm_clears_plan(self):
         updater.arm(["app"])
         updater.disarm()
         assert updater.read_plan() == {}
 
-    def test_plan_without_a_writable_boot_is_dropped(self, monkeypatch):
+    def test_plan_without_writable_boot_is_dropped(self, monkeypatch):
         """Otherwise the next boot runs an update it cannot install and says so."""
         monkeypatch.setattr(updater, "unlock_next_boot", raiser("cmdline.txt missing"))
         with pytest.raises(UpdateError):
@@ -500,7 +500,7 @@ class TestArm:
 class TestRun:
     @pytest.fixture(autouse=True)
     def update_boot(self, tmp_path: Path, monkeypatch):
-        """An armed box with apt, converge and the framebuffer stubbed out."""
+        """An armed unit with apt, converge and the framebuffer stubbed out."""
         monkeypatch.setenv("CAMLAB_UPDATE_FILE", str(tmp_path / "update.json"))
         monkeypatch.setattr(updater, "OVERLAY_CONF", tmp_path / "absent")
         monkeypatch.setattr(updater, "FBSPLASH", tmp_path / "absent")
@@ -524,7 +524,7 @@ class TestRun:
         plan = {"version": 1, "ids": ["app"], "attempts": attempts, "armed": "now"}
         updater.write_state(plan, updater.plan_file())
 
-    def test_installs_what_the_plan_names(self):
+    def test_installs_what_plan_names(self):
         self.arm()
         assert updater.run() == ""
         assert self.installed == [["app-pkg"]]
@@ -547,7 +547,7 @@ class TestRun:
         assert "did not finish" in updater.run()
         assert self.installed == []
 
-    def test_attempt_is_counted_before_the_work(self, monkeypatch):
+    def test_attempt_is_counted_before_work(self, monkeypatch):
         seen = []
         monkeypatch.setattr(
             updater,
@@ -584,13 +584,13 @@ class TestRun:
         assert updater.read_plan() == {}
         assert updater.read_state()["last_run"]["error"] == "boom"
 
-    def test_failure_without_a_message_still_names_itself(self, monkeypatch):
+    def test_failure_without_message_still_names_itself(self, monkeypatch):
         self.arm()
         monkeypatch.setattr(updater, "converge", raiser("", FileNotFoundError))
         assert updater.run() == "FileNotFoundError"
 
-    def test_relock_failure_reaches_the_record(self, monkeypatch):
-        """A box left writable is the one failure the reboot cannot fix by itself."""
+    def test_relock_failure_reaches_record(self, monkeypatch):
+        """A unit left writable is the one failure the reboot cannot fix by itself."""
         self.arm()
         monkeypatch.setattr(updater, "relock", raiser("cmdline.txt missing"))
         assert "cmdline.txt missing" in updater.run()
@@ -636,13 +636,13 @@ class TestRepair:
         assert updater.repair() == ["ar0822-rpi-dkms"]
         assert self.ran == [["apt-get", "install", "-y", "--reinstall"]]
 
-    def test_clean_box_reinstalls_nothing(self, monkeypatch):
+    def test_clean_unit_reinstalls_nothing(self, monkeypatch):
         self.feed(monkeypatch, "installed camlab-rpi\n")
         assert updater.repair() == []
         assert self.ran == []
 
     def test_pending_configure_runs_offline(self):
-        """Before the refresh, so it heals a box that cannot reach the archive either."""
+        """Before the refresh, so it heals a unit that cannot reach the archive either."""
         updater.configure_pending()
         assert self.ran == [["dpkg", "--configure", "-a"]]
 
@@ -655,7 +655,7 @@ class TestRepair:
         updater.configure_pending(progress)
         assert painted == ["Finishing last update"]
 
-    def test_clean_box_paints_nothing(self, monkeypatch):
+    def test_clean_unit_paints_nothing(self, monkeypatch):
         progress = updater._Progress()
         monkeypatch.setattr(progress, "step", lambda done, label=None: pytest.fail("painted"))
         self.feed(monkeypatch, "installed camlab-rpi\n")
@@ -670,12 +670,12 @@ class TestLogCopy:
         monkeypatch.setenv("CAMLAB_UPDATE_FILE", str(tmp_path / "update.json"))
         return tmp_path
 
-    def test_journal_lands_beside_the_record(self, data_mount: Path, monkeypatch):
+    def test_journal_lands_beside_record(self, data_mount: Path, monkeypatch):
         monkeypatch.setattr(updater, "_run", lambda cmd, env=None: "journal text\n")
         updater._save_log()
         assert (data_mount / "update.log").read_text() == "journal text\n"
 
-    def test_missing_journal_is_not_a_failure(self, data_mount: Path, monkeypatch):
+    def test_missing_journal_is_not_failure(self, data_mount: Path, monkeypatch):
         monkeypatch.setattr(updater, "_run", raiser("no journal"))
         updater._save_log()
         assert not (data_mount / "update.log").exists()
@@ -713,26 +713,26 @@ class TestSplashProgress:
             "Rebuilding camera drivers",
         ]
 
-    def test_fetch_and_install_split_the_phase(self):
+    def test_fetch_and_install_split_phase(self):
         progress = updater._Progress()
         progress.phase(0.0, 1.0, "start")
         updater._report_apt("dlstatus:camlab-rpi:100:Retrieved\n", progress)
         updater._report_apt("pmstatus:camlab-rpi:0:Unpacking\n", progress)
         assert self.paints[1:] == [(0.25, "Downloading updates"), (0.25, "Installing updates")]
 
-    def test_driver_configure_names_the_rebuild(self):
+    def test_driver_configure_names_rebuild(self):
         progress = updater._Progress()
         progress.phase(0.0, 1.0, "start")
         updater._report_apt("pmstatus:ar0822-rpi-dkms:40:Setting up\n", progress)
         assert self.paints[-1] == (0.55, "Rebuilding camera drivers")
 
-    def test_line_without_a_percentage_is_ignored(self):
+    def test_line_without_percentage_is_ignored(self):
         updater._report_apt("nonsense\n", updater._Progress())
         assert self.paints == []
 
 
 class TestRefreshRetry:
-    def test_keeps_trying_while_the_network_settles(self, monkeypatch):
+    def test_keeps_trying_while_network_settles(self, monkeypatch):
         calls = []
 
         def flaky() -> None:
@@ -792,18 +792,18 @@ class TestRefreshRetry:
 class TestUnreadableIndex:
     """Which apt failures are worth dropping an index for, measured on hardware."""
 
-    def test_apt_names_the_file_it_cannot_parse(self):
+    def test_apt_names_file_it_cannot_parse(self):
         """The wording a poisoned Packages file gets, and the one that cost 50 s unmatched."""
         assert updater._unreadable_index(
             "E: Unable to parse package file "
             "/var/lib/apt/lists/apt.kurokesu.com_dists_trixie_main_binary-arm64_Packages (1)"
         )
 
-    def test_the_generic_summary_counts_too(self):
+    def test_generic_summary_counts_too(self):
         """What the round two power cut recorded."""
         assert updater._unreadable_index("E: The package lists or status file could not be parsed")
 
-    def test_a_broken_dpkg_status_is_not_ours_to_drop(self):
+    def test_broken_dpkg_status_is_not_ours_to_drop(self):
         """Same wording, but no index we delete can fix it."""
         assert not updater._unreadable_index(
             "E: Unable to parse package file /var/lib/dpkg/status (1)"
@@ -815,7 +815,7 @@ class TestUnreadableIndex:
             "/var/lib/apt/lists/deb.debian.org_dists_trixie_main_binary-arm64_Packages (1)"
         )
 
-    def test_an_absent_archive_is_not_an_unreadable_one(self):
+    def test_absent_archive_is_not_unreadable(self):
         assert not updater._unreadable_index("E: Failed to fetch file:/srv/camlab-staging")
 
 
@@ -848,7 +848,7 @@ class TestConverge:
         self.ran: list[str] = []
         monkeypatch.setattr(updater, "_run_logged", lambda cmd, env=None: self.ran.append(cmd[0]))
 
-    def test_runs_the_wiring_scripts_when_the_version_moved(self, tmp_path: Path):
+    def test_runs_wiring_scripts_when_version_moved(self, tmp_path: Path):
         (tmp_path / "converged").write_text("1.0.0\n")
         assert updater.converge()
         assert [Path(c).name for c in self.ran] == [s[0] for s in updater.CONVERGE_SCRIPTS]
@@ -861,7 +861,7 @@ class TestConverge:
         assert not updater.converge()
         assert self.ran == []
 
-    def test_marker_records_the_new_version(self, tmp_path: Path):
+    def test_marker_records_new_version(self, tmp_path: Path):
         updater.converge()
         assert (tmp_path / "converged").read_text().strip() == "1.0.1"
 
@@ -930,7 +930,7 @@ class TestCli:
         updater._main(["show", "driver:ar0234"])
         assert capsys.readouterr().out.startswith("driver:ar0234: driver:ar0234-pkg")
 
-    def test_check_keeps_the_last_update_outcome(self, tmp_path: Path, monkeypatch):
+    def test_check_keeps_last_update_outcome(self, tmp_path: Path, monkeypatch):
         """The GUI checks on its own, and used to wipe the record of the update it ran."""
         monkeypatch.setenv("CAMLAB_UPDATE_FILE", str(tmp_path / "update.json"))
         monkeypatch.setattr(updater, "refresh", lambda: None)
@@ -963,7 +963,7 @@ class TestGuiHelpers:
         )
         assert updater.component_summary(component) == (f"{krks}-4", "\u2026-5")
 
-    def test_an_epoch_is_dropped_from_both_sides(self):
+    def test_epoch_is_dropped_from_both_sides(self):
         """Stripped before the shortening, or the shared prefix would not line up."""
         krks = "0.7.1+rpt20260429+krks1"
         component = self._component(
@@ -977,14 +977,14 @@ class TestGuiHelpers:
         )
         assert updater.component_summary(component) == ("1.0.0~beta.10", "1.0.0~beta.11")
 
-    def test_a_repackaged_build_still_shows_a_move(self):
+    def test_repackaged_build_still_shows_move(self):
         """Hiding revision 1 must not leave an Update button beside two equal versions."""
         component = self._component(
             {"name": "ar0234-rpi-dkms", "installed": "0.1.0-1", "pending": "0.1.0-2"}
         )
         assert updater.component_summary(component) == ("0.1.0", "0.1.0-2")
 
-    def test_pending_ids_are_what_the_card_offers(self):
+    def test_pending_ids_are_what_card_offers(self):
         state = {
             "components": [
                 {"id": "app", "pending": True},
@@ -997,7 +997,7 @@ class TestGuiHelpers:
     def test_never_checked_offers_nothing(self):
         assert updater.pending_ids({}) == []
 
-    def test_commands_go_through_the_shim_sudoers_names(self):
+    def test_commands_go_through_shim_sudoers_names(self):
         assert updater.check_command() == ["sudo", updater.UPDATE_BIN, "check"]
         assert updater.apply_command("driver:ar0234") == [
             "sudo",
@@ -1016,5 +1016,5 @@ class TestGuiHelpers:
             "driver:ar0234",
         ]
 
-    def test_apply_without_an_id_takes_everything_pending(self):
+    def test_apply_without_id_takes_everything_pending(self):
         assert updater.apply_command() == ["sudo", updater.UPDATE_BIN, "apply"]
