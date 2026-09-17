@@ -47,7 +47,7 @@ def test_driver_lines_classify_as_errors(classifier, line):
     assert classifier.classify_with_severity(line) == (dmesg.CATEGORY, "error")
 
 
-def test_subdevice_notice_is_context_not_an_error(classifier):
+def test_subdevice_notice_is_context_not_error(classifier):
     """It shares the device prefix but reports success, so it must not tint or count."""
     assert SUBDEVICE_NOTICE in dmesg.driver_lines(DMESG_SAMPLE, "ar0822")
     assert classifier.classify_with_severity(SUBDEVICE_NOTICE) == (None, None)
@@ -58,7 +58,7 @@ def test_widening_leaves_camera_stack_lines_alone(classifier, line):
     assert classifier.classify_with_severity(line) == LogClassifier().classify_with_severity(line)
 
 
-def test_error_breakdown_names_the_category():
+def test_error_breakdown_names_category():
     stats = IntegrityStats(errors=3, by_category={dmesg.CATEGORY: 3})
     assert "Kernel driver: 3" in breakdown_text(stats, "error")
 

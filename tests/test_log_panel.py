@@ -40,7 +40,7 @@ def test_errors_filter_keeps_driver_lines(panel):
     assert shown == [" ".join(raw.split()) for raw in FAILURES]
 
 
-def test_unclassified_lines_hide_under_the_errors_filter(qapp):
+def test_unclassified_lines_hide_under_errors_filter(qapp):
     """The trap the widened pattern set exists for."""
     panel = LogPanel(LogClassifier())
     for line in PROBE_FAILURE:
@@ -49,7 +49,7 @@ def test_unclassified_lines_hide_under_the_errors_filter(qapp):
     assert panel.view.toPlainText() == ""
 
 
-def test_warnings_filter_keeps_a_stack_drift_line(panel):
+def test_warnings_filter_keeps_stack_drift_line(panel):
     """Where a drift warning has to show, and where an unclassified line never would."""
     line = logged(f"{stack.PREFIX} libcamera 0.7.3, validated against 0.7.2")
     panel.append_line(line)
