@@ -347,27 +347,27 @@ class DisplayManager(QtCore.QObject):
         self.topology_changed.emit(Topology.from_screens(self._app.screens()))
 
 
-def _touchscreen_attached() -> bool:
-    touch = QtGui.QInputDevice.DeviceType.TouchScreen
-    return any(d.type() == touch for d in QtGui.QInputDevice.devices())
-
-
 class CursorPolicy(QtCore.QObject):
     """Blank the cursor until a real mouse moves, re-blank it on touch.
 
-    The app-wide filter costs a Python call per event, so it retires itself
-    after the first reveal when no touchscreen is attached (nothing would
-    ever re-blank). Panels are wired at boot, so a touchscreen cannot appear
-    later on a rig that retired the filter.
+    Qt gives a seat one synthetic pointer that outlives a replug, so a new mouse
+    carries no cursor and cage's blank theme leaves nothing drawn. Watching the
+    input directory is the only notice of a replug, and it arms one reveal.
     """
 
-    def __init__(self, app: QtWidgets.QApplication):
+    def __init__(self, app: QtWidgets.QApplication, input_dir: str = "/dev/input"):
         super().__init__(app)
         self._app = app
         self._visible = True
+        self._rearm = False
         self._err_logged = False
+        self._watcher = QtCore.QFileSystemWatcher([input_dir], self)
+        self._watcher.directoryChanged.connect(self._on_input_changed)
         app.installEventFilter(self)
         self._set_visible(False)
+
+    def _on_input_changed(self, _path: str) -> None:
+        self._rearm = True
 
     def eventFilter(self, obj, event) -> bool:
         # PyQt aborts on exceptions escaping Qt virtuals, so never throw here.
@@ -380,6 +380,10 @@ class CursorPolicy(QtCore.QObject):
                 dev = event.pointingDevice()
                 if dev is not None:
                     touch = dev.type() == QtGui.QInputDevice.DeviceType.TouchScreen
+                    # Blank first so the reveal reapplies a shape to the new pointer
+                    if not touch and self._rearm:
+                        self._rearm = False
+                        self._set_visible(False)
                     self._set_visible(not touch)
         except Exception:  # cursor state is cosmetic, never fatal
             if not self._err_logged:
@@ -393,15 +397,8 @@ class CursorPolicy(QtCore.QObject):
         self._visible = visible
         if visible:
             self._app.restoreOverrideCursor()
-            self._maybe_retire()
         else:
             self._app.setOverrideCursor(QtGui.QCursor(QtCore.Qt.CursorShape.BlankCursor))
-
-    def _maybe_retire(self) -> None:
-        # Cached panel answer first, camlabctl's touch re-add thins Qt's live list
-        if has_dsi_display() or _touchscreen_attached():
-            return
-        self._app.removeEventFilter(self)
 
 
 # At 0 the operator cannot find the slider to bring the picture back.
