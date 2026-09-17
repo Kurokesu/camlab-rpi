@@ -14,7 +14,7 @@
 #
 # Requirements:
 #   - Raspberry Pi CM5 + IO board, or a Pi 5
-#   - Raspberry Pi OS Lite Trixie (64-bit, Debian 13)
+#   - Raspberry Pi OS Lite (trixie 64-bit)
 #   - Internet connection (apt)
 
 set -euo pipefail
@@ -27,6 +27,10 @@ CAMLAB_TAG="install"
 
 # shellcheck source=scripts/common.sh
 source "$REPO_DIR/scripts/common.sh"
+
+# OS_CODENAME for the platform check, packages are deps.sh's
+# shellcheck source=apt-packages
+source "$REPO_DIR/apt-packages"
 
 DO_READONLY=1
 DISPLAY_OVERLAY=""
@@ -66,8 +70,9 @@ log "Architecture: $ARCH"
 [ -f /etc/os-release ] || die "cannot detect OS (/etc/os-release missing)"
 . /etc/os-release
 log "OS: ${PRETTY_NAME:-unknown}"
-[ "${VERSION_CODENAME:-}" = "trixie" ] \
-    || die "unsupported OS: ${PRETTY_NAME:-unknown} (need Raspberry Pi OS Lite Trixie, 64-bit)"
+[ "${VERSION_CODENAME:-}" = "$OS_CODENAME" ] \
+    || die "unsupported OS: ${PRETTY_NAME:-unknown}," \
+           "need Raspberry Pi OS Lite ($OS_CODENAME 64-bit)"
 # Desktop image boots graphical.target and fights kiosk for tty1. Lite uses multi-user.
 if [ "$(systemctl get-default)" = "graphical.target" ]; then
     die "Raspberry Pi OS Desktop detected. Use the Lite image."
