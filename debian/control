@@ -20,12 +20,15 @@ Depends: ${misc:Depends},
 Suggests: ar0234-rpi-dkms,
  ar0822-rpi-dkms,
  imx585-rpi-dkms
-Description: Kurokesu camera test bench tool for Raspberry Pi
- Single-operator bench GUI for validating Kurokesu Raspberry Pi camera
- modules: live viewfinder, sensor selection (writes the dtoverlay) and
- signal-integrity surfacing. Runs fullscreen under a Cage kiosk.
+Description: Kiosk app for live preview and testing MIPI CSI camera modules
+ Runs on Raspberry Pi 5 and CM5. Sensor and CSI port are chosen in the GUI.
+ Covers AR0234, AR0822, IMX283, IMX462, IMX477 and IMX585.
  .
- Installs the application tree to /opt/camlab and restarts a running
- camlab.service. Sensor drivers, service wiring, boot tuning and the
- read-only overlay stay with camlab-setup, which the operator runs once
- after install.
+ Viewfinder carries focus peaking, zebra clipping, histogram and focus map.
+ Exposure, gain and white balance run auto or manual. Resolution, bit depth
+ and frame rate come from sensor modes. Drives a DSI touch panel, HDMI
+ monitor or both at once.
+ .
+ Camera and kernel driver errors surface in a log panel, which separates
+ a bad overlay from bad wiring. App, camera stack and sensor drivers update
+ from the Kurokesu apt archive without leaving the GUI.

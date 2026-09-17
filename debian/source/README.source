@@ -40,18 +40,17 @@ deb is the one path bypassing it.
 
 Unlike the driver repos, this branch is deliberately detached from
 Kurokesu/ci while app packaging stabilizes: workflows carry their own
-build, sign and publish logic and call nothing remote. The sign step mirrors
-deb-sign.yml conventions exactly (bundle naming, tilde rename, signed
-SHA256SUMS), so apt archive ingest cannot tell the difference. Once
-proven, the flow gets upstreamed into Kurokesu/ci as an app-family
-reusable workflow.
+build, sign and publish logic. The sign step mirrors deb-sign.yml
+conventions exactly (bundle naming, tilde rename, signed SHA256SUMS), so
+apt archive ingest cannot tell the difference. Once proven, the flow
+gets upstreamed into Kurokesu/ci as an app-family reusable workflow.
 
 Publish semantics also differ from the driver repos: deb assets land
 on the existing v-tag source release, next to the README-pinned
 camlab-rpi-<version>.tar.gz. The publish step deletes only assets it
 owns (SHA256SUMS* and camlab-rpi_*.tar.gz bundles), never the source
-tarball, and touches no release flags or notes. The Kurokesu/apt
-manifest PR is what gates the archive.
+tarball, and touches no release flags or notes. Kurokesu/apt manifest
+PR gates the archive.
 
 Releasing
 ---------
@@ -85,8 +84,8 @@ plus the build's .changes and .buildinfo, alongside SHA256SUMS and a
 detached SHA256SUMS.asc signed with the archive key. A source package
 stays in workflow-run artifacts only.
 
-Setting up a box
-----------------
+Setting up a unit
+-----------------
 
 The package owns /opt/camlab and /usr/bin/camlab-setup, a symlink to
 install.sh in the payload. Everything outside /opt, the service, boot
