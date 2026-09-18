@@ -49,6 +49,7 @@ published() {
     done < <(apt-cache madison "$pkg" | awk -F'|' '{ gsub(/ /, "", $2); print $2 }')
 }
 
+# What camlab/stack.py cannot ask: which package owns the object ldd resolved
 # ldd reports /lib paths, dpkg records the merged-usr ones, so resolve first
 check_loaded() {
     local module name path owner version
