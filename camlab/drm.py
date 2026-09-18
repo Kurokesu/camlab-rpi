@@ -1,10 +1,7 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""DRM sysfs facts shared by display management and config validation.
-
-Qt-free on purpose: config_manager runs as the camlab-apply CLI.
-"""
+"""DRM sysfs facts shared by display management and config validation."""
 
 from __future__ import annotations
 
