@@ -153,6 +153,12 @@ class TestPortArbitration:
         with pytest.raises(ConfigError):
             cm._rewrite_in_place("ar0234", "cam1", [])
 
+    @pytest.mark.parametrize("port", ["cam0", "cam1"])
+    def test_composed_display_overlay_leaves_camera_port_free(self, cm, port):
+        # Fact SensorCard._port_locks leans on, locking no port for a catalog panel
+        cm._rewrite_display_in_place(ConfigManager.compose_display_overlay(PANEL, port))
+        assert port not in cm.blocked_ports_next_boot()
+
     def test_display_block_wins_over_live_drm(self, cm, fake_drm):
         # Pending change: block says cam1 while DRM still shows DSI-1 (cam0)
         fake_drm({"DSI-1": "connected"})
