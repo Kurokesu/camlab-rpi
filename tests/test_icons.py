@@ -5,20 +5,11 @@
 
 from __future__ import annotations
 
-import os
-
 import pytest
 
 pytest.importorskip("PyQt6")
 
 from camlab.gui import icons
-from camlab.qt import QtWidgets
-
-
-@pytest.fixture(scope="module")
-def qapp():
-    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    return QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
 
 @pytest.mark.parametrize("name", sorted(icons._CODEPOINTS))

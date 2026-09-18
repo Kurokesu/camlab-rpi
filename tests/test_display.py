@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from types import SimpleNamespace
 
 import pytest
@@ -24,7 +23,7 @@ from camlab.display import (
     plan_layout,
     touch_matrix,
 )
-from camlab.qt import QtCore, QtGui, QtWidgets, Signal
+from camlab.qt import QtCore, QtGui, Signal
 from camlab.settings import DisplayMode
 
 REPORT = """DSI-2 "(null) (null) (DSI-2)"
@@ -453,12 +452,6 @@ def test_every_screen_signal_arms_one_debounce():
     screen.geometryChanged.emit(NEW_GEOMETRY)
     screen.geometryChanged.emit(NEW_GEOMETRY)
     assert spy.arms == 4
-
-
-@pytest.fixture(scope="module")
-def qapp():
-    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    return QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
 
 class CursorApp(QtCore.QObject):

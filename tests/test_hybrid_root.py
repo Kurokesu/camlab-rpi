@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import os
 from types import SimpleNamespace
 
 import pytest
@@ -28,12 +27,6 @@ def topology(panel=None, monitor=None, bounds=None) -> SimpleNamespace:
 BOTH = topology(PANEL, MONITOR, UNION)
 PANEL_ONLY = topology(PANEL, None, PANEL)
 MONITOR_ONLY = topology(None, MONITOR_ALONE, MONITOR_ALONE)
-
-
-@pytest.fixture(scope="module")
-def qapp():
-    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    return QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
 
 class Bench:
