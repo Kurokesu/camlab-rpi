@@ -151,7 +151,7 @@ Button = tuple[str, str, Callable[[], None]]  # (label, role, callback) - role: 
 
 
 def message_card(title: str, message: str, buttons: list[Button]) -> QtWidgets.QFrame:
-    """Simple confirmation / info card for ModalOverlay."""
+    """Confirmation / info card for ModalOverlay."""
     card = QtWidgets.QFrame()
     card.setObjectName("modalCard")
     card.setMinimumWidth(380)

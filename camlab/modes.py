@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Sensor mode catalog and selection (pure, no Picamera2/Qt).
+"""Sensor mode catalog and selection.
 
 A mode is one raw sensor output: packed format, size, bit depth, max fps.
 Operator picks via Resolution --> Bit depth --> FPS. Standard rates (24, 30, 60,
