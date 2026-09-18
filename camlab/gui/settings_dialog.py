@@ -50,7 +50,7 @@ class SettingsCard(QtWidgets.QFrame):
 
         form = QtWidgets.QFormLayout()
 
-        # None hides row: no backlight device or panel is not active display.
+        # None hides row: no backlight device or panel is not active display
         if backlight_pct is not None:
             bl_label = QtWidgets.QLabel()
             bl_label.setPixmap(icons.pixmap("brightness_6", _ICON_PX, "#8a909b"))
@@ -120,12 +120,12 @@ class SettingsCard(QtWidgets.QFrame):
         note.setMaximumWidth(400)
         form.addRow(note)
 
-        # None hides row, for a caller with no About card to drill into.
+        # None hides row, for a caller with no About card to drill into
         if on_about is not None:
             self.about_btn = QtWidgets.QPushButton("About")
             self.about_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             self.about_btn.clicked.connect(on_about)
-            # Spans the row: opens a card rather than setting a value.
+            # Spans the row: opens a card rather than setting a value
             form.addRow(self.about_btn)
 
         buttons = QtWidgets.QHBoxLayout()
@@ -134,7 +134,7 @@ class SettingsCard(QtWidgets.QFrame):
         self.apply_btn = QtWidgets.QPushButton("Apply")
         self.apply_btn.clicked.connect(self._apply)
         self.apply_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        # Networking off cuts reachability. Bare Enter must not trigger Apply: Cancel is primary.
+        # Networking off cuts reachability. Bare Enter must not trigger Apply: Cancel is primary
         self.primary_button = cancel_btn
         buttons.addWidget(cancel_btn)
         buttons.addStretch(1)

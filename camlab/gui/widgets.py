@@ -63,7 +63,7 @@ class SegmentedSelector(QtWidgets.QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        # Fused segmented control: row reads as one pick-one widget. Arrow keys move within group.
+        # Fused segmented control: row reads as one pick-one widget. Arrow keys move within group
         self._values: list[Any] = []
         self._group = QtWidgets.QButtonGroup(self)
         self._group.setExclusive(True)
@@ -100,7 +100,7 @@ class SegmentedSelector(QtWidgets.QWidget):
         for i, (text, value) in enumerate(options):
             btn = QtWidgets.QPushButton(text)
             btn.setObjectName("segment")
-            # pos drives outer corner rounding. Non-first buttons overlap previous border by 1px.
+            # pos drives outer corner rounding. Non-first buttons overlap previous border by 1px
             if last == 0:
                 pos = "only"
             elif i == 0:

@@ -47,7 +47,7 @@ class TestCompose:
             ConfigManager.compose_dtoverlay("ar0234", "dsi0", [])
 
     def test_display_overlay_takes_free_connector(self):
-        # Camera on cam0 leaves DISP1 (overlay default), cam1 leaves DISP0.
+        # Camera on cam0 leaves DISP1 (overlay default), cam1 leaves DISP0
         assert ConfigManager.compose_display_overlay(PANEL, "cam0") == PANEL
         assert ConfigManager.compose_display_overlay(PANEL, "cam1") == f"{PANEL},dsi0"
 
@@ -136,7 +136,7 @@ class TestDisplayBlock:
         cm.config_path.write_text("arm_boost=1\n")
 
         def apply(dsi0: bool) -> str:
-            # Panel on DISP0 claims cam0, so the camera takes the other port.
+            # Panel on DISP0 claims cam0, so the camera takes the other port
             cm._rewrite_display_in_place(f"{PANEL},dsi0" if dsi0 else PANEL)
             cm._rewrite_in_place("ar0234", "cam1" if dsi0 else "cam0", [])
             return cm.config_path.read_text()
@@ -154,7 +154,7 @@ class TestPortArbitration:
             cm._rewrite_in_place("ar0234", "cam1", [])
 
     def test_display_block_wins_over_live_drm(self, cm, fake_drm):
-        # Pending change: block says cam1 while DRM still shows DSI-1 (cam0).
+        # Pending change: block says cam1 while DRM still shows DSI-1 (cam0)
         fake_drm({"DSI-1": "connected"})
         cm._rewrite_display_in_place(PANEL)
         assert cm.blocked_ports_next_boot() == {"cam1"}
@@ -166,7 +166,7 @@ class TestPortArbitration:
         assert cm.free_port() == "cam1"
 
     def test_compute_module_ignores_live_drm(self, cm, fake_drm):
-        # CM carrier DSI wiring is not tied to CSI ports like the Pi 5 pairs.
+        # CM carrier DSI wiring is not tied to CSI ports like the Pi 5 pairs
         fake_drm({"DSI-1": "connected"})
         config_manager.MODEL_PATH.write_text("Raspberry Pi Compute Module 5 Rev 1.0")
         assert cm.blocked_ports_next_boot() == set()

@@ -25,7 +25,7 @@ _FILL = QtGui.QColor(215, 218, 224, 90)
 class HistogramOverlay(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        # Informational only: never steal viewfinder taps.
+        # Informational only: never steal viewfinder taps
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self._levels: np.ndarray | None = None
         self.set_card_height(96)

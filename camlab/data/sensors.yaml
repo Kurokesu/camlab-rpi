@@ -26,12 +26,12 @@
 #     - { name: "...", addr: 0xNNNN, len: N }
 #
 # [VERIFY] overlay tokens / options / info_registers per sensor against each
-# driver repo before trusting an entry.
+# driver repo before trusting an entry
 
 sensors:
   # driver_package set => Kurokesu out-of-tree sensor, DKMS package installed
   # by drivers.sh. No driver_package => mainline sensor, driver + overlay ship
-  # with RPi OS.
+  # with RPi OS
   - name: AR0234
     overlay: ar0234
     driver_package: ar0234-rpi-dkms

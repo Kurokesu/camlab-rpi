@@ -21,7 +21,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 LOGO = "/lib/firmware/logo.tga"
-# splash.sh installs the face beside this script. Second is a repo checkout.
+# splash.sh installs the face beside this script. Second is a repo checkout
 FONT_DIRS = (Path(__file__).resolve().parent, Path(__file__).resolve().parents[2] / "camlab/assets")
 FONT_NAME = "Roboto-Regular.ttf"
 TRACK = (51, 51, 51)

@@ -41,7 +41,7 @@ class ModeCard(QtWidgets.QFrame):
         self.setMinimumWidth(420)
         self._modes = modes
         self._on_apply = on_apply
-        # Compact shortens labels so widest rows still fit one segment.
+        # Compact shortens labels so widest rows still fit one segment
         self._compact = bool(compact)
 
         title = QtWidgets.QLabel("Sensor mode")
@@ -63,10 +63,10 @@ class ModeCard(QtWidgets.QFrame):
             [("Fixed", True), ("Exposure driven", False)], current=bool(fps_fixed)
         )
 
-        # Dirty check uses post-seed values (fps may snap to nearest option).
+        # Dirty check uses post-seed values (fps may snap to nearest option)
         self._initial = self._selection()
 
-        # Connect after build so seeding stays silent.
+        # Connect after build so seeding stays silent
         self.res_sel.changed.connect(self._on_res_changed)
         self.depth_sel.changed.connect(self._on_depth_changed)
         self.fps_sel.changed.connect(self._refresh_apply)
@@ -83,7 +83,7 @@ class ModeCard(QtWidgets.QFrame):
         cancel_btn.clicked.connect(on_cancel)
         self.apply_btn = QtWidgets.QPushButton("Apply")
         self.apply_btn.clicked.connect(self._apply)
-        # Apply is safe (no reboot), so it is primary Enter target.
+        # Apply is safe (no reboot), so it is primary Enter target
         self.primary_button = self.apply_btn
         buttons.addWidget(cancel_btn)
         buttons.addStretch(1)
@@ -130,7 +130,7 @@ class ModeCard(QtWidgets.QFrame):
         m = mode_for(self._modes, self.res_sel.current_value(), self.depth_sel.current_value())
         opts = fps_options(m.max_fps) if m else [30.0]
         unit = "" if self._compact else " fps"
-        # Keep chosen rate when still offered, else nearest.
+        # Keep chosen rate when still offered, else nearest
         self.fps_sel.set_options(
             [(f"{format_fps(o)}{unit}", o) for o in opts],
             current=nearest_fps_option(opts, prefer_fps),

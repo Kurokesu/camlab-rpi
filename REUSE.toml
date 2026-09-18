@@ -1,6 +1,6 @@
 version = 1
 
-# Markdown and binary assets, annotated here instead of in-file headers.
+# Markdown and binary assets, annotated here instead of in-file headers
 
 [[annotations]]
 path = [

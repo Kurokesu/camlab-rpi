@@ -36,7 +36,7 @@ mapfile -t DEV_CLUTTER < <(awk '$2 == "export-ignore" { sub(/\/$/, "", $1); prin
     "$REPO_DIR/.gitattributes" 2>/dev/null)
 DEV_CLUTTER+=(.git .venv)
 
-# Re-run from $APP_DIR skips the copy. Stage then swap, on failure old tree stays.
+# Re-run from $APP_DIR skips the copy. Stage then swap, on failure old tree stays
 if [ "$REPO_DIR" != "$APP_DIR" ]; then
     header "Installing app to $APP_DIR"
     STAGE_DIR="$APP_DIR.new"
@@ -52,5 +52,5 @@ if [ "$REPO_DIR" != "$APP_DIR" ]; then
     mv "$STAGE_DIR" "$APP_DIR"
     log "Copied $REPO_DIR -> $APP_DIR"
 fi
-# Precompile: service user cannot write bytecode into root-owned tree.
+# Precompile: service user cannot write bytecode into root-owned tree
 python3 -m compileall -q -j 0 "$APP_DIR/camlab"

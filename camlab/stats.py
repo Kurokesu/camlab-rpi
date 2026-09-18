@@ -15,11 +15,11 @@ import glob
 from dataclasses import dataclass
 
 # v3d exposes per-queue cumulative busy ns. Bin and render carry the real
-# rasterization work (tfu/csd are transfer/compute, rarely the bottleneck).
+# rasterization work (tfu/csd are transfer/compute, rarely the bottleneck)
 _GPU_STATS_GLOB = "/sys/devices/platform/axi/*.v3d/gpu_stats"
 _SOC_TEMP = "/sys/class/thermal/thermal_zone0/temp"
 
-# RP1 hosts the camera's CSI-2 front end. hwmon indices are not boot-stable.
+# RP1 hosts the camera's CSI-2 front end. hwmon indices are not boot-stable
 _HWMON_GLOB = "/sys/class/hwmon/hwmon*"
 _RP1_HWMON_NAME = "rp1_adc"
 
@@ -95,7 +95,7 @@ class RpiStats:
                 continue
             load = 100.0 * (runtime - prev[1]) / (ts - prev[0])
             # Queues run concurrently, so overall business is the busiest one,
-            # not the sum (which could read past 100%).
+            # not the sum (which could read past 100%)
             if busiest is None or load > busiest:
                 busiest = load
         return None if busiest is None else min(max(busiest, 0.0), 100.0)

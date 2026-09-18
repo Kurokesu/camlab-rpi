@@ -12,10 +12,10 @@ from ..qt import Qt, QtCore, QtGui, QtWidgets
 from .style import GLASS_BG
 
 FIELDS = ("cpu", "gpu", "ram", "soc", "rp1")
-# Complement of the CPU/GPU pair the compact strip keeps on screen.
+# Complement of the CPU/GPU pair the compact strip keeps on screen
 CARD_FIELDS = ("ram", "soc", "rp1")
 
-# Placeholders keep the cluster fully formed from birth, samples fill in at 1 Hz.
+# Placeholders keep the cluster fully formed from birth, samples fill in at 1 Hz
 PLACEHOLDER_TEXTS = {
     "cpu": "CPU --%",
     "gpu": "GPU --%",
@@ -23,7 +23,7 @@ PLACEHOLDER_TEXTS = {
     "soc": "SoC --\u00b0C",
     "rp1": "RP1 --\u00b0C",
 }
-# Digit-widest renders, pin_width measures these so live data never widens a view.
+# Digit-widest renders, pin_width measures these so live data never widens a view
 _SAMPLE_TEXTS = {
     "cpu": "CPU 99%",
     "gpu": "GPU 99%",
@@ -116,7 +116,7 @@ class RpiStatsCard(QtWidgets.QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        # Informational only: never steal taps from viewfinder.
+        # Informational only: never steal taps from viewfinder
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         col = QtWidgets.QVBoxLayout(self)
         col.setContentsMargins(14, 8, 14, 8)

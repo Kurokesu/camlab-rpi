@@ -11,12 +11,12 @@
 #
 # Card numbers follow probe order, so they are resolved here rather than pinned.
 # /dev/dri/by-path is no use, its vc4 name contains a colon and the variable is
-# colon separated.
+# colon separated
 
 set -eu
 
 # Connector directories exist only on cards that can drive an output. v3d is
-# render only and wlroots rejects it.
+# render only and wlroots rejects it
 drives_output() {
 	for conn in "$1"/"$2"-*; do
 		[ -e "$conn" ] && return 0

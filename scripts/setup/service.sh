@@ -31,7 +31,7 @@ done
 require_root
 
 # An update boot converges as root with no SUDO_USER. Rendering User=root would
-# hand the kiosk root and leave the operator's own state unreadable.
+# hand the kiosk root and leave the operator's own state unreadable
 [ "$CAMLAB_USER" != "root" ] || die "Cannot tell who owns the kiosk. Re-run under sudo from that account."
 save_camlab_user
 
@@ -42,7 +42,7 @@ log "app=$CAMLAB_APP_DIR user=$CAMLAB_USER uid=$CAMLAB_UID enable-at-boot=$ENABL
 
 systemctl stop camlab.service 2>/dev/null || true
 
-# Backlight sysfs writes need video group.
+# Backlight sysfs writes need video group
 if ! id -nG "$CAMLAB_USER" | tr ' ' '\n' | grep -qx video; then
     usermod -aG video "$CAMLAB_USER"
     log "Added $CAMLAB_USER to video group (panel backlight control)"

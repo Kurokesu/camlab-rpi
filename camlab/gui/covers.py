@@ -24,7 +24,7 @@ class _Cover(QtWidgets.QWidget):
         self._window = window
         # Window has settled once it spans this rect
         self._target = target
-        # Plain QWidget subclasses ignore QSS backgrounds without this attribute.
+        # Plain QWidget subclasses ignore QSS backgrounds without this attribute
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet("background: #000;")
 
@@ -56,13 +56,13 @@ class BootCover(_Cover):
         g = screen.virtualGeometry() if screen is not None else host.rect()
         self.setGeometry(0, 0, g.width(), g.height())
         self.raise_()
-        # Show now so cover does not depend on construction order.
+        # Show now so cover does not depend on construction order
         self.show()
 
         self._settle = self._single_shot(self._SETTLE_MS, self._reveal)
 
         # Cold boot can hold the fullscreen configure past the settle window,
-        # so retry until it lands and reveal regardless after _MAX_TRIES.
+        # so retry until it lands and reveal regardless after _MAX_TRIES
         self._tries = 0
         self._retry = self._single_shot(self._RETRY_MS, self._on_retry)
         self._retry.start()
@@ -114,7 +114,7 @@ class SwitchCover(_Cover):
         self.hide()
 
         self._settle = self._single_shot(self._SETTLE_MS, self.lift)
-        # Never leave the operator on black because a resize never arrived.
+        # Never leave the operator on black because a resize never arrived
         self._timeout = self._single_shot(self._TIMEOUT_MS, self.lift)
 
     def blank(self) -> None:
