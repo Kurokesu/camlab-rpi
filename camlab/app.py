@@ -109,7 +109,6 @@ def main(argv: list[str] | None = None) -> int:
     avail = _avail_size(app, settings.get_display())
 
     # Boot mode: persisted selection when valid, else heaviest runnable mode.
-    # One configure at boot.
     if engine.picam2 is not None and engine.modes:
         overlay = config.get_current().get("overlay") or ""
         saved = settings.get_mode(overlay)
