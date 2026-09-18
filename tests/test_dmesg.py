@@ -14,7 +14,7 @@ from camlab.integrity import LogClassifier
 
 @pytest.fixture
 def classifier() -> LogClassifier:
-    return LogClassifier(dmesg.PATTERNS)
+    return LogClassifier()
 
 
 def test_filter_keeps_probe_failure_only():
@@ -36,15 +36,16 @@ def test_retrying_driver_cannot_flood():
     assert len(dmesg.driver_lines(spam, "ar0822")) == 40
 
 
-@pytest.mark.parametrize("line", PROBE_FAILURE)
-def test_camera_stack_patterns_miss_driver_lines(line):
-    """Why PATTERNS exists: unclassified lines drop out of the Errors filter and the tally."""
-    assert LogClassifier().classify_with_severity(line) == (None, None)
-
-
 @pytest.mark.parametrize("line", FAILURES)
 def test_driver_lines_classify_as_errors(classifier, line):
-    assert classifier.classify_with_severity(line) == (dmesg.CATEGORY, "error")
+    assert classifier.classify_with_severity(line) == ("kernel_driver", "error")
+
+
+def test_short_i2c_address_is_scraped_and_classified(classifier):
+    """Scrape and classifier share the address shape, so a short one counts as well as shows."""
+    line = "[    4.19] ar0822 10-10: probe with driver ar0822 failed with error -121"
+    assert dmesg.driver_lines(f"kern  :err   : {line}\n", "ar0822") == [line]
+    assert classifier.classify_with_severity(line) == ("kernel_driver", "error")
 
 
 def test_subdevice_notice_is_context_not_error(classifier):
@@ -54,8 +55,9 @@ def test_subdevice_notice_is_context_not_error(classifier):
 
 
 @pytest.mark.parametrize("line", CAMERA_STACK)
-def test_widening_leaves_camera_stack_lines_alone(classifier, line):
-    assert classifier.classify_with_severity(line) == LogClassifier().classify_with_severity(line)
+def test_device_prefix_leaves_camera_stack_lines_alone(classifier, line):
+    """Broadest pattern goes last, so nothing the capture already carries reads as a driver."""
+    assert classifier.classify_with_severity(line)[0] != "kernel_driver"
 
 
 def test_unknown_module_reads_nothing():

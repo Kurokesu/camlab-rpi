@@ -1,13 +1,14 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Syslog priorities on the journald mirror."""
+"""Category order and syslog priorities on the journald mirror."""
 
 from __future__ import annotations
 
 import logging
 
 import pytest
+from conftest import logged
 
 from camlab.integrity import (
     LOG_DATEFMT,
@@ -21,6 +22,12 @@ from camlab.integrity import (
 @pytest.fixture
 def classifier() -> LogClassifier:
     return LogClassifier()
+
+
+def test_own_record_beats_libcamera_wording(classifier):
+    """Order trap: app leads the heuristics, so a refit failure is not read as v4l2."""
+    line = logged("lores refit failed: Failed to start stream", logging.ERROR)
+    assert classifier.classify_with_severity(line) == ("app", "error")
 
 
 @pytest.mark.parametrize(

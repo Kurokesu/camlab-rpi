@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 
-from .. import dmesg, network, updater
+from .. import network, updater
 from ..camera import CameraEngine
 from ..config_manager import ConfigManager, poweroff, reboot
 from ..display import Backlight, DisplayManager, Topology
@@ -115,7 +115,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._wire()
         self._populate_static()
-        self._report_driver_errors()
         mon = settings.get_monitor()
         self._sheets["monitor"].seed(mon)
         if mon.histogram:
@@ -391,15 +390,6 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             glyph, color = "photo_camera", "#aeb4bf"
         self.sensor_btn.setIcon(icons.icon(glyph, self._profile.icon_px, color))
-
-    def _report_driver_errors(self) -> None:
-        """Kernel probe failures behind a missing camera, libcamera reports none of them."""
-        cur = self.config.get_current()
-        if self.engine.info.get("Model") or not cur["overlay"]:
-            return
-        for line in dmesg.read(cur["overlay"]):
-            self.log_panel.append_line(line)
-            self.monitor.feed(line)
 
     def _refresh_mode_status(self) -> None:
         """Update the merged Mode chip. Compact drops the format token."""
