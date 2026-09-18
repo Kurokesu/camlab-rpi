@@ -5,8 +5,6 @@
 
 from __future__ import annotations
 
-import os
-
 import pytest
 
 pytest.importorskip("PyQt6")
@@ -39,12 +37,6 @@ class FakeLive(QtWidgets.QWidget):
 
     def set_assists(self, peaking: bool, zebra: bool, threshold: float) -> None:
         self.assists = (peaking, zebra, threshold)
-
-
-@pytest.fixture(scope="module")
-def qapp():
-    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    return QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
 
 def test_pre_made_live_widget_skips_make_viewfinder(qapp):

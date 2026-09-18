@@ -5,13 +5,14 @@
 
 from __future__ import annotations
 
-import os
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
 pytest.importorskip("PyQt6")
+
+from conftest import FakeEngine, telemetry
 
 from camlab.gui import focus_map
 from camlab.gui.chips import CTRL_SPEC, chip_text
@@ -26,40 +27,6 @@ OFF = MonitorState(
 )
 
 
-def telemetry(frame=None, fps=0.0, **metadata) -> SimpleNamespace:
-    return SimpleNamespace(frame=frame, fps=fps, metadata=metadata)
-
-
-class FakeLive(QtWidgets.QWidget):
-    def __init__(self):
-        super().__init__()
-        self.assists = None
-
-    def set_assists(self, peaking: bool, zebra: bool, threshold: float) -> None:
-        self.assists = (peaking, zebra, threshold)
-
-
-class FakeEngine:
-    """Offers exposure and gain only, WB chip stays hidden."""
-
-    def __init__(self):
-        self.picam2 = object()
-        self.telemetry = telemetry()
-        self.control_state = SimpleNamespace(exposure_us=None, gain=None, colour_temp=None)
-        self.current_mode = SimpleNamespace(
-            size=(1920, 1080), label=lambda: "1920x1080 SRGGB12 30fps"
-        )
-        self.latest_histogram = None
-        self.mirrors: list[FakeLive] = []
-
-    def make_mirror(self) -> FakeLive:
-        self.mirrors.append(FakeLive())
-        return self.mirrors[-1]
-
-    def control_ranges(self) -> dict[str, tuple]:
-        return {"exposure_us": (100, 100_000), "gain": (1.0, 16.0)}
-
-
 class FakeSampler(QtCore.QObject):
     sample = Signal(object)
 
@@ -69,12 +36,6 @@ class Sheet:
 
     def __init__(self):
         self.state = OFF
-
-
-@pytest.fixture(scope="module")
-def qapp():
-    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    return QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
 
 @pytest.fixture

@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
@@ -19,12 +18,6 @@ from camlab.settings import AwbMode, DisplayMode, SettingsStore
 
 DISPLAY_LABELS = ["External", "Built-in", "Both"]
 AWB_LABELS = ["Grey world", "libcamera"]
-
-
-@pytest.fixture(scope="module")
-def qapp():
-    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    return QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
 
 
 @pytest.fixture

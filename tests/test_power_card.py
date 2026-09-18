@@ -5,81 +5,11 @@
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
-
 import pytest
 
-pytest.importorskip("PyQt6")
 main_window = pytest.importorskip("camlab.gui.main_window")
 
-from test_monitor_view import FakeEngine
-
-from camlab.config_manager import ConfigManager
-from camlab.dsi_panels import PanelRegistry
-from camlab.gui import settings_dialog
-from camlab.integrity import LogClassifier, NullCapture
 from camlab.qt import QtWidgets
-from camlab.sensors import SensorRegistry
-from camlab.settings import SettingsStore
-
-
-class Engine(FakeEngine):
-    """Monitor view stub plus what MainWindow itself reaches for."""
-
-    def __init__(self):
-        super().__init__()
-        self.modes: list = []
-        self.info: dict = {}
-
-    def make_viewfinder(self) -> QtWidgets.QWidget:
-        return QtWidgets.QWidget()
-
-    def set_stats_output(self, enabled: bool) -> None:
-        pass
-
-    def on_first_frame(self, callback) -> None:
-        pass
-
-    def set_grey_world(self, enabled: bool) -> None:
-        pass
-
-    def refit_lores(self, avail_size) -> bool:
-        return False
-
-    def start(self) -> None:
-        pass
-
-    def stop(self) -> None:
-        pass
-
-
-@pytest.fixture(scope="module")
-def qapp():
-    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    return QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
-
-
-@pytest.fixture
-def win(qapp, tmp_path: Path, drm_root, monkeypatch):
-    """Shown window over empty config, so no panel is forced and no probe runs."""
-    monkeypatch.delenv("CAMLAB_SCREEN", raising=False)
-    monkeypatch.setattr(settings_dialog.network, "is_enabled", lambda: True)
-    window = main_window.MainWindow(
-        Engine(),
-        SensorRegistry.load(),
-        PanelRegistry.load(),
-        ConfigManager(config_path=tmp_path / "config.txt", overlays_dir=tmp_path),
-        NullCapture(),
-        LogClassifier(),
-        SettingsStore(tmp_path / "state.json"),
-    )
-    window.resize(800, 480)
-    window.show()
-    qapp.processEvents()
-    yield window
-    window._close_modal()
-    window.close()
 
 
 @pytest.fixture
