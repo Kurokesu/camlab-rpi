@@ -25,10 +25,9 @@ Branch layout
 Runtime dependencies
 --------------------
 
-debian/rules renders Depends from source tree's apt-packages, stack
-relations into ${camlab:StackDepends} and presence-checked rest into
-${camlab:AppDepends}, so a deb and a clone install cannot drift. Build
-fails without that file.
+debian/rules renders Depends from source tree's apt-packages into
+${camlab:Depends}, so a deb and a clone install cannot drift. Build
+fails when that file or a key it reads is missing.
 
 Trixie only, codename stored once in main's apt-packages. It reaches
 preinst as #OS_CODENAME# through dh_installdeb and install.sh reads same

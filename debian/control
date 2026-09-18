@@ -13,8 +13,7 @@ Architecture: all
 # needs it and deps.sh leaves it to Raspberry Pi OS
 Depends: ${misc:Depends},
  python3,
- ${camlab:AppDepends},
- ${camlab:StackDepends}
+ ${camlab:Depends}
 # camlab-setup installs drivers after kernel.sh prunes the
 # sibling kernel flavor.
 Suggests: ar0234-rpi-dkms,

@@ -2,39 +2,43 @@
 
 include /usr/share/dpkg/pkg-info.mk
 
-# Runtime relations for control, rendered from the source tree's apt-packages
+# Runtime relations for control, rendered from the source tree's apt-packages.
+# Camera stack forks carry a floor and a ceiling, rest carry bare names.
+# PICAMERA2_VERSION is recorded for drift checks, not rendered.
+# ':?' stops the build on a missing key, rather than dropping dependencies.
+# Unquoted expansion splits names, test_stack_pin.py on main asserts glob-free
 ifeq ($(wildcard apt-packages),)
 $(error apt-packages missing from source tree)
 endif
-STACK_DEPENDS := $(shell . ./apt-packages && \
-	for pin in "$$LIBCAMERA_VERSION $$LIBCAMERA_PACKAGES" \
-	           "$$RPICAM_APPS_VERSION $$RPICAM_APPS_PACKAGES"; do \
-		set -- $$pin; v=$$1; shift; \
-		for p in "$$@"; do echo "$$p (>= $$v)"; echo "$$p (<< $$v.)"; done; \
-	done | awk '{ printf "%s%s", sep, $$0; sep = ", " }')
-# Rest carry no relation, deps.sh installs them by presence and picamera2's
-# recorded version is deliberately not enforced
-APP_DEPENDS := $(shell . ./apt-packages && \
-	printf '%s\n' $$APP_PACKAGES $$PICAMERA2_PACKAGES \
-	| awk '{ printf "%s%s", sep, $$0; sep = ", " }')
+DEPENDS := $(shell . ./apt-packages && set -o pipefail && { \
+	pin() { for p in $$2; do echo "$$p (>= $$1)"; echo "$$p (<< $$1.)"; done; }; \
+	pin "$${LIBCAMERA_VERSION:?}" "$${LIBCAMERA_PACKAGES:?}"; \
+	pin "$${RPICAM_APPS_VERSION:?}" "$${RPICAM_APPS_PACKAGES:?}"; \
+	printf '%s\n' $${APP_PACKAGES:?} $${PICAMERA2_PACKAGES:?}; \
+	} | awk '{ printf "%s%s", sep, $$0; sep = ", " }')
+ifneq ($(.SHELLSTATUS),0)
+$(error apt-packages did not render Depends)
+endif
 
-# Blank codename ships a preinst comparing VERSION_CODENAME against an
-# empty string, refusing every normal system and passing where it is unset
-OS_CODENAME := $(shell . ./apt-packages && printf '%s' "$$OS_CODENAME")
-ifeq ($(OS_CODENAME),)
-$(error apt-packages must set OS_CODENAME)
+OS_CODENAME := $(shell . ./apt-packages && printf '%s' "$${OS_CODENAME:?}")
+ifneq ($(.SHELLSTATUS),0)
+$(error apt-packages did not render OS_CODENAME)
 endif
 
 %:
 	dh $@
 
 override_dh_gencontrol:
-	dh_gencontrol -- -V'camlab:StackDepends=$(STACK_DEPENDS)' \
-		-V'camlab:AppDepends=$(APP_DEPENDS)'
+	dh_gencontrol -- -V'camlab:Depends=$(DEPENDS)'
 
-# Same key gates a bare dpkg -i, preinst carries #OS_CODENAME#
+# Undefined token is left verbatim, shipping a gate that refuses every system.
+# Negated grep passes on a missing file, so test the file exists first
 override_dh_installdeb:
 	dh_installdeb -DOS_CODENAME=$(OS_CODENAME)
+	@test -f debian/camlab-rpi/DEBIAN/preinst \
+		|| { echo "ERROR: preinst missing after dh_installdeb." >&2; exit 1; }
+	@! grep -q '#OS_CODENAME#' debian/camlab-rpi/DEBIAN/preinst \
+		|| { echo "ERROR: #OS_CODENAME# survived dh_installdeb." >&2; exit 1; }
 
 # Interpreted Python tree, nothing to compile at packaging time.
 # Bytecode is generated on target by postinst.
