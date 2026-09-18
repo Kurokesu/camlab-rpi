@@ -9,7 +9,7 @@ import pytest
 from conftest import CAMERA_STACK, DMESG_SAMPLE, FAILURES, PROBE_FAILURE, SUBDEVICE_NOTICE
 
 from camlab import dmesg
-from camlab.integrity import IntegrityStats, LogClassifier, breakdown_text
+from camlab.integrity import LogClassifier
 
 
 @pytest.fixture
@@ -56,11 +56,6 @@ def test_subdevice_notice_is_context_not_error(classifier):
 @pytest.mark.parametrize("line", CAMERA_STACK)
 def test_widening_leaves_camera_stack_lines_alone(classifier, line):
     assert classifier.classify_with_severity(line) == LogClassifier().classify_with_severity(line)
-
-
-def test_error_breakdown_names_category():
-    stats = IntegrityStats(errors=3, by_category={dmesg.CATEGORY: 3})
-    assert "Kernel driver: 3" in breakdown_text(stats, "error")
 
 
 def test_unknown_module_reads_nothing():

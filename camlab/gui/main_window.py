@@ -15,7 +15,7 @@ from ..display import Backlight, DisplayManager, Topology
 from ..drm import dsi_blocked_ports
 from ..dsi_panels import PanelRegistry
 from ..focus_metric import FocusSampler
-from ..integrity import IntegrityMonitor, LineSource, LogClassifier
+from ..integrity import IntegrityMonitor, LineSource, LogClassifier, tint_severity
 from ..modes import mode_for
 from ..qt import Qt, QtCore, QtGui, QtWidgets, Slot
 from ..sensors import SensorRegistry
@@ -79,7 +79,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._topology = Topology.from_screens(QtWidgets.QApplication.screens())
         self._profile: UiProfile = profile_for_rect(pane_screen(self._topology))
         self._display_key: Topology | None = None
-        self._sev = ""  # worst severity seen, tints log button
+        self._sev = ""  # severity tinting the log button
         self._log_btn_state: tuple | None = None  # last synced look, skips no-op restyles
         self._chip_values: dict[str, float] = {}  # last metadata reading per chip
 
@@ -384,27 +384,14 @@ class MainWindow(QtWidgets.QMainWindow):
         detected = self.engine.info.get("Model")
         overlay = cur["overlay"]
         if not detected:
-            glyph, color, tip = "error", "#e06c75", "No camera detected by libcamera"
-            # On panel rigs the usual cause is the display taking the configured port.
-            blocked = dsi_blocked_ports()
-            if cur["port"] in blocked:
-                tip += f". {cur['port']} is claimed by the display overlay, move the camera"
+            glyph, color = "error", "#e06c75"
         elif overlay and detected.lower() == overlay.lower():
-            glyph, color, tip = (
-                "check_circle",
-                "#98c379",
-                f"Detected {detected} (matches selection)",
-            )
+            glyph, color = "check_circle", "#98c379"
         elif overlay:
-            glyph, color, tip = (
-                "warning",
-                "#e5c07b",
-                f"Detected {detected}, selection is {overlay}",
-            )
+            glyph, color = "warning", "#e5c07b"
         else:
-            glyph, color, tip = "photo_camera", "#aeb4bf", f"Detected {detected}"
+            glyph, color = "photo_camera", "#aeb4bf"
         self.sensor_btn.setIcon(icons.icon(glyph, self._profile.icon_px, color))
-        self.sensor_btn.setToolTip(tip)
 
     def _report_driver_errors(self) -> None:
         """Kernel probe failures behind a missing camera, libcamera reports none of them."""
@@ -447,7 +434,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @Slot(object)
     def _on_integrity(self, stats) -> None:
-        self._sev = "error" if stats.errors else ("warning" if stats.warnings else "")
+        self._sev = tint_severity(stats)
         self._sync_log_button(self.log_btn.isChecked())
 
     def _update_status(self) -> None:

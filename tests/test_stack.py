@@ -12,7 +12,7 @@ import pytest
 from conftest import logged
 
 from camlab import dmesg, stack
-from camlab.integrity import IntegrityStats, LogClassifier, breakdown_text
+from camlab.integrity import LogClassifier
 
 # What Picamera2.camera_manager.version reports, and the pin it pairs with
 LOADED = "v0.7.2+rpt20260817+krks3"
@@ -84,8 +84,3 @@ def test_drift_line_classifies_as_warning(pin):
         "stack_pairing",
         "warning",
     )
-
-
-def test_warning_breakdown_names_category():
-    stats = IntegrityStats(warnings=1, by_category={"stack_pairing": 1})
-    assert "Stack pairing: 1" in breakdown_text(stats, "warning")

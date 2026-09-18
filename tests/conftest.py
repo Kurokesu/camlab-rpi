@@ -46,9 +46,9 @@ CAMERA_STACK = [
 ]
 
 
-def logged(note: str) -> str:
+def logged(note: str, level: int = logging.WARNING) -> str:
     """Note as _setup_logging renders it, which is the form the panel classifies."""
-    record = logging.LogRecord("camlab.camera", logging.WARNING, __file__, 1, note, None, None)
+    record = logging.LogRecord("camlab.camera", level, __file__, 1, note, None, None)
     return logging.Formatter(LOG_FORMAT, LOG_DATEFMT).format(record)
 
 

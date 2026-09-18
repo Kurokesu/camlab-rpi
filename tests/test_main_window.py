@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Kernel driver lines and boot backlog joining the log stream.
+"""Kernel driver lines, boot backlog and Log button tint.
 
 MainWindow is too heavy to build here, so each method runs unbound against a stub.
 """
@@ -19,7 +19,7 @@ from conftest import PROBE_FAILURE
 
 from camlab import dmesg
 from camlab.gui.main_window import MainWindow
-from camlab.integrity import LineSource
+from camlab.integrity import APP_CATEGORY, IntegrityStats, LineSource
 
 
 def stub(overlay: str, model: str = "") -> SimpleNamespace:
@@ -55,6 +55,30 @@ def wire_stub(capture: LineSource) -> SimpleNamespace:
     )
 
 
+def tint_stub() -> SimpleNamespace:
+    """What _on_integrity reaches for, the button restyle inert."""
+    return SimpleNamespace(
+        log_btn=SimpleNamespace(isChecked=lambda: False),
+        _sync_log_button=lambda _checked: None,
+    )
+
+
+@pytest.mark.parametrize(
+    ("stats", "sev"),
+    [
+        (IntegrityStats({"error": {APP_CATEGORY: 1}}), "error"),
+        (IntegrityStats({"warning": {APP_CATEGORY: 8}}), ""),
+        (IntegrityStats({"warning": {"stack_pairing": 1}}), "warning"),
+        (IntegrityStats({"warning": {APP_CATEGORY: 8, "stack_pairing": 1}}), "warning"),
+    ],
+)
+def test_log_button_tint_skips_app_warnings(stats, sev):
+    """App errors tint, app warnings do not, and volume does not override category."""
+    win = tint_stub()
+    MainWindow._on_integrity(win, stats)
+    assert win._sev == sev
+
+
 def test_early_records_replay_once_panel_exists():
     """Camera open runs before the window, so its error reaches panel and tally on replay."""
     capture = LineSource()
@@ -85,7 +109,7 @@ def test_scrape_asks_for_selected_overlay(monkeypatch):
     ("overlay", "model"),
     [("ar0822", "ar0822"), ("", "")],
 )
-def test_scrape_stays_off_without_the_no_camera_path(monkeypatch, overlay, model):
+def test_scrape_stays_off_without_no_camera_path(monkeypatch, overlay, model):
     monkeypatch.setattr(dmesg, "read", lambda module: pytest.fail("scraped the ring buffer"))
     win = stub(overlay, model)
     MainWindow._report_driver_errors(win)
