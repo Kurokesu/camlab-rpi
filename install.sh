@@ -28,9 +28,9 @@ CAMLAB_TAG="install"
 # shellcheck source=scripts/common.sh
 source "$REPO_DIR/scripts/common.sh"
 
-# OS_CODENAME for the platform check, packages are deps.sh's
+# Subshell keeps manifest keys out of installer variables, packages are deps.sh's
 # shellcheck source=apt-packages
-source "$REPO_DIR/apt-packages"
+OS_CODENAME="$(source "$REPO_DIR/apt-packages" && printf '%s' "$OS_CODENAME")"
 
 DO_READONLY=1
 DISPLAY_OVERLAY=""
