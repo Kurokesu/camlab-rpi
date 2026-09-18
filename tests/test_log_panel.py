@@ -15,7 +15,7 @@ from conftest import CAMERA_STACK, FAILURES, PROBE_FAILURE, logged
 
 from camlab import dmesg, stack
 from camlab.gui.log_panel import LogPanel
-from camlab.integrity import IntegrityMonitor, LogClassifier
+from camlab.integrity import IntegrityMonitor, LineSource, LogClassifier
 from camlab.qt import QtWidgets
 
 
@@ -55,6 +55,20 @@ def test_warnings_filter_keeps_stack_drift_line(panel):
     panel.append_line(line)
     panel.filter.button("warning").click()
     assert panel.view.toPlainText() == line
+
+
+def test_replayed_and_live_lines_pass_same_classification(panel):
+    """Drift warning captured before replay lands beside one captured after, both warnings."""
+    source = LineSource()
+    early = logged(f"{stack.PREFIX} libcamera 0.7.3, validated against 0.7.2")
+    late = logged(f"{stack.PREFIX} picamera2 0.3.31, validated against 0.3.30")
+    source.line_received.connect(panel.append_line)
+    source._deliver(early)
+    assert panel.view.toPlainText() == ""
+    source.replay()
+    source._deliver(late)
+    panel.filter.button("warning").click()
+    assert panel.view.toPlainText().splitlines() == [early, late]
 
 
 def test_tally_counts_driver_errors(panel):

@@ -15,7 +15,7 @@ from ..display import Backlight, DisplayManager, Topology
 from ..drm import dsi_blocked_ports
 from ..dsi_panels import PanelRegistry
 from ..focus_metric import FocusSampler
-from ..integrity import IntegrityMonitor, LogClassifier, StderrCapture
+from ..integrity import IntegrityMonitor, LineSource, LogClassifier
 from ..modes import mode_for
 from ..qt import Qt, QtCore, QtGui, QtWidgets, Slot
 from ..sensors import SensorRegistry
@@ -57,7 +57,7 @@ class MainWindow(QtWidgets.QMainWindow):
         registry: SensorRegistry,
         panels: PanelRegistry,
         config: ConfigManager,
-        capture: StderrCapture,
+        capture: LineSource,
         classifier: LogClassifier,
         settings: SettingsStore,
         display_manager: DisplayManager | None = None,
@@ -329,6 +329,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.log_panel.cleared.connect(self.monitor.reset)
         # picamera2 delivers requests on the GUI thread, so this lands here directly.
         self.engine.on_first_frame(self._on_first_frame)
+        # Camera open predates this window, so its lines are still in the backlog
+        self.capture.replay()
 
     @staticmethod
     def _is_mono(sensor, options: list[str]) -> bool:

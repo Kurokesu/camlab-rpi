@@ -1,9 +1,9 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""No-camera path: kernel driver lines join the log stream.
+"""Kernel driver lines and boot backlog joining the log stream.
 
-MainWindow is too heavy to build here, so the method runs unbound against a stub.
+MainWindow is too heavy to build here, so each method runs unbound against a stub.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from conftest import PROBE_FAILURE
 
 from camlab import dmesg
 from camlab.gui.main_window import MainWindow
+from camlab.integrity import LineSource
 
 
 def stub(overlay: str, model: str = "") -> SimpleNamespace:
@@ -32,6 +33,37 @@ def stub(overlay: str, model: str = "") -> SimpleNamespace:
         shown=shown,
         fed=fed,
     )
+
+
+def wire_stub(capture: LineSource) -> SimpleNamespace:
+    """What _wire reaches for, capture real and every other signal inert."""
+    inert = SimpleNamespace(connect=lambda *_: None)
+    shown: list[str] = []
+    fed: list[str] = []
+    return SimpleNamespace(
+        capture=capture,
+        log_panel=SimpleNamespace(append_line=shown.append, update_integrity=None, cleared=inert),
+        monitor=SimpleNamespace(feed=fed.append, stats_changed=inert, reset=None),
+        status=SimpleNamespace(stats_tapped=inert),
+        viewfinder_area=SimpleNamespace(tapped=inert, toggle_stats_overlay=None),
+        engine=SimpleNamespace(on_first_frame=lambda _cb: None),
+        _on_integrity=None,
+        _on_viewfinder_tapped=None,
+        _on_first_frame=None,
+        shown=shown,
+        fed=fed,
+    )
+
+
+def test_early_records_replay_once_panel_exists():
+    """Camera open runs before the window, so its error reaches panel and tally on replay."""
+    capture = LineSource()
+    line = "12:50:03 ERROR camlab: camera open failed: no camera enumerated by libcamera"
+    capture._deliver(line)
+    win = wire_stub(capture)
+    MainWindow._wire(win)
+    assert win.shown == [line]
+    assert win.fed == [line]
 
 
 def test_missing_camera_pushes_driver_lines(monkeypatch):

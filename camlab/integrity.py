@@ -140,19 +140,45 @@ def breakdown_text(stats: IntegrityStats, severity: str) -> str:
     return f"Camera-stack {noun} (facts, not a verdict):\n" + "\n".join(rows)
 
 
-class NullCapture(QtCore.QObject):
-    """Drop-in that does no fd splicing (debug: CAMLAB_NO_CAPTURE=1)."""
+# Log panel keeps 2000 lines, so a deeper backlog would never show
+_BACKLOG_LINES = 2000
+
+
+class LineSource(QtCore.QObject):
+    """Emits captured lines, holding what arrives before the log panel exists."""
 
     line_received = Signal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._backlog: collections.deque[str] | None = collections.deque(maxlen=_BACKLOG_LINES)
+        # Capture thread appends while main thread drains, so no line goes out twice
+        self._lock = threading.Lock()
+
+    def _deliver(self, line: str) -> None:
+        with self._lock:
+            if self._backlog is not None:
+                self._backlog.append(line)
+                return
+        self.line_received.emit(line)
+
+    def replay(self) -> None:
+        """Emit backlog, then stop buffering. Qt drops a signal with nothing connected."""
+        with self._lock:
+            backlog, self._backlog = self._backlog, None
+        for line in backlog or ():
+            self.line_received.emit(line)
 
     def stop(self) -> None:
         pass
 
 
-class StderrCapture(QtCore.QObject):
-    """Splices fd 2 onto a pipe, emits each line, mirrors it with a priority prefix."""
+class NullCapture(LineSource):
+    """Drop-in that does no fd splicing (debug: CAMLAB_NO_CAPTURE=1)."""
 
-    line_received = Signal(str)
+
+class StderrCapture(LineSource):
+    """Splices fd 2 onto a pipe, emits each line, mirrors it with a priority prefix."""
 
     def __init__(self, classifier: LogClassifier, parent=None):
         super().__init__(parent)
@@ -178,7 +204,7 @@ class StderrCapture(QtCore.QObject):
                 out, lines, buf = mirror_lines(buf + chunk, self._classifier, self._priorities)
                 self._mirror(out)
                 for line in lines:
-                    self.line_received.emit(line)
+                    self._deliver(line)
         except OSError:
             pass
         if buf:  # unterminated tail still belongs in the journal
