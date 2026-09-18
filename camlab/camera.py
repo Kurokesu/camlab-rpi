@@ -161,6 +161,9 @@ class CameraEngine:
         infos = Picamera2.global_camera_info()
         if not infos:
             raise RuntimeError("no camera enumerated by libcamera")
+        # Negative camera_num would index from the end and open another camera
+        if not 0 <= camera_num < len(infos):
+            raise RuntimeError(f"no camera {camera_num}, libcamera enumerated {len(infos)}")
         self.info = dict(infos[camera_num])
         self.picam2 = Picamera2(camera_num)
         self.modes = enumerate_modes(self.picam2.sensor_modes)

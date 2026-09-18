@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Grey world AWB: trimmed estimator, gain easing and the AwbEnable handover."""
+"""CameraEngine: grey world estimator, gain easing, AwbEnable handover and open() bounds."""
 
 from __future__ import annotations
 
@@ -61,6 +61,20 @@ def _gains(picam2: FakePicam2) -> list[tuple[float, float]]:
 def _frame(engine: CameraEngine, metadata: dict) -> None:
     """Deliver one frame the way picamera2 does, through the pre-callback."""
     engine._pre_callback(SimpleNamespace(request=None, get_metadata=lambda: metadata))
+
+
+def _cameras(monkeypatch, count: int) -> None:
+    """Enumerate count cameras and fail the test if open() reaches picamera2."""
+
+    class FakePicamera2:
+        def __init__(self, camera_num):
+            raise AssertionError(f"opened camera {camera_num}")
+
+        @staticmethod
+        def global_camera_info() -> list[dict]:
+            return [{"Num": n} for n in range(count)]
+
+    monkeypatch.setattr(camera, "Picamera2", FakePicamera2)
 
 
 class TestEstimator:
@@ -170,3 +184,20 @@ class TestEngine:
         engine._apply_controls()
         assert picam2.pushed[-1]["ColourGains"] == _gains(picam2)[0]
         assert picam2.pushed[-1]["AwbEnable"] is False
+
+
+class TestOpen:
+    def test_camera_num_past_enumeration_names_count(self, monkeypatch):
+        _cameras(monkeypatch, 1)
+        with pytest.raises(RuntimeError, match="no camera 2, libcamera enumerated 1"):
+            CameraEngine().open(camera_num=2)
+
+    def test_negative_camera_num_is_refused(self, monkeypatch):
+        _cameras(monkeypatch, 2)
+        with pytest.raises(RuntimeError, match="no camera -1"):
+            CameraEngine().open(camera_num=-1)
+
+    def test_empty_enumeration_reads_as_no_camera(self, monkeypatch):
+        _cameras(monkeypatch, 0)
+        with pytest.raises(RuntimeError, match="no camera enumerated by libcamera"):
+            CameraEngine().open()
