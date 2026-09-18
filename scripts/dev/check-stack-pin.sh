@@ -49,6 +49,7 @@ published() {
     done < <(apt-cache madison "$pkg" | awk -F'|' '{ gsub(/ /, "", $2); print $2 }')
 }
 
+# What camlab/stack.py cannot ask: which package owns the object ldd resolved
 # ldd reports /lib paths, dpkg records the merged-usr ones, so resolve first
 check_loaded() {
     local module name path owner version
@@ -93,13 +94,7 @@ for pin in "${PINNED[@]}" "${RECORDED[@]}"; do
     done
 done
 
-RELATIONS=()
-for pin in "${PINNED[@]}"; do
-    read -r floor packages <<<"$pin"
-    for pkg in $packages; do
-        RELATIONS+=("$pkg (>= $floor)" "$pkg (<< $floor.)")
-    done
-done
+mapfile -t RELATIONS < <(stack_relations "${PINNED[@]}")
 
 if resolution="$(apt-get satisfy -s --no-install-recommends "${RELATIONS[@]}" 2>&1)"; then
     log "resolve: apt satisfies the pinned set"

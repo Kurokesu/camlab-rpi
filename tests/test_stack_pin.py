@@ -6,10 +6,15 @@ would surface at install or deb-build time. This validates it on main."""
 
 import re
 import subprocess
+from pathlib import Path
 
 from camlab.stack import pins
 
 FORKS = ("LIBCAMERA", "RPICAM_APPS")
+
+COMMON = Path(__file__).resolve().parent.parent / "scripts" / "common.sh"
+
+RELATION = re.compile(r"(\S+) \((>=|<<) (\S+)\)")
 
 
 def app_packages() -> list[str]:
@@ -19,6 +24,30 @@ def app_packages() -> list[str]:
 def dpkg_says(left: str, op: str, right: str) -> bool:
     cmd = ["dpkg", "--compare-versions", left, op, right]
     return subprocess.run(cmd, capture_output=True, check=False).returncode == 0
+
+
+def next_fork(floor: str) -> str:
+    """Fork build after floor, trailing counter bumped."""
+    return re.sub(r"\d+$", lambda m: str(int(m.group()) + 1), floor)
+
+
+def relation_bounds(*given: str) -> dict[str, dict[str, str]]:
+    """Bounds stack_relations emits per package, keyed by apt operator."""
+    # Pre-set owner, or common.sh resolves one off the running unit
+    script = f'CAMLAB_USER=root; source "{COMMON}"; stack_relations "$@"'
+    emitted = subprocess.run(
+        ["bash", "-c", script, "bash", *given],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    bounds: dict[str, dict[str, str]] = {}
+    for line in emitted.splitlines():
+        relation = RELATION.fullmatch(line)
+        assert relation, line
+        pkg, op, version = relation.groups()
+        bounds.setdefault(pkg, {})[op] = version
+    return bounds
 
 
 def test_os_codename_is_well_formed():
@@ -43,9 +72,28 @@ def test_versions_carry_fork_epoch():
 def test_ceiling_admits_rebuild_and_stops_next_fork():
     """Trailing dot carries the whole ceiling, so prove it against real dpkg."""
     floor = pins()["LIBCAMERA_VERSION"]
-    next_fork = re.sub(r"\d+$", lambda m: str(int(m.group()) + 1), floor)
     assert dpkg_says(f"{floor}-9", "lt", f"{floor}.")
-    assert dpkg_says(next_fork, "ge", f"{floor}.")
+    assert dpkg_says(next_fork(floor), "ge", f"{floor}.")
+
+
+def test_stack_relations_admit_rebuild_and_stop_next_fork():
+    """Relations reach apt as argv, so prove emitted bounds against real dpkg."""
+    floor = "1:2.3.4+krks7"
+    bounds = relation_bounds(f"{floor} pkg-a pkg-b")
+    assert set(bounds) == {"pkg-a", "pkg-b"}
+    for pkg, bound in bounds.items():
+        assert set(bound) == {">=", "<<"}, pkg
+        assert dpkg_says(floor, "ge", bound[">="]), pkg
+        assert dpkg_says(f"{floor}-9", "lt", bound["<<"]), pkg
+        assert dpkg_says(next_fork(floor), "ge", bound["<<"]), pkg
+
+
+def test_stack_relations_cover_both_fork_pins():
+    """Callers pass both pins in one call, so every pinned package needs a pair."""
+    env = pins()
+    given = [" ".join((env[f"{fork}_VERSION"], env[f"{fork}_PACKAGES"])) for fork in FORKS]
+    wanted = {pkg for fork in FORKS for pkg in env[f"{fork}_PACKAGES"].split()}
+    assert set(relation_bounds(*given)) == wanted
 
 
 def test_picamera2_is_recorded():
