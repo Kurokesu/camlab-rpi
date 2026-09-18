@@ -67,14 +67,16 @@ REPO="$(resolve_repo_dir)"
 # shellcheck source=../../apt-packages
 source "$REPO/apt-packages"
 
-RELATIONS=()
+PINNED=("$LIBCAMERA_VERSION $LIBCAMERA_PACKAGES"
+        "$RPICAM_APPS_VERSION $RPICAM_APPS_PACKAGES")
+
+mapfile -t RELATIONS < <(stack_relations "${PINNED[@]}")
+
 STALE=()
 AHEAD=()
-for pin in "$LIBCAMERA_VERSION $LIBCAMERA_PACKAGES" \
-           "$RPICAM_APPS_VERSION $RPICAM_APPS_PACKAGES"; do
+for pin in "${PINNED[@]}"; do
     read -r floor packages <<<"$pin"
     for pkg in $packages; do
-        RELATIONS+=("$pkg (>= $floor)" "$pkg (<< $floor.)")
         have="$(dpkg-query -Wf '${Version}' "$pkg" 2>/dev/null)" || have=""
         if dpkg --compare-versions "${have:-0}" lt "$floor"; then
             STALE+=("$pkg")

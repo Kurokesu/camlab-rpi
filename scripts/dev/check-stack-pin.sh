@@ -93,13 +93,7 @@ for pin in "${PINNED[@]}" "${RECORDED[@]}"; do
     done
 done
 
-RELATIONS=()
-for pin in "${PINNED[@]}"; do
-    read -r floor packages <<<"$pin"
-    for pkg in $packages; do
-        RELATIONS+=("$pkg (>= $floor)" "$pkg (<< $floor.)")
-    done
-done
+mapfile -t RELATIONS < <(stack_relations "${PINNED[@]}")
 
 if resolution="$(apt-get satisfy -s --no-install-recommends "${RELATIONS[@]}" 2>&1)"; then
     log "resolve: apt satisfies the pinned set"

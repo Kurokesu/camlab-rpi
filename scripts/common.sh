@@ -91,6 +91,18 @@ missing_packages() {
     done
 }
 
+# Apt relations for "<floor> <pkg>..." pins. Trailing dot on the ceiling admits
+# a floor rebuild and stops the next fork
+stack_relations() {
+    local pin floor packages pkg
+    for pin in "$@"; do
+        read -r floor packages <<<"$pin"
+        for pkg in $packages; do
+            printf '%s (>= %s)\n%s (<< %s.)\n' "$pkg" "$floor" "$pkg" "$floor"
+        done
+    done
+}
+
 # Write via a temp file in the same dir, so readers never see a half-written
 # boot-critical file. Mode of an existing file is preserved. An unchanged file is
 # left alone, convergence runs this over config.txt on the FAT partition
