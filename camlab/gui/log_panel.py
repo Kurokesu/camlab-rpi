@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Collapsible log panel for captured camera-stack stderr.
+"""Collapsible log panel for captured stderr.
 
 Ring buffer lets filter re-render without re-tailing. Boot-to-viewfinder time in header.
 """
@@ -11,7 +11,7 @@ from __future__ import annotations
 import collections
 import html
 
-from ..integrity import IntegrityStats, LogClassifier, breakdown_text
+from ..integrity import IntegrityStats, LogClassifier
 from ..qt import Qt, QtCore, QtGui, QtWidgets, Signal, Slot
 from .style import SEV_COLOR
 from .widgets import SegmentedSelector, kinetic_scroll, repolish
@@ -55,7 +55,6 @@ class LogPanel(QtWidgets.QWidget):
 
         self.boot_lbl = QtWidgets.QLabel(self)
         self.boot_lbl.setObjectName("bootInfo")
-        self.boot_lbl.setToolTip("Time from power-on to the first captured frame")
 
         self.filter = SegmentedSelector()
         self.filter.set_options(
@@ -68,10 +67,6 @@ class LogPanel(QtWidgets.QWidget):
         self.autoscroll_btn = QtWidgets.QPushButton("Autoscroll")
         self.autoscroll_btn.setCheckable(True)
         self.autoscroll_btn.setChecked(True)
-        self.autoscroll_btn.setToolTip(
-            "Follow new lines. Swipe or scroll up to freeze the view for "
-            "inspection, new lines keep buffering and reappear on return."
-        )
         self.autoscroll_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.autoscroll_btn.setFocusPolicy(Qt.FocusPolicy.TabFocus)
         self.autoscroll_btn.toggled.connect(self._on_autoscroll)
@@ -126,17 +121,14 @@ class LogPanel(QtWidgets.QWidget):
     @Slot(object)
     def update_integrity(self, stats: IntegrityStats) -> None:
         """Counts ride filter segments they select for, tinted when non-zero."""
-        for value, word, count in (
-            ("warning", "Warnings", stats.warnings),
-            ("error", "Errors", stats.errors),
-        ):
+        for value, word in (("warning", "Warnings"), ("error", "Errors")):
             btn = self.filter.button(value)
             if btn is None:
                 continue
+            count = stats.total(value)
             text = f"{word} {count}"
             if btn.text() != text:
                 btn.setText(text)
-                btn.setToolTip(breakdown_text(stats, value))
                 # Ratchet width so a digit rollover cannot shift the header.
                 btn.setMinimumWidth(max(btn.minimumWidth(), btn.sizeHint().width()))
             sev = value if count else None

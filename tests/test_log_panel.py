@@ -1,10 +1,11 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Log panel filter and tally against kernel driver lines."""
+"""Log panel filter and tally against kernel driver, camera stack and own records."""
 
 from __future__ import annotations
 
+import logging
 import os
 
 import pytest
@@ -15,8 +16,16 @@ from conftest import CAMERA_STACK, FAILURES, PROBE_FAILURE, logged
 
 from camlab import dmesg, stack
 from camlab.gui.log_panel import LogPanel
-from camlab.integrity import IntegrityMonitor, LineSource, LogClassifier
+from camlab.integrity import (
+    APP_CATEGORY,
+    IntegrityMonitor,
+    IntegrityStats,
+    LineSource,
+    LogClassifier,
+)
 from camlab.qt import QtWidgets
+
+CAMERA_OPEN_FAILED = logged("camera open failed: no cameras available", logging.ERROR)
 
 
 @pytest.fixture(scope="module")
@@ -28,6 +37,17 @@ def qapp():
 @pytest.fixture
 def panel(qapp) -> LogPanel:
     return LogPanel(LogClassifier(dmesg.PATTERNS))
+
+
+def tallied(*lines: str) -> IntegrityStats:
+    """Stats the monitor publishes for these lines, empty when none classified."""
+    monitor = IntegrityMonitor(LogClassifier(dmesg.PATTERNS))
+    seen: list[IntegrityStats] = []
+    monitor.stats_changed.connect(seen.append)
+    for line in lines:
+        monitor.feed(line)
+    monitor._emit()
+    return seen[-1] if seen else IntegrityStats()
 
 
 def test_errors_filter_keeps_driver_lines(panel):
@@ -73,12 +93,46 @@ def test_replayed_and_live_lines_pass_same_classification(panel):
 
 def test_tally_counts_driver_errors(panel):
     """Fed the whole scrape, so a success notice inflating the count would show here."""
-    monitor = IntegrityMonitor(LogClassifier(dmesg.PATTERNS))
-    seen: list = []
-    monitor.stats_changed.connect(seen.append)
-    for line in PROBE_FAILURE:
-        monitor.feed(line)
-    monitor._emit()
-    assert (seen[-1].errors, seen[-1].warnings) == (len(FAILURES), 0)
-    panel.update_integrity(seen[-1])
+    stats = tallied(*PROBE_FAILURE)
+    assert (stats.total("error"), stats.total("warning")) == (len(FAILURES), 0)
+    panel.update_integrity(stats)
     assert panel.filter.button("error").text() == f"Errors {len(FAILURES)}"
+
+
+def test_camera_open_failure_reaches_errors_filter(panel):
+    """Worst failure an operator meets, so the Errors filter has to keep it."""
+    panel.append_line(CAMERA_OPEN_FAILED)
+    panel.filter.button("error").click()
+    assert panel.view.toPlainText() == CAMERA_OPEN_FAILED
+
+
+@pytest.mark.parametrize(
+    ("line", "severity", "label"),
+    [
+        (CAMERA_OPEN_FAILED, "error", "Errors 1"),
+        (logged("settings schema mismatch - ignoring"), "warning", "Warnings 1"),
+    ],
+)
+def test_own_record_counts_under_app(panel, line, severity, label):
+    """Both severities count, and the category separates app warnings from stack warnings."""
+    stats = tallied(line)
+    assert stats.by_severity[severity] == {APP_CATEGORY: 1}
+    panel.update_integrity(stats)
+    assert panel.filter.button(severity).text() == label
+
+
+def test_info_record_neither_counts_nor_shows(panel):
+    """Only WARNING and above classify, so routine chatter stays plain and uncounted."""
+    line = logged("first frame at boot time=3.1s", logging.INFO)
+    stats = tallied(line)
+    panel.append_line(line)
+    panel.filter.button("warning").click()
+    assert (stats.total("error"), stats.total("warning")) == (0, 0)
+    assert panel.view.toPlainText() == ""
+
+
+def test_tally_follows_line_severity_not_category_default(qapp):
+    """Frame timeout defaults to warning, so the same line at ERROR has to count as an error."""
+    stats = tallied(CAMERA_STACK[1].replace("WARN", "ERROR"))
+    assert stats.by_severity["error"] == {"frame_timeout": 1}
+    assert stats.by_severity["warning"] == {}

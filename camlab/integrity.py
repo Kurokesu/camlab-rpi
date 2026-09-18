@@ -17,29 +17,29 @@ from dataclasses import dataclass, field
 
 from .qt import QtCore, Signal
 
+# Own records: _setup_logging formats them, the regexes below parse them back.
+LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
+LOG_DATEFMT = "%H:%M:%S"
+_APP_STAMP = r"^\d\d:\d\d:\d\d "
+_APP_LEVEL_RE = re.compile(_APP_STAMP + r"(DEBUG|INFO|WARNING|ERROR|CRITICAL) ")
+
+APP_CATEGORY = "app"
+
 # category -> regex, order matters (first match wins).
 DEFAULT_PATTERNS: dict[str, str] = {
+    # Drift note opts in with this lead, so it beats the own-record prefix below
+    "stack_pairing": r"camera stack:",
+    # Own records prove origin, so they beat heuristics reading libcamera's wording
+    APP_CATEGORY: _APP_STAMP + r"(WARNING|ERROR|CRITICAL) ",
     "embedded_data": r"Embedded data buffer parsing failed",
     "register_tags": r"Incorrect register value tags",
     "csi_crc": r"\bCRC\b|corrupt(ed)? (frame|buffer)|pixel error",
     "frame_timeout": r"(?i)\b(timed out|timeout)\b|Dequeue timer|no buffers",
     "frame_drop": r"(?i)dropp(ed|ing) (a )?frame|frame drop",
     "v4l2_error": r"(?i)\bVIDIOC_\w+ failed|Failed to queue buffer|Failed to start",
-    "stack_pairing": r"camera stack:",
 }
 
-CATEGORY_LABELS: dict[str, str] = {
-    "embedded_data": "Embedded-data parse",
-    "register_tags": "Register-tag mismatch",
-    "csi_crc": "CSI CRC / corruption",
-    "frame_timeout": "Frame timeout",
-    "frame_drop": "Dropped frame",
-    "v4l2_error": "V4L2 error",
-    "stack_pairing": "Stack pairing",
-    "kernel_driver": "Kernel driver",
-}
-
-# Severity fallback, used when a matched line carries no libcamera level token.
+# Severity fallback, used when a matched line carries no level word
 CATEGORY_SEVERITY: dict[str, str] = {
     "embedded_data": "error",
     "register_tags": "error",
@@ -51,13 +51,8 @@ CATEGORY_SEVERITY: dict[str, str] = {
     "stack_pairing": "warning",
 }
 
-# libcamera prefixes each line with a level word (e.g. "... ERROR RPI ...").
-_LEVEL_RE = re.compile(r"\b(ERROR|FATAL|WARN(?:ING)?)\b")
-
-# Own records: _setup_logging formats them, the regex below parses them back.
-LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
-LOG_DATEFMT = "%H:%M:%S"
-_APP_LEVEL_RE = re.compile(r"^\d\d:\d\d:\d\d (DEBUG|INFO|WARNING|ERROR|CRITICAL) ")
+# libcamera puts a level word mid-line ("... ERROR RPI ..."), own records lead with theirs
+_LEVEL_RE = re.compile(r"\b(CRITICAL|ERROR|FATAL|WARN(?:ING)?)\b")
 
 # journald parses a leading <N>. Syslog: 2 crit, 3 err, 4 warning, 6 info, 7 debug.
 _APP_PRIORITY = {"CRITICAL": 2, "ERROR": 3, "WARNING": 4, "INFO": 6, "DEBUG": 7}
@@ -66,10 +61,10 @@ _INFO_PRIORITY = 6
 
 
 def severity_for(line: str, category: str) -> str:
-    """'error' or 'warning' for a line, from libcamera's level word or category default."""
+    """'error' or 'warning' for a line, from its own level word or category default."""
     m = _LEVEL_RE.search(line)
     if m:
-        return "error" if m.group(1) in ("ERROR", "FATAL") else "warning"
+        return "warning" if m.group(1).startswith("WARN") else "error"
     return CATEGORY_SEVERITY.get(category, "warning")
 
 
@@ -122,22 +117,23 @@ def mirror_lines(
 
 @dataclass
 class IntegrityStats:
-    errors: int = 0
-    warnings: int = 0
-    by_category: dict[str, int] = field(default_factory=dict)
+    # severity -> category -> count. Tint needs the category behind a warning, not just a total
+    by_severity: dict[str, dict[str, int]] = field(default_factory=dict)
+
+    def total(self, severity: str) -> int:
+        return sum(self.by_severity.get(severity, {}).values())
 
 
-def breakdown_text(stats: IntegrityStats, severity: str) -> str:
-    """Per-category tally for one severity, as tooltip text."""
-    noun = "errors" if severity == "error" else "warnings"
-    rows = [
-        f"  {CATEGORY_LABELS.get(cat, cat)}: {n}"
-        for cat, n in sorted(stats.by_category.items(), key=lambda kv: -kv[1])
-        if n and CATEGORY_SEVERITY.get(cat) == severity
-    ]
-    if not rows:
-        return f"No camera-stack {noun} observed."
-    return f"Camera-stack {noun} (facts, not a verdict):\n" + "\n".join(rows)
+def tint_severity(stats: IntegrityStats) -> str:
+    """Severity the Log button tints, '' for none.
+
+    App warnings count but never tint. Standing amber teaches the operator to ignore the button.
+    """
+    if stats.total("error"):
+        return "error"
+    if any(cat != APP_CATEGORY for cat in stats.by_severity.get("warning", ())):
+        return "warning"
+    return ""
 
 
 # Log panel keeps 2000 lines, so a deeper backlog would never show
@@ -237,9 +233,10 @@ class IntegrityMonitor(QtCore.QObject):
     def __init__(self, classifier: LogClassifier | None = None, emit_hz: float = 4.0, parent=None):
         super().__init__(parent)
         self._classifier = classifier or LogClassifier()
-        self._errors = 0
-        self._warnings = 0
-        self._by_cat: collections.Counter = collections.Counter()
+        self._tally: dict[str, collections.Counter] = {
+            "error": collections.Counter(),
+            "warning": collections.Counter(),
+        }
         self._dirty = False
         # feed() runs on the capture thread. Timer publishes rolled-up counts only when
         # they changed, so bursts coalesce.
@@ -252,17 +249,12 @@ class IntegrityMonitor(QtCore.QObject):
         cat, sev = self._classifier.classify_with_severity(line)
         if cat is None:
             return
-        if sev == "error":
-            self._errors += 1
-        else:
-            self._warnings += 1
-        self._by_cat[cat] += 1
+        self._tally[sev][cat] += 1
         self._dirty = True
 
     def reset(self) -> None:
-        self._errors = 0
-        self._warnings = 0
-        self._by_cat.clear()
+        for counts in self._tally.values():
+            counts.clear()
         self._dirty = True
 
     def _emit(self) -> None:
@@ -270,9 +262,5 @@ class IntegrityMonitor(QtCore.QObject):
             return
         self._dirty = False
         self.stats_changed.emit(
-            IntegrityStats(
-                errors=self._errors,
-                warnings=self._warnings,
-                by_category=dict(self._by_cat),
-            )
+            IntegrityStats({sev: dict(counts) for sev, counts in self._tally.items()})
         )
