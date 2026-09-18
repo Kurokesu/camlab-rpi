@@ -12,7 +12,6 @@ from .. import dmesg, network, updater
 from ..camera import CameraEngine
 from ..config_manager import ConfigManager, poweroff, reboot
 from ..display import Backlight, DisplayManager, Topology
-from ..drm import dsi_blocked_ports
 from ..dsi_panels import PanelRegistry
 from ..focus_metric import FocusSampler
 from ..integrity import IntegrityMonitor, LineSource, LogClassifier, tint_severity
@@ -735,23 +734,17 @@ class MainWindow(QtWidgets.QMainWindow):
         sensor = self.registry.by_overlay(cur["overlay"]) if cur["overlay"] else None
         mono = self._is_mono(sensor, cur["options"])
         disp = self.config.get_current_display()
-        # No display block but a live DSI connector: firmware brought the panel up
-        locked_ports = dsi_blocked_ports() if not disp["present"] else set()
-        current_display = self._display_name_current(disp)
-        # Off-catalog block: its claimed port is fixed, the card locks it out.
-        offcat_port = None
-        if current_display is not None and self.panels.by_name(current_display) is None:
-            offcat_port = disp["port_blocked"]
+        blocked = self.config.blocked_ports_next_boot()
         card = SensorCard(
             self.registry,
             self.panels,
             sensor.name if sensor else None,
             cur["port"],
             mono,
-            current_display,
-            display_locked=bool(locked_ports),
-            locked_ports=locked_ports,
-            offcat_port=offcat_port,
+            self._display_name_current(disp),
+            # Blocked with no display block means firmware brought the panel up
+            display_auto_detected=bool(blocked) and not disp["present"],
+            blocked_ports=blocked,
             on_apply=self._apply_sensor,
             on_cancel=self._close_modal,
         )

@@ -26,9 +26,8 @@ class SensorCard(QtWidgets.QFrame):
         current_port: str,
         current_mono: bool,
         current_display: str | None,
-        display_locked: bool,
-        locked_ports: set[str],
-        offcat_port: str | None,
+        display_auto_detected: bool,
+        blocked_ports: set[str],
         on_apply: Callable[[str, str, bool, str | None], None],
         on_cancel: Callable[[], None],
     ):
@@ -37,15 +36,14 @@ class SensorCard(QtWidgets.QFrame):
         self.setMinimumWidth(420)
         self._registry = registry
         self._on_apply = on_apply
-        self._display_locked = bool(display_locked)
-        self._locked_ports = set(locked_ports)
+        self._display_auto_detected = bool(display_auto_detected)
+        self._blocked_ports = set(blocked_ports)
         # Off-catalog display blocks kept as-is on apply, port they claim locks while selected.
         self._offcat_name = (
             current_display
             if current_display is not None and panels.by_name(current_display) is None
             else None
         )
-        self._offcat_port = offcat_port
         # Remember the initially-selected sensor + its variant so re-selecting it
         # restores the choice (other sensors default to color).
         self._init_name = current_name
@@ -70,7 +68,7 @@ class SensorCard(QtWidgets.QFrame):
         self.sensor_sel.changed.connect(self._on_sensor_changed)
 
         self.display_sel = SegmentedSelector()
-        if self._display_locked:
+        if self._display_auto_detected:
             # Pi 5 firmware owns the panel, nothing to choose here.
             self.display_sel.set_options([("Auto-detected", None)], current=None, enabled=False)
         else:
@@ -153,10 +151,12 @@ class SensorCard(QtWidgets.QFrame):
 
     def _port_locks(self) -> set[str]:
         """Ports the camera cannot take under the current display selection."""
-        locks = set(self._locked_ports)
-        if self._offcat_port is not None and self.display_sel.current_value() == self._offcat_name:
-            locks.add(self._offcat_port)
-        return locks
+        selected = self.display_sel.current_value()
+        offcat_kept = self._offcat_name is not None and selected == self._offcat_name
+        if self._display_auto_detected or offcat_kept:
+            return set(self._blocked_ports)
+        # Catalog panel moves off the port the camera takes
+        return set()
 
     def _on_wiring_changed(self) -> None:
         locks = self._port_locks()
@@ -172,8 +172,8 @@ class SensorCard(QtWidgets.QFrame):
 
     def _sync_wiring_note(self) -> None:
         """State the wiring map, derived from the camera port."""
-        if self._display_locked:
-            ports = ", ".join(sorted(self._locked_ports))
+        if self._display_auto_detected:
+            ports = ", ".join(sorted(self._blocked_ports))
             text = f"{ports} is used by the auto-detected touch display" if ports else ""
         elif self.display_sel.current_value() is not None:
             cam, disp = ("0", "1") if self.port_sel.current_value() == "cam0" else ("1", "0")
