@@ -1,10 +1,7 @@
 #!/bin/sh
 set -e
 
-# Codename from apt-packages, substituted by dh_installdeb, the same floor
-# install.sh applies to a clone install. Archive serves camlab-rpi to trixie
-# only, so apt on a bookworm unit finds nothing, and this covers a bare
-# dpkg -i of a downloaded deb, which bypasses the archive entirely
+# OS gate for a bare dpkg -i, codename substituted by dh_installdeb
 case "$1" in
     install|upgrade)
         # shellcheck source=/dev/null

@@ -31,7 +31,7 @@ fails when that file or a key it reads is missing.
 
 Trixie only, codename stored once in main's apt-packages. It reaches
 preinst as #OS_CODENAME# through dh_installdeb and install.sh reads same
-key, so a release bump moves one file.
+key, so an OS bump moves one file.
 
 preinst is the whole OS gate. Archive serves camlab-rpi to trixie only,
 so apt finds nothing on bookworm, and a bare dpkg -i of a downloaded
