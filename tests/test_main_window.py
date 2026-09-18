@@ -1,13 +1,15 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Kernel driver lines, boot backlog and Log button tint.
+"""Kernel driver lines, boot backlog, Log button tint and sensor card wiring.
 
 MainWindow is too heavy to build here, so each method runs unbound against a stub.
 """
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -17,9 +19,14 @@ pytest.importorskip("PyQt6")
 
 from conftest import PROBE_FAILURE
 
-from camlab import dmesg
+from camlab import config_manager, dmesg
+from camlab.config_manager import ConfigManager
+from camlab.dsi_panels import PanelRegistry
 from camlab.gui.main_window import MainWindow
+from camlab.gui.sensor_dialog import SensorCard
 from camlab.integrity import APP_CATEGORY, IntegrityStats, LineSource
+from camlab.qt import QtWidgets
+from camlab.sensors import SensorRegistry
 
 
 def stub(overlay: str, model: str = "") -> SimpleNamespace:
@@ -114,3 +121,88 @@ def test_scrape_stays_off_without_no_camera_path(monkeypatch, overlay, model):
     win = stub(overlay, model)
     MainWindow._report_driver_errors(win)
     assert win.shown == []
+
+
+PANEL_NAME = "Waveshare 43H"
+PANEL_OVERLAY = "vc4-kms-dsi-7inch"
+
+
+class SensorWindow(SimpleNamespace):
+    """What _choose_sensor reaches for, the card kept instead of shown."""
+
+    _is_mono = staticmethod(MainWindow._is_mono)
+    _display_name_current = MainWindow._display_name_current
+    _choose_sensor = MainWindow._choose_sensor
+
+    def _open_modal(self, card) -> None:
+        self.card = card
+
+    def _apply_sensor(self, *_args) -> None:
+        """Qt rejects a None slot, so Apply and Cancel both need a callable."""
+
+    _close_modal = _apply_sensor
+
+
+@pytest.fixture(scope="module")
+def qapp():
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    return QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+
+
+@pytest.fixture
+def cm(tmp_path: Path, drm_root: Path, monkeypatch: pytest.MonkeyPatch) -> ConfigManager:
+    """Empty config over tmp_path, no DRM connector and model reading as Pi 5."""
+    monkeypatch.setattr(config_manager, "MODEL_PATH", tmp_path / "model")
+    overlays = tmp_path / "overlays"
+    overlays.mkdir()
+    (overlays / f"{PANEL_OVERLAY}.dtbo").touch()
+    return ConfigManager(config_path=tmp_path / "config.txt", overlays_dir=overlays)
+
+
+@pytest.fixture
+def open_card(qapp, cm: ConfigManager):
+    """Builder for the sensor card over whatever the test left in config.txt."""
+
+    def build() -> SensorCard:
+        win = SensorWindow(registry=SensorRegistry.load(), panels=PanelRegistry.load(), config=cm)
+        win._choose_sensor()
+        return win.card
+
+    return build
+
+
+def test_auto_detected_display_locks_claimed_csi_port(cm, open_card, fake_drm):
+    """Firmware brought the panel up, so claimed port and display row both stay put."""
+    fake_drm({"DSI-1": "connected"})
+    card = open_card()
+    assert not card.port_sel.button("cam0").isEnabled()
+    assert not card.display_sel.button(None).isEnabled()
+    assert card.wiring_note.text() == "cam0 is used by the auto-detected touch display"
+
+
+def test_compute_module_dsi_leaves_csi_ports_selectable(cm, open_card, fake_drm):
+    """CM carrier DSI is not tied to a CSI port, so a live connector blocks neither."""
+    fake_drm({"DSI-1": "connected"})
+    config_manager.MODEL_PATH.write_text("Raspberry Pi Compute Module 5 Rev 1.0")
+    card = open_card()
+    assert card.port_sel.button("cam0").isEnabled()
+    assert card.display_sel.button(None).isEnabled()
+    assert card.wiring_note.text() == ""
+
+
+def test_configured_display_block_does_not_read_as_auto_detected(cm, open_card):
+    """Operator wrote that block, so the panel moves to the connector the camera leaves."""
+    cm._rewrite_display_in_place(PANEL_OVERLAY)  # claims cam1 next boot
+    card = open_card()
+    assert card.display_sel.current_value() == PANEL_NAME
+    assert card.wiring_note.text() == "Camera on CAM/DISP1, touch display on CAM/DISP0"
+    assert card.port_sel.button("cam1").isEnabled()
+
+
+def test_off_catalog_display_block_keeps_claimed_port(cm, open_card):
+    """Unknown overlay is written back as-is, so the claimed port stays out of reach."""
+    (cm.overlays_dir / "vc4-kms-dsi-generic.dtbo").touch()
+    cm._rewrite_display_in_place("vc4-kms-dsi-generic,dsi0")  # claims cam0
+    card = open_card()
+    assert card.display_sel.current_value() == "vc4-kms-dsi-generic,dsi0"
+    assert not card.port_sel.button("cam0").isEnabled()
