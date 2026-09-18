@@ -12,6 +12,9 @@ from __future__ import annotations
 
 import importlib
 import pkgutil
+import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -21,6 +24,8 @@ import camlab
 HARDWARE_DEPS = {"picamera2", "libcamera", "PyQt6", "OpenGL"}
 
 MODULES = sorted(m.name for m in pkgutil.walk_packages(camlab.__path__, "camlab."))
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def test_walk_reaches_subpackages():
@@ -38,3 +43,12 @@ def test_module_imports(name: str):
         if missing not in HARDWARE_DEPS:
             raise
         pytest.skip(f"{missing} not installed")
+
+
+@pytest.mark.parametrize("name", ["camlab.drm", "camlab.config_manager"])
+def test_privileged_cli_imports_no_qt(name: str):
+    """Qt on camlab-apply import path breaks the only privileged config write."""
+    # This interpreter has Qt loaded by other tests, only a fresh one can answer
+    code = f"import {name}, sys; assert 'PyQt6' not in sys.modules"
+    probe = subprocess.run([sys.executable, "-c", code], cwd=REPO_ROOT, check=False)
+    assert probe.returncode == 0
