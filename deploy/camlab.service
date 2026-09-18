@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # Rendered by service.sh (CAMLAB_USER / CAMLAB_APP_DIR substituted).
-# camlab GUI fullscreen under Cage kiosk on tty1.
+# camlab GUI fullscreen under Cage kiosk on tty1
 
 [Unit]
 Description=camlab camera preview and test kiosk (Kurokesu)
@@ -15,7 +15,7 @@ User=CAMLAB_USER
 PAMName=camlab
 WorkingDirectory=CAMLAB_APP_DIR
 
-# Persistent state (mode/fps selection). Read-only root keeps this on data partition.
+# Persistent state (mode/fps selection). Read-only root keeps this on data partition
 StateDirectory=camlab
 StateDirectoryMode=0750
 
@@ -27,15 +27,15 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=camlab
 
-# Do not raise LIBCAMERA_LOG_LEVELS: ERROR lines are integrity signal.
+# Do not raise LIBCAMERA_LOG_LEVELS: ERROR lines are integrity signal
 Environment=PYTHONUNBUFFERED=1
 # Blank cursor theme for Cage, so no pointer shows on boot screen. app.py
-# drops it before Qt starts.
+# drops it before Qt starts
 Environment=XCURSOR_PATH=/usr/local/lib/camlab/cursors
 
 ExecStart=/usr/local/lib/camlab/drm-order /usr/bin/cage -- /usr/bin/python3 -m camlab
 
-# Settings save-now before stop kill, pattern anchored or SIGUSR1 hits Cage too.
+# Settings save-now before stop kill, pattern anchored or SIGUSR1 hits Cage too
 ExecStop=-/bin/sh -c 'pkill -USR1 -f "^/usr/bin/python3 -m camlab" && sleep 0.5'
 
 Restart=on-failure

@@ -18,16 +18,16 @@ from dataclasses import dataclass
 BASE_FPS: tuple[float, ...] = (24.0, 30.0, 60.0, 120.0)
 
 # App ceiling. Higher rates run but start unreliably (AR0234 960x600 claims
-# 236.85, locks about half the time).
+# 236.85, locks about half the time)
 MAX_FPS = 120.0
 
-# Boot rate when nothing is persisted. Higher rates are opt-in.
+# Boot rate when nothing is persisted. Higher rates are opt-in
 DEFAULT_FPS = 30.0
 
-# Tolerance when matching reported fps (e.g. 33.89) to nominal rates.
+# Tolerance when matching reported fps (e.g. 33.89) to nominal rates
 _FPS_EPS = 0.5
 
-# Lores alignment. Even size avoids fractional scaling artifacts.
+# Lores alignment. Even size avoids fractional scaling artifacts
 _LORES_ALIGN = 2
 
 _STREAM_MAX_PIXELS = 1920 * 1080
@@ -76,7 +76,7 @@ def enumerate_modes(raw_modes) -> list[SensorMode]:
         fmt = str(m.get("format") or "")
         sm = SensorMode(format=fmt, size=size, bit_depth=depth, max_fps=fps)
         prev = by_key.get((size, depth))
-        # Keep higher fps when the stack lists the same mode twice.
+        # Keep higher fps when the stack lists the same mode twice
         if prev is None or sm.max_fps > prev.max_fps:
             by_key[(size, depth)] = sm
     return sorted(by_key.values(), key=lambda s: (s.area, s.bit_depth, s.max_fps))

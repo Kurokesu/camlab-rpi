@@ -22,7 +22,7 @@ log = logging.getLogger(__name__)
 
 _CHECK_TIMEOUT_MS = 120_000
 # Version column: one Kurokesu version fits a line, capped so a pair of them
-# wraps instead of widening the card past the panel.
+# wraps instead of widening the card past the panel
 _VERSION_MIN = 250
 _VERSION_W = 320
 
@@ -39,7 +39,7 @@ class AboutCard(QtWidgets.QFrame):
     ):
         super().__init__()
         self.setObjectName("modalCard")
-        # Wider than other cards: three columns to line up.
+        # Wider than other cards: three columns to line up
         self.setMinimumWidth(560)
         self._rows = rows
         self._blocked = blocked
@@ -56,15 +56,15 @@ class AboutCard(QtWidgets.QFrame):
         self.status_lbl.setWordWrap(True)
 
         self._grid = QtWidgets.QGridLayout()
-        # Right margin keeps Update buttons off the scrollbar.
+        # Right margin keeps Update buttons off the scrollbar
         self._grid.setContentsMargins(0, 0, 8, 0)
         self._grid.setHorizontalSpacing(12)
-        # Rows of Update buttons, so a thumb needs a gap even where height is tight.
+        # Rows of Update buttons, so a thumb needs a gap even where height is tight
         self._grid.setVerticalSpacing(6 if compact else 8)
-        # Slack goes to versions, labels hug their text.
+        # Slack goes to versions, labels hug their text
         self._grid.setColumnStretch(1, 1)
 
-        # Every sensor plus the stack and kernel outgrows the panel, so the list scrolls.
+        # Every sensor plus the stack and kernel outgrows the panel, so the list scrolls
         body = QtWidgets.QWidget()
         body.setLayout(self._grid)
         self._scroll = QtWidgets.QScrollArea()
@@ -72,21 +72,21 @@ class AboutCard(QtWidgets.QFrame):
         self._scroll.setWidgetResizable(True)
         self._scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        # Tab belongs to the buttons, the list scrolls by drag and wheel.
+        # Tab belongs to the buttons, the list scrolls by drag and wheel
         self._scroll.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         kinetic_scroll(self._scroll.viewport())
 
         self.check_btn = QtWidgets.QPushButton("Check for updates")
         self.check_btn.clicked.connect(self._check)
         self.check_btn.setEnabled(self._online)
-        # One boot installs the lot, so sending them together saves a second reboot.
+        # One boot installs the lot, so sending them together saves a second reboot
         self.all_btn = QtWidgets.QPushButton("Update all")
         self.all_btn.clicked.connect(self._apply_all)
-        # Back, not Close: the setting that gates a check sits one card behind.
+        # Back, not Close: the setting that gates a check sits one card behind
         back_btn = QtWidgets.QPushButton("Back")
         back_btn.clicked.connect(on_back)
         # TabFocus keeps a press from leaving a focus ring, and keeps the ring off
-        # the next button when Check disables itself mid-check.
+        # the next button when Check disables itself mid-check
         for btn in (self.check_btn, self.all_btn, back_btn):
             btn.setFocusPolicy(Qt.FocusPolicy.TabFocus)
         # Every other button here reboots the unit, so Enter lands on Back
@@ -117,9 +117,9 @@ class AboutCard(QtWidgets.QFrame):
 
         pending = updater.pending_ids(self._state)
         # A blocked unit surveys like any other, so it shows what waits upstream and
-        # leaves the operator to install it from outside camlab.
+        # leaves the operator to install it from outside camlab
         offers = not self._blocked
-        # Only worth its own button when it saves a reboot.
+        # Only worth its own button when it saves a reboot
         self.all_btn.setVisible(offers and len(pending) > 1)
         self.all_btn.setEnabled(self._online)
         surveyed = {c["id"]: c for c in self._state.get("components") or []}
@@ -128,7 +128,7 @@ class AboutCard(QtWidgets.QFrame):
             waiting = item["id"] in pending
             installed, available = item["installed"], ""
             if waiting:
-                # Survey carries the version it moves to, which an inventory row cannot.
+                # Survey carries the version it moves to, which an inventory row cannot
                 installed, available = updater.component_summary(surveyed[item["id"]])
             version = QtWidgets.QLabel(f"{installed} \u2192 {available}" if waiting else installed)
             version.setObjectName("modalText" if item["updatable"] else "dialogNote")
@@ -167,14 +167,14 @@ class AboutCard(QtWidgets.QFrame):
         if self._state.get("checked") and not updater.pending_ids(self._state):
             return "Up to date"
         if (self._state.get("last_run") or {}).get("error"):
-            # Still pending next to its Update button. update.log carries apt's words.
+            # Still pending next to its Update button. update.log carries apt's words
             return "Last update failed"
         return ""
 
     def _check(self) -> None:
         if self._proc is not None:
             return
-        # Label held still, the footer says what is happening.
+        # Label held still, the footer says what is happening
         self.check_btn.setEnabled(False)
         self._set_status("Checking\u2026")
         self._proc = QtCore.QProcess(self)
@@ -190,7 +190,7 @@ class AboutCard(QtWidgets.QFrame):
             self._proc.kill()
 
     def _on_error(self, error) -> None:
-        # Only a start failure skips finished, the rest arrive there with an exit code.
+        # Only a start failure skips finished, the rest arrive there with an exit code
         if error == QtCore.QProcess.ProcessError.FailedToStart:
             self._check_done(f"{updater.UPDATE_BIN} did not start")
 
@@ -212,12 +212,12 @@ class AboutCard(QtWidgets.QFrame):
         self._proc = None
         self.check_btn.setEnabled(self._online)
         if error:
-            # Card stays short, the log panel carries apt's reason.
+            # Card stays short, the log panel carries apt's reason
             log.error("update check failed: %s", error.removeprefix("error: "))
             self._set_status("Check failed")
 
     def hideEvent(self, event) -> None:
-        # Dismissing the modal deletes this card, do not leave apt running behind it.
+        # Dismissing the modal deletes this card, do not leave apt running behind it
         if self._proc is not None:
             self._proc.kill()
         super().hideEvent(event)

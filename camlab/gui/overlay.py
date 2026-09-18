@@ -42,7 +42,7 @@ class ModalOverlay(QtWidgets.QWidget):
         self.setObjectName("modalOverlay")
         for btn in card.findChildren(QtWidgets.QPushButton):
             btn.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
-        # Hold focus so dimmed chrome cannot be tabbed before card.
+        # Hold focus so dimmed chrome cannot be tabbed before card
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
 
         outer = QtWidgets.QVBoxLayout(self)
@@ -56,14 +56,14 @@ class ModalOverlay(QtWidgets.QWidget):
         outer.addStretch(1)
 
         host.installEventFilter(self)
-        # Plain QWidget is not a focus scope: without an app trap, Tab escapes.
+        # Plain QWidget is not a focus scope: without an app trap, Tab escapes
         self._app = QtWidgets.QApplication.instance()
         if self._app is not None:
             self._app.installEventFilter(self)
         self.setGeometry(host.rect())
         self.raise_()
         self.show()
-        # Focus overlay, not a button, until first Tab.
+        # Focus overlay, not a button, until first Tab
         self.setFocus(QtCore.Qt.FocusReason.OtherFocusReason)
 
     def paintEvent(self, event) -> None:
@@ -74,7 +74,7 @@ class ModalOverlay(QtWidgets.QWidget):
         painter.fillRect(self.rect(), _DIM)
 
     def mousePressEvent(self, event) -> None:
-        # Card widgets ignore presses as well, so geometry decides what is backdrop.
+        # Card widgets ignore presses as well, so geometry decides what is backdrop
         if self._on_backdrop is not None and not self.card.geometry().contains(
             event.position().toPoint()
         ):
@@ -128,7 +128,7 @@ class ModalOverlay(QtWidgets.QWidget):
         if obj is self._host and event.type() == QtCore.QEvent.Type.Resize:
             self.setGeometry(self._host.rect())
             return False
-        # App-wide key trap while overlay is up.
+        # App-wide key trap while overlay is up
         if event.type() == QtCore.QEvent.Type.KeyPress:
             key = event.key()
             if key in (QtCore.Qt.Key.Key_Tab, QtCore.Qt.Key.Key_Backtab):
@@ -179,7 +179,7 @@ def message_card(title: str, message: str, buttons: list[Button]) -> QtWidgets.Q
             btn.setObjectName("danger")
         btn.clicked.connect(callback)
         row.addWidget(btn)
-        # Last non-danger button is Enter target. Fall back if all destructive.
+        # Last non-danger button is Enter target. Fall back if all destructive
         if role != "danger" or primary is None:
             primary = btn
     lay.addLayout(row)

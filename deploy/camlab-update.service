@@ -13,14 +13,14 @@ Before=camlab.service
 
 [Service]
 Type=oneshot
-# This boot rewrites cmdline.txt, and trim has eaten boot files there.
+# This boot rewrites cmdline.txt, and trim has eaten boot files there
 ExecStartPre=-/usr/bin/systemctl stop fstrim.timer fstrim.service
 ExecStart=/usr/local/bin/camlab-update run
 ExecStopPost=/usr/local/bin/camlab-update relock
-# After ExecStart, so the copy carries the failure that ended it.
+# After ExecStart, so the copy carries the failure that ended it
 ExecStopPost=/usr/local/bin/camlab-update savelog
 ExecStopPost=/usr/bin/systemctl reboot --no-wall
-# DKMS rebuilds every sensor module against the running kernel.
+# DKMS rebuilds every sensor module against the running kernel
 TimeoutStartSec=30min
 
 [Install]

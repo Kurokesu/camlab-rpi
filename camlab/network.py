@@ -15,7 +15,7 @@ import subprocess
 CAMLABCTL = "/usr/local/bin/camlabctl"
 
 # Networking is "on" when any manager runs. NetworkManager on stock RPi OS,
-# systemd-networkd covers alternative setups.
+# systemd-networkd covers alternative setups
 _MANAGERS = ("NetworkManager.service", "systemd-networkd.service")
 
 

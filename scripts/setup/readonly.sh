@@ -17,7 +17,7 @@
 
 set -euo pipefail
 
-# mkfs/losetup/blkid live in sbin, off the non-login PATH.
+# mkfs/losetup/blkid live in sbin, off the non-login PATH
 PATH="/usr/sbin:/sbin:/usr/bin:/bin:$PATH"
 
 # shellcheck disable=SC2034  # log tag read by common.sh
@@ -41,17 +41,17 @@ FW_DIR="${CAMLAB_FW_DIR:-/boot/firmware}"
 CMDLINE_TXT="$FW_DIR/cmdline.txt"
 DATA_IMG="$FW_DIR/camlab-data.img"
 DATA_MNT="/var/lib/camlab"
-# State is a few hundred bytes of JSON. 32MB fits cramped FAT boot partition.
+# State is a few hundred bytes of JSON. 32MB fits cramped FAT boot partition
 DATA_SIZE_MB="${CAMLAB_DATA_SIZE_MB:-32}"
 OVERLAY_CONF="/etc/overlayroot.local.conf"
-# Legacy mount API drop-in. systemd-remount-fs fails under overlayroot on Trixie without it.
+# Legacy mount API drop-in. systemd-remount-fs fails under overlayroot on Trixie without it
 REMOUNT_DROPIN="/etc/systemd/system.conf.d/overlayfs.conf"
-# Force zram swap. /var/swap file cannot live under tmpfs overlay.
+# Force zram swap. /var/swap file cannot live under tmpfs overlay
 SWAP_DROPIN="/etc/rpi/swap.conf.d/camlab-readonly.conf"
 FINALISE_SCRIPT="/usr/local/sbin/camlab-readonly-finalise"
 ONESHOT_UNIT="camlab-readonly-firstboot.service"
 
-# Managed-block markers, same convention as boot.sh.
+# Managed-block markers, same convention as boot.sh
 BEGIN="# >>> camlab readonly (do not edit) >>>"
 END="# <<< camlab readonly <<<"
 
@@ -88,7 +88,7 @@ stage_packages() {
     DEBIAN_FRONTEND=noninteractive apt-get install -y "${missing[@]}" >/dev/null
 }
 
-# Loopback data image on writable boot partition. Survives read-only overlay.
+# Loopback data image on writable boot partition. Survives read-only overlay
 stage_data() {
     log "Stage: data partition"
     if [ "$REVERT" -eq 1 ]; then
@@ -106,7 +106,7 @@ stage_data() {
     fi
 
     if [ ! -f "$DATA_IMG" ]; then
-        # FAT has no sparse files. Check room up front.
+        # FAT has no sparse files. Check room up front
         local free_mb
         free_mb="$(df -m --output=avail "$FW_DIR" | tail -1 | tr -d ' ')"
         if [ "$free_mb" -lt "$((DATA_SIZE_MB + 16))" ]; then
@@ -119,15 +119,15 @@ stage_data() {
         log "data image already present, keeping it"
     fi
 
-    # nofail: missing image must not block boot. x-systemd.before orders before service.
+    # nofail: missing image must not block boot. x-systemd.before orders before service
     block_write /etc/fstab "$BEGIN" "$END" \
         "$DATA_IMG $DATA_MNT ext4 loop,nofail,x-systemd.before=camlab.service 0 2"
     log "ensured fstab mount $DATA_IMG -> $DATA_MNT"
 
-    # Mount now, migrate existing state into image.
+    # Mount now, migrate existing state into image
     mkdir -p "$DATA_MNT"
     if ! mountpoint -q "$DATA_MNT"; then
-        # Mount hides existing dir. Copy back after mount.
+        # Mount hides existing dir. Copy back after mount
         local staged=""
         if [ -n "$(ls -A "$DATA_MNT" 2>/dev/null)" ]; then
             staged="$(mktemp -d)"
@@ -140,35 +140,35 @@ stage_data() {
         fi
         log "mounted $DATA_MNT (migrated existing state if any)"
     fi
-    # Marker for one-shot ConditionPathExists (data mount live before lockdown).
+    # Marker for one-shot ConditionPathExists (data mount live before lockdown)
     touch "$DATA_MNT/.camlab-data"
     chown "$CAMLAB_USER":"$CAMLAB_USER" "$DATA_MNT" 2>/dev/null || true
 }
 
-# Overlay config. Inert until finaliser locks in.
+# Overlay config. Inert until finaliser locks in
 stage_overlay() {
     log "Stage: overlay config"
     if [ "$REVERT" -eq 1 ]; then
         [ -f "$OVERLAY_CONF" ] && { rm -f "$OVERLAY_CONF"; log "removed $OVERLAY_CONF"; }
         [ -f "$REMOUNT_DROPIN" ] && { rm -f "$REMOUNT_DROPIN"; log "removed $REMOUNT_DROPIN"; }
-        # Drop disable token so revert leaves cmdline as-is.
+        # Drop disable token so revert leaves cmdline as-is
         cmdline_remove "$CMDLINE_TXT" "overlayroot=disabled"
         update-initramfs -u >/dev/null 2>&1 || true
         log "overlay config removed (reboot to fully unlock)"
         return
     fi
 
-    # recurse=0: do not force /var/lib/camlab loop mount read-only.
+    # recurse=0: do not force /var/lib/camlab loop mount read-only
     atomic_write "$OVERLAY_CONF" 'overlayroot="tmpfs:recurse=0"'$'\n'
     log "wrote $OVERLAY_CONF (tmpfs:recurse=0)"
 
-    # Legacy mount API or systemd-remount-fs fails under overlay.
+    # Legacy mount API or systemd-remount-fs fails under overlay
     install -d -m 0755 "$(dirname "$REMOUNT_DROPIN")"
     atomic_write "$REMOUNT_DROPIN" \
         '[Manager]'$'\n''DefaultEnvironment="LIBMOUNT_FORCE_MOUNT2=always"'$'\n'
     log "wrote $REMOUNT_DROPIN (legacy mount API for remount-fs)"
 
-    # Stage overlay disabled for writable settle-boot. Finaliser clears token and reboots.
+    # Stage overlay disabled for writable settle-boot. Finaliser clears token and reboots
     if ! cmdline_has "$CMDLINE_TXT" "overlayroot=disabled"; then
         cmdline_add "$CMDLINE_TXT" "overlayroot=disabled"
         log "cmdline.txt: staged overlay disabled (writable settle-boot)"
@@ -180,7 +180,7 @@ stage_overlay() {
     log "refreshed initramfs"
 }
 
-# zram swap only. No swapfile on tmpfs root.
+# zram swap only. No swapfile on tmpfs root
 stage_swap() {
     log "Stage: swap"
     if [ "$REVERT" -eq 1 ]; then
@@ -192,7 +192,7 @@ stage_swap() {
     log "wrote $SWAP_DROPIN (zram swap, no swapfile under overlay)"
 }
 
-# Finaliser + one-shot unit. Locks down on next boot after settle. Last stage.
+# Finaliser + one-shot unit. Locks down on next boot after settle. Last stage
 stage_finalise() {
     log "Stage: finaliser"
     if [ "$REVERT" -eq 1 ]; then
@@ -206,7 +206,7 @@ stage_finalise() {
     install -d -m 0755 /usr/local/sbin
     cat > "$FINALISE_SCRIPT" <<'FINEOF'
 #!/usr/bin/bash
-# Installed by readonly.sh. Locks root read-only on first post-install boot.
+# Installed by readonly.sh. Locks root read-only on first post-install boot
 set -euo pipefail
 PATH="/usr/sbin:/sbin:/usr/bin:/bin:$PATH"
 FW_DIR="/boot/firmware"
@@ -214,14 +214,14 @@ CMDLINE="$FW_DIR/cmdline.txt"
 
 logger -t camlab-readonly "finaliser starting"
 
-# Only act during disabled-settle boot. No token means overlay already engaged.
+# Only act during disabled-settle boot. No token means overlay already engaged
 if ! grep -q 'overlayroot=disabled' "$CMDLINE"; then
     logger -t camlab-readonly "overlay not in disabled-settle state, nothing to do"
     systemctl disable camlab-readonly-firstboot.service >/dev/null 2>&1 || true
     exit 0
 fi
 
-# Refuse lockdown unless /var/lib/camlab is writable.
+# Refuse lockdown unless /var/lib/camlab is writable
 if ! mountpoint -q /var/lib/camlab; then
     logger -t camlab-readonly "ABORT: /var/lib/camlab not mounted, leaving root writable"
     exit 1
@@ -232,14 +232,14 @@ if ! touch /var/lib/camlab/.write-probe 2>/dev/null; then
 fi
 rm -f /var/lib/camlab/.write-probe
 
-# Clear token so overlay engages next boot.
+# Clear token so overlay engages next boot
 if grep -q 'overlayroot=disabled' "$CMDLINE"; then
     mount -o remount,rw "$FW_DIR" 2>/dev/null || true
     sed -i 's/ *overlayroot=disabled//g' "$CMDLINE"
     logger -t camlab-readonly "cleared overlayroot=disabled from cmdline"
 fi
 
-# Disable self before reboot (avoid loop on wedged overlay).
+# Disable self before reboot (avoid loop on wedged overlay)
 systemctl disable camlab-readonly-firstboot.service >/dev/null 2>&1 || true
 logger -t camlab-readonly "locked in, rebooting into read-only root"
 sync

@@ -97,11 +97,11 @@ from OpenGL.GLES2.VERSION.GLES2_2_0 import (
     glViewport,
 )
 
-# GL_EXT_texture_rg shares these enums, so ES2 carrying it works too.
+# GL_EXT_texture_rg shares these enums, so ES2 carrying it works too
 from OpenGL.GLES3.VERSION.GLES3_3_0 import GL_R8, GL_RED, GL_RG, GL_RG8, glBindVertexArray
 
 # Raw entry point: PyOpenGL wrapper caches array per-context keyed by
-# eglGetCurrentContext(), reads 0 inside QOpenGLWidget and raises.
+# eglGetCurrentContext(), reads 0 inside QOpenGLWidget and raises
 from OpenGL.raw.GLES2.VERSION.GLES2_2_0 import glVertexAttribPointer
 from picamera2.previews.gl_helpers import (
     Buffer,
@@ -114,11 +114,11 @@ from .qt import QOpenGLWidget, QtCore, QtGui, Signal
 log = logging.getLogger(__name__)
 
 # H+V Gaussian iterations at 1/8 scale. Each adds ~sigma 21 px (full-res
-# equivalent), two together read as the intended frost strength.
+# equivalent), two together read as the intended frost strength
 _BLUR_PASSES = 2
 
 # uRotate turns sampled texcoord about center, portrait panel shows landscape sensor upright.
-# Identity at 0 degrees.
+# Identity at 0 degrees
 _VERT = """
     attribute vec2 aPosition;
     varying vec2 texcoord;
@@ -132,7 +132,7 @@ _VERT = """
     }
 """
 
-# Guide is already in displayed orientation, so it comes straight off the quad.
+# Guide is already in displayed orientation, so it comes straight off the quad
 _VERT_FX = """
     attribute vec2 aPosition;
     varying vec2 texcoord;
@@ -148,7 +148,7 @@ _VERT_FX = """
     }
 """
 
-# Identity texcoords for FBO-to-FBO passes (first pass already flipped).
+# Identity texcoords for FBO-to-FBO passes (first pass already flipped)
 _VERT_PLAIN = """
     attribute vec2 aPosition;
     varying vec2 texcoord;
@@ -184,7 +184,7 @@ _FRAG_2D = """
 """
 
 # Peaking guide: mean and gradient sector, smooth enough for half resolution.
-# Paint does the sharp work against them.
+# Paint does the sharp work against them
 _FRAG_GUIDE = """
     precision mediump float;
     varying vec2 texcoord;
@@ -217,7 +217,7 @@ _FRAG_GUIDE = """
 """
 
 # Luma for formats with no plane to import. Plain texcoords keep the target in
-# camera orientation, like an imported plane.
+# camera orientation, like an imported plane
 _FRAG_LUMA = """
     #extension GL_OES_EGL_image_external : enable
     precision mediump float;
@@ -234,7 +234,7 @@ _FRAG_LUMA = """
 
 # Paint pass: marks and zebra over the frame, gated by 0/1 uniforms and compiled
 # on first assist use.
-# Zebra: animated diagonal black/white stripes where luma clips zebraThr.
+# Zebra: animated diagonal black/white stripes where luma clips zebraThr
 _FRAG_EXT_FX = """
     #extension GL_OES_EGL_image_external : enable
     precision mediump float;
@@ -297,12 +297,12 @@ _FRAG_EXT_FX = """
 
 _PEAK_COLOR = (1.0, 0.0, 0.0)
 _PEAK_THR = 0.12
-# Plane luma is studio range, stretch it to match a conversion.
+# Plane luma is studio range, stretch it to match a conversion
 _LUMA_GAIN = 255.0 / 219.0
 
 
 # 9-tap separable Gaussian using linear-sampling offsets (5 fetches).
-# texel is one texel along the blur axis, zero on the other.
+# texel is one texel along the blur axis, zero on the other
 _FRAG_BLUR = """
     precision mediump float;
     varying vec2 texcoord;
@@ -340,7 +340,7 @@ def install_gles_format() -> None:
 
 def _compile(src: str, kind):
     sh = shaders.compileShader(src, kind)
-    # compileShader occasionally returns a 1-tuple (see upstream q_gl_picamera2).
+    # compileShader occasionally returns a 1-tuple (see upstream q_gl_picamera2)
     return sh[0] if isinstance(sh, tuple) else sh
 
 
@@ -386,7 +386,7 @@ class _Buffer(Buffer):
         picam2 = completed_request.picam2
         stream = picam2.stream_map[picam2.display_stream_name]
         cfg = stream.configuration
-        # Peaking wants luma only and plane 0 holds it. R8 costs a plain fetch.
+        # Peaking wants luma only and plane 0 holds it. R8 costs a plain fetch
         self.luma = None
         if str(cfg.pixel_format) in ("YUV420", "YVU420"):
             fd = completed_request.request.buffers[stream].planes[0].fd
@@ -436,7 +436,7 @@ class _DisplayStream:
     def buffer_for(self, completed_request) -> _Buffer:
         if completed_request.request not in self.buffers:
             if self._stop_count != self.picam2.stop_count:
-                # Reconfigured: every cached request is stale, textures included.
+                # Reconfigured: every cached request is stale, textures included
                 for buffer in self.buffers.values():
                     glDeleteTextures(1, [buffer.texture])
                     if buffer.luma is not None:
@@ -461,7 +461,7 @@ class GlFrameWidget(QOpenGLWidget):
             raise ValueError(f"transform must be 0, 90, 180 or 270 (got {transform})")
         self._transform = transform
         # Preview only, captures are untouched. A booth wants a mirror to frame
-        # against, not flipped stills.
+        # against, not flipped stills
         self._mirror = bool(mirror)
         # Pure black pillarboxes blend into dark UI, so picture reads as natural focus target
         self._bg = (0.0, 0.0, 0.0, 1.0)
@@ -474,14 +474,14 @@ class GlFrameWidget(QOpenGLWidget):
         self._zebra_thr = 0.95
         self._fx_t0 = time.monotonic()  # zebra stripe animation epoch
         # ctypes array not list: raw glVertexAttribPointer takes pointer as-is,
-        # GL reads at every draw, must stay alive.
+        # GL reads at every draw, must stay alive
         self._quad = (ctypes.c_float * 8)(0.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0)
         self._target_size: tuple[int, int] | None = None
 
     def show_request(self, completed_request) -> None:
         self.current_request = completed_request
         # update() coalesces (Qt paints once per compositor frame callback),
-        # so no explicit pacing is needed here.
+        # so no explicit pacing is needed here
         self.update()
 
     # frost
@@ -516,7 +516,7 @@ class GlFrameWidget(QOpenGLWidget):
 
     def _build_program(self, vsrc: str, fsrc: str, samplers: dict[str, int] | None = None):
         # Samplers default to unit 0 at link time, invalid for two sampler types,
-        # so validate after assigning.
+        # so validate after assigning
         prog = shaders.compileProgram(
             _compile(vsrc, GL_VERTEX_SHADER), _compile(fsrc, GL_FRAGMENT_SHADER), validate=False
         )
@@ -525,7 +525,7 @@ class GlFrameWidget(QOpenGLWidget):
         for name, unit in (samplers or {"tex": 0}).items():
             glUniform1i(glGetUniformLocation(prog, name), unit)
         # uRotate exists only in _VERT programs. Seed it so a program left at
-        # its default (0 matrix) never samples a collapsed texcoord.
+        # its default (0 matrix) never samples a collapsed texcoord
         loc = glGetUniformLocation(prog, "uRotate")
         if loc != -1:
             glUniformMatrix2fv(loc, 1, GL_FALSE, self._rotate_matrix())
@@ -544,7 +544,7 @@ class GlFrameWidget(QOpenGLWidget):
         angle = math.radians(-self._transform)
         c, s = math.cos(angle), math.sin(angle)
         flip = -1.0 if self._mirror else 1.0
-        # glUniformMatrix2fv with transpose=FALSE reads column-major: [m00, m10, m01, m11].
+        # glUniformMatrix2fv with transpose=FALSE reads column-major: [m00, m10, m01, m11]
         return (ctypes.c_float * 4)(c * flip, s * flip, -s, c)
 
     def _displayed(self, iw: int, ih: int) -> tuple[int, int]:
@@ -583,7 +583,7 @@ class GlFrameWidget(QOpenGLWidget):
         try:
             buffer = self._stream.buffer_for(req)
         except Exception:
-            # Log once, not per frame (34 Hz would flood the journal).
+            # Log once, not per frame (34 Hz would flood the journal)
             if not self._import_err_logged:
                 self._import_err_logged = True
                 log.exception("dmabuf import failed")
@@ -595,7 +595,7 @@ class GlFrameWidget(QOpenGLWidget):
                 if self._draw_frosted(texture, (vx, vy, vw, vh)):
                     return
             except Exception:
-                # Broken frost must never kill the viewfinder: back to sharp for good.
+                # Broken frost must never kill the viewfinder: back to sharp for good
                 log.exception("frost render failed, disabling")
                 self._frost_broken = True
                 self._frosted = False
@@ -605,7 +605,7 @@ class GlFrameWidget(QOpenGLWidget):
                 if self._draw_fx(buffer, (vx, vy, vw, vh)):
                     return
             except Exception:
-                # Assists are optional: never let one take the viewfinder down.
+                # Assists are optional: never let one take the viewfinder down
                 log.exception("assist render failed, disabling")
                 self._peaking = self._zebra = False
                 glBindFramebuffer(GL_FRAMEBUFFER, self.defaultFramebufferObject())
@@ -720,7 +720,7 @@ class GlFrameWidget(QOpenGLWidget):
         )
         self._fx_locs = {name: glGetUniformLocation(self._prog_fx, name) for name in names}
         # _build_program leaves the program current. Color and threshold never
-        # change, upload once.
+        # change, upload once
         glUniform3f(glGetUniformLocation(self._prog_fx, "peakColor"), *_PEAK_COLOR)
         glUniform1f(glGetUniformLocation(self._prog_fx, "peakThr"), _PEAK_THR)
 
@@ -764,7 +764,7 @@ class GlFrameWidget(QOpenGLWidget):
         glUniform1f(loc["peaking"], 1.0 if self._peaking else 0.0)
         glUniform1f(loc["zebra"], 1.0 if self._zebra else 0.0)
         glUniform1f(loc["zebraThr"], self._zebra_thr)
-        # Wrapped epoch keeps mediump float precise (stripes drift, never jump).
+        # Wrapped epoch keeps mediump float precise (stripes drift, never jump)
         glUniform1f(loc["time"], (time.monotonic() - self._fx_t0) % 3600.0)
 
     def _letterbox_viewport(self) -> tuple[int, int, int, int]:
@@ -792,7 +792,7 @@ class GlFrameWidget(QOpenGLWidget):
         if size is None:
             return False
         # camera -> A rotates while sampling, so A onward is already displayed
-        # orientation. FBOs must match it or the frost squashes.
+        # orientation. FBOs must match it or the frost squashes
         iw, ih = self._displayed(*size)
         self._ensure_targets(iw, ih)
         (aw, ah), (bw, bh) = self._sizes[0], self._sizes[1]
@@ -822,7 +822,7 @@ class GlFrameWidget(QOpenGLWidget):
             glBindTexture(GL_TEXTURE_2D, c_tex)
             glUniform2f(self._blur_step, 0.0, 1.0 / bh)
             glDrawArrays(GL_TRIANGLE_FAN, 0, 4)
-        # B -> screen. _VERT_PLAIN keeps orientation, pass 1 already flipped.
+        # B -> screen. _VERT_PLAIN keeps orientation, pass 1 already flipped
         glBindFramebuffer(GL_FRAMEBUFFER, self.defaultFramebufferObject())
         glViewport(*viewport)
         self._use(self._prog_copy)

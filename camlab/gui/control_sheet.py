@@ -210,7 +210,7 @@ class ControlSheet(SheetCard):
     def _on_slider(self, _pos: int) -> None:
         if self._tracking:
             return
-        # Any user move (drag, groove click, arrow key) implies manual.
+        # Any user move (drag, groove click, arrow key) implies manual
         if self.is_auto:
             self.mode_sel.set_value("manual")
             self._style_slider()
@@ -235,7 +235,7 @@ class ControlSheet(SheetCard):
 
 
 # Zebra clip-threshold span (percent of full scale), matching cinepi's
-# slider (0.7..1.0, default 0.95).
+# slider (0.7..1.0, default 0.95)
 _ZEBRA_LO, _ZEBRA_HI, _ZEBRA_DEFAULT = 70, 100, 95
 
 
@@ -252,14 +252,14 @@ class MonitorSheet(SheetCard):
 
         self.title_lbl = _sheet_title("Monitor")
 
-        # Labels and icons come from apply_profile, sized for the display.
+        # Labels and icons come from apply_profile, sized for the display
         self.hist_btn = QtWidgets.QPushButton()
         self.map_btn = QtWidgets.QPushButton()
         self.peak_btn = QtWidgets.QPushButton()
         self.zebra_btn = QtWidgets.QPushButton()
         for btn in (self.hist_btn, self.map_btn, self.peak_btn, self.zebra_btn):
             # Segment look (square corners) to match the Auto/Manual rows.
-            # No pos property, so these stay visually separate toggles.
+            # No pos property, so these stay visually separate toggles
             btn.setObjectName("segment")
             btn.setCheckable(True)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -279,7 +279,7 @@ class MonitorSheet(SheetCard):
 
         self.value_lbl = QtWidgets.QLabel(f"{_ZEBRA_DEFAULT}%")
         self.value_lbl.setObjectName("sheetValue")
-        # Fixed width so the cluster holds still as digits change.
+        # Fixed width so the cluster holds still as digits change
         self.value_lbl.setMinimumWidth(48)
         self.value_lbl.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 
@@ -287,12 +287,12 @@ class MonitorSheet(SheetCard):
         row.setContentsMargins(16, 10, 16, 10)
         row.setSpacing(14)
         row.addWidget(self.title_lbl)
-        # Toggles first, so threshold keeps the loose end of the row.
+        # Toggles first, so threshold keeps the loose end of the row
         row.addWidget(self.hist_btn)
         row.addWidget(self.map_btn)
         row.addWidget(self.peak_btn)
         # Threshold cluster hugs the Zebra button (tighter spacing than the
-        # row) and dims with it, so it reads as that button's parameter.
+        # row) and dims with it, so it reads as that button's parameter
         cluster = QtWidgets.QHBoxLayout()
         cluster.setSpacing(8)
         cluster.addWidget(self.zebra_btn)
@@ -307,7 +307,7 @@ class MonitorSheet(SheetCard):
     def apply_profile(self, profile: UiProfile) -> None:
         self.title_lbl.setMinimumWidth(profile.sheet_title_w)
         self.slider.setFixedWidth(profile.zebra_slider_w)
-        # Full labels plus threshold outgrow an 800 px panel, so compact trims them.
+        # Full labels plus threshold outgrow an 800 px panel, so compact trims them
         self.hist_btn.setText("" if profile.compact else " Histogram")
         self.map_btn.setText("" if profile.compact else " Focus Map")
         self.peak_btn.setText(" Peaking" if profile.compact else " Focus Peaking")
@@ -355,7 +355,7 @@ class MonitorSheet(SheetCard):
     def _on_slider(self, _pos: int) -> None:
         self.value_lbl.setText(f"{self.slider.value()}%")
         # Touching the threshold implies wanting zebra on (mirrors control
-        # sheets, where a slider touch flips auto to manual).
+        # sheets, where a slider touch flips auto to manual)
         if not self.zebra_btn.isChecked():
             self.zebra_btn.setChecked(True)  # toggled re-emits
         else:

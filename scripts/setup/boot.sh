@@ -45,7 +45,7 @@ APT_CONF="/etc/apt/apt.conf.d/99camlab"
 # and tokens owned by other scripts survive. quiet and logo.nologo both
 # suppress the kernel fullscreen logo (splash.sh), so they are removed. The
 # fullscreen logo keeps the console clean on its own (verified on hardware).
-# mousepoll=0 honours the interval each mouse asks for.
+# mousepoll=0 honours the interval each mouse asks for
 CMDLINE_ADD=(
     vt.global_cursor_default=0
     usbhid.mousepoll=0
@@ -58,12 +58,12 @@ CMDLINE_REMOVE=(
     plymouth.ignore-serial-consoles
 )
 
-# Managed block markers, same convention as config_manager. Greppable and re-run safe.
+# Managed block markers, same convention as config_manager. Greppable and re-run safe
 BEGIN="# >>> camlab boot (do not edit) >>>"
 END="# <<< camlab boot <<<"
 
 # Units kiosk never uses (only present ones touched). Left alone: journald, logind
-# and avahi. Drop networking with camlabctl net off for production.
+# and avahi. Drop networking with camlabctl net off for production
 MASK_UNITS=(
     NetworkManager-wait-online.service
     systemd-networkd-wait-online.service
@@ -73,7 +73,7 @@ MASK_UNITS=(
     apt-daily.timer
     apt-daily-upgrade.timer
 )
-# cloud-init ships on stock RPi OS images and is pure overhead on a fixed appliance.
+# cloud-init ships on stock RPi OS images and is pure overhead on a fixed appliance
 CLOUDINIT_UNITS=(
     cloud-init-local.service
     cloud-init-network.service
@@ -86,7 +86,7 @@ CLOUDINIT_UNITS=(
 
 _unit_present() { systemctl list-unit-files "$1" >/dev/null 2>&1; }
 
-# Managed block carrying firmware-stage tweaks, currently just disable-bt.
+# Managed block carrying firmware-stage tweaks, currently just disable-bt
 stage_config() {
     log "Stage: config.txt (firmware tweaks)"
     [ -f "$CONFIG_TXT" ] || { warn "$CONFIG_TXT missing, skipping"; return; }
@@ -112,7 +112,7 @@ stage_systemd() {
             systemctl unmask "$u" >/dev/null 2>&1 || true
             # Re-enable too. We used disable on apply, so unmask alone would
             # leave the unit installed but disabled. enable is a harmless no-op
-            # for static units that have no [Install] section.
+            # for static units that have no [Install] section
             systemctl enable "$u" >/dev/null 2>&1 || true
             changed=1
         done
@@ -121,7 +121,7 @@ stage_systemd() {
             systemctl enable "$u" >/dev/null 2>&1 || true
             changed=1
         done
-        # Lift the cloud-init kill switch we dropped on apply.
+        # Lift the cloud-init kill switch we dropped on apply
         if [ -f /etc/cloud/cloud-init.disabled ]; then
             rm -f /etc/cloud/cloud-init.disabled
             log "removed /etc/cloud/cloud-init.disabled"
@@ -149,7 +149,7 @@ stage_systemd() {
         fi
     done
     # cloud-init also honors a disable flag, which stops it even when a unit is
-    # static or gets re-enabled by a package upgrade.
+    # static or gets re-enabled by a package upgrade
     if [ -d /etc/cloud ]; then
         touch /etc/cloud/cloud-init.disabled
         log "touched /etc/cloud/cloud-init.disabled"
@@ -160,7 +160,7 @@ stage_systemd() {
     fi
 }
 
-# Recommends would regrow the lean install on the first upgrade.
+# Recommends would regrow the lean install on the first upgrade
 stage_apt() {
     log "Stage: apt policy"
     if [ "$REVERT" -eq 1 ]; then

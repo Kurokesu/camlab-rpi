@@ -28,7 +28,7 @@ from .settings import AwbMode, DisplayMode, SettingsStore
 log = logging.getLogger("camlab")
 
 # Chrome height (status strip + controls row) sizing the boot lores stream.
-# Errors are free, the stream refits to the real viewfinder before camera start.
+# Errors are free, the stream refits to the real viewfinder before camera start
 _CHROME_PX = 90
 _CHROME_COMPACT_PX = 85
 
@@ -66,7 +66,7 @@ def _setup_logging() -> None:
 def main(argv: list[str] | None = None) -> int:
     _setup_logging()
 
-    # Splice stderr before libcamera/Picamera2 init so IPA child inherits it.
+    # Splice stderr before libcamera/Picamera2 init so IPA child inherits it
     classifier = LogClassifier()
     capture = NullCapture() if os.environ.get("CAMLAB_NO_CAPTURE") else StderrCapture(classifier)
 
@@ -75,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
     config = ConfigManager()
     settings = SettingsStore()
 
-    # open() only enumerates modes. Stream is configured below, once display size is known.
+    # open() only enumerates modes. Stream is configured below, once display size is known
     engine = CameraEngine()
     try:
         engine.open(camera_num=int(os.environ.get("CAMLAB_CAMERA_NUM", "0")))
@@ -88,45 +88,45 @@ def main(argv: list[str] | None = None) -> int:
                 capture.deliver(line)
 
     # Force native Wayland under Wayland session. picamera2 import sets xcb, which breaks
-    # in-scene viewfinder (PyOpenGL needs EGL-current, Xwayland makes GLX-current).
+    # in-scene viewfinder (PyOpenGL needs EGL-current, Xwayland makes GLX-current)
     if os.environ.get("WAYLAND_DISPLAY"):
         os.environ["QT_QPA_PLATFORM"] = "wayland"
-        # Kiosk: no client-side decorations, even if fullscreen state drops.
+        # Kiosk: no client-side decorations, even if fullscreen state drops
         os.environ["QT_WAYLAND_DISABLE_WINDOWDECORATION"] = "1"
     # Cage runs on a blank cursor theme to keep boot screen clean. Qt must not
-    # inherit it, a real mouse needs a cursor it can see.
+    # inherit it, a real mouse needs a cursor it can see
     os.environ.pop("XCURSOR_PATH", None)
 
     # Settle outputs before Qt connects to compositor
     apply_output_layout(settings.get_display())
 
-    # Restore persisted panel brightness before anything renders.
+    # Restore persisted panel brightness before anything renders
     backlight = Backlight()
     saved_backlight = settings.get_backlight()
     if backlight.available and saved_backlight is not None:
         backlight.set_percent(saved_backlight)
 
-    # Viewfinder needs a GLES context (samplerExternalOES), set before QApplication.
+    # Viewfinder needs a GLES context (samplerExternalOES), set before QApplication
     install_gles_format()
     app = QtWidgets.QApplication(argv if argv is not None else sys.argv)
     fonts.apply(app)
 
     avail = _avail_size(app, settings.get_display())
 
-    # Boot mode: persisted selection when valid, else heaviest runnable mode.
+    # Boot mode: persisted selection when valid, else heaviest runnable mode
     if engine.picam2 is not None and engine.modes:
         overlay = config.get_current().get("overlay") or ""
         saved = settings.get_mode(overlay)
         mode, fps = resolve_initial_mode(engine.modes, saved)
         try:
             engine.configure_mode(mode, fps, avail, fps_fixed=saved["fps_fixed"] if saved else True)
-            # Restore manual overrides after configure, so they clamp to the new ranges.
+            # Restore manual overrides after configure, so they clamp to the new ranges
             engine.set_control_state(**settings.get_controls(overlay))
             engine.set_grey_world(settings.get_awb() is AwbMode.GREY)
         except Exception as exc:  # noqa: BLE001
             log.error("camera configure failed: %s", exc)
 
-    # CursorPolicy needs no handle: QApplication parentage keeps it alive.
+    # CursorPolicy needs no handle: QApplication parentage keeps it alive
     display_manager = DisplayManager(app, settings.get_display)
     CursorPolicy(app)
 

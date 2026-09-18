@@ -19,7 +19,7 @@
 
 set -euo pipefail
 
-# realpath: the package installs /usr/bin/camlab-setup as a symlink to this.
+# realpath: the package installs /usr/bin/camlab-setup as a symlink to this
 REPO_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
 LOG_FILE="/var/log/camlab-install.log"
 # shellcheck disable=SC2034  # log tag read by common.sh
@@ -49,13 +49,13 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 header "camlab install started at $(date)"
 log "Logging to $LOG_FILE"
 
-# Hold off apt's background jobs so they cannot grab the dpkg lock mid-install.
+# Hold off apt's background jobs so they cannot grab the dpkg lock mid-install
 systemctl stop apt-daily.timer apt-daily-upgrade.timer \
     apt-daily.service apt-daily-upgrade.service 2>/dev/null || true
 trap 'systemctl start apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true' EXIT
 
 # Fresh images carry a stale trim stamp, so the timer fires minutes into first
-# boot and a lying card can eat the boot files setup writes. Stop, not mask.
+# boot and a lying card can eat the boot files setup writes. Stop, not mask
 systemctl stop fstrim.timer fstrim.service 2>/dev/null || true
 
 header "Platform check"
@@ -73,21 +73,21 @@ log "OS: ${PRETTY_NAME:-unknown}"
 [ "${VERSION_CODENAME:-}" = "$OS_CODENAME" ] \
     || die "unsupported OS: ${PRETTY_NAME:-unknown}," \
            "need Raspberry Pi OS Lite ($OS_CODENAME 64-bit)"
-# Desktop image boots graphical.target and fights kiosk for tty1. Lite uses multi-user.
+# Desktop image boots graphical.target and fights kiosk for tty1. Lite uses multi-user
 if [ "$(systemctl get-default)" = "graphical.target" ]; then
     die "Raspberry Pi OS Desktop detected. Use the Lite image."
 fi
 log "Install user: $CAMLAB_USER (uid=$CAMLAB_UID)"
 
-# Fixed app location. app-deploy.sh skips copy when run from $APP_DIR.
+# Fixed app location. app-deploy.sh skips copy when run from $APP_DIR
 APP_DIR="$CAMLAB_APP_DIR"
 "$REPO_DIR/scripts/setup/app-deploy.sh"
 
-# Primitives run from $APP_DIR. Kernel trim before drivers. Overlay-root last.
+# Primitives run from $APP_DIR. Kernel trim before drivers. Overlay-root last
 "$APP_DIR/scripts/setup/deps.sh"
 "$APP_DIR/scripts/setup/kernel.sh"
 "$APP_DIR/scripts/setup/drivers.sh"
-# Display before camera: config.sh picks CSI port panel does not claim.
+# Display before camera: config.sh picks CSI port panel does not claim
 if [ -n "$DISPLAY_OVERLAY" ]; then
     "$APP_DIR/scripts/setup/display.sh" --overlay "$DISPLAY_OVERLAY"
 fi
