@@ -6,7 +6,7 @@
 # scripts/setup/shims.sh (CAMLAB_APP_DIR substituted). This is the ONLY
 # command the GUI user is allowed to run as root for config writes (see
 # deploy/camlab-sudoers). It only runs camlab.config_manager verbs, which
-# validate every value before rewriting their managed config.txt blocks.
+# validate every value before rewriting their managed config.txt blocks
 
 set -euo pipefail
 cd "CAMLAB_APP_DIR" || exit 1

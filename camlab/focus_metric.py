@@ -15,7 +15,7 @@ from .qt import QtCore, Signal
 log = logging.getLogger(__name__)
 
 _CENTER_CELLS = 2
-# Ref-count tag for the shared stats output.
+# Ref-count tag for the shared stats output
 _OWNER = "focus"
 
 
@@ -24,7 +24,7 @@ class FocusSample:
     """Current sharpness."""
 
     raw: float | None = None  # center figure of merit
-    # Scaled by the running peak cell, so the whole map dims as focus is lost.
+    # Scaled by the running peak cell, so the whole map dims as focus is lost
     heat: np.ndarray | None = None
 
 
@@ -59,7 +59,7 @@ class FocusSampler(QtCore.QObject):
             if owner in self._owners:
                 return
             self._owners.add(owner)
-            # A readout switching on scores against the current scene.
+            # A readout switching on scores against the current scene
             self._rewind()
         else:
             self._owners.discard(owner)
@@ -77,7 +77,7 @@ class FocusSampler(QtCore.QObject):
         grid = self._engine.cdaf_focus(md)
         self._describe_once(md, grid)
         if grid is None:
-            # libcamera can skip the blob on a frame, hold rather than blink.
+            # libcamera can skip the blob on a frame, hold rather than blink
             self.sample.emit(self._last)
             return
         self._cell_peak = max(self._cell_peak, float(grid.max()))

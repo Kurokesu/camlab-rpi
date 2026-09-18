@@ -34,7 +34,7 @@ done
 require_root
 REPO_DIR="$(resolve_repo_dir)"
 
-# DSI shares connector with CSI. config_manager picks free port.
+# DSI shares connector with CSI. config_manager picks free port
 PORT="$(cd "$REPO_DIR" && python3 -m camlab.config_manager free-port)"
 
 header "Configuring overlay: $SENSOR on $PORT (options: ${OPTIONS[*]:-none})"
@@ -44,7 +44,7 @@ for o in "${OPTIONS[@]:-}"; do [ -n "$o" ] && opt_args+=(--options "$o"); done
 ( cd "$REPO_DIR" && python3 -m camlab.config_manager set \
     --overlay "$SENSOR" --port "$PORT" "${opt_args[@]}" )
 
-# Shims live in their own script because they converge and the overlay above does not.
+# Shims live in their own script because they converge and the overlay above does not
 "$REPO_DIR/scripts/setup/shims.sh"
 
 log "Done."

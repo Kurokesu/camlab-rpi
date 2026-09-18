@@ -29,7 +29,7 @@ header "Configuring the update path"
 
 UNIT="camlab-update.service"
 
-# Rendered aside, so an update boot re-running this cannot truncate its own shim.
+# Rendered aside, so an update boot re-running this cannot truncate its own shim
 log "Installing /usr/local/bin/camlab-update"
 tmp_shim="$(mktemp)"
 sed -e "s|CAMLAB_APP_DIR|$CAMLAB_APP_DIR|g" \

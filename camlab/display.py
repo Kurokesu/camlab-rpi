@@ -30,7 +30,7 @@ _CAMLABCTL = "/usr/local/bin/camlabctl"
 # Two udev triggers with settle per touchscreen
 _TOUCH_TIMEOUT_S = 5.0
 
-# Debounce Qt screen-event burst before enforcing. Same beat after lets Qt pick up new topology.
+# Debounce Qt screen-event burst before enforcing. Same beat after lets Qt pick up new topology
 _SETTLE_MS = 300
 
 # GPU render budget, larger output makes the viewfinder miss frames
@@ -310,7 +310,7 @@ class Topology:
 class DisplayManager(QtCore.QObject):
     """Applies output layout at boot and after every screen change settles."""
 
-    # Topology after every enforcement pass, no-ops and empty screen lists included.
+    # Topology after every enforcement pass, no-ops and empty screen lists included
     topology_changed = Signal(object)
 
     def __init__(self, app: QtWidgets.QApplication, get_mode: Callable[[], DisplayMode]):
@@ -370,13 +370,13 @@ class CursorPolicy(QtCore.QObject):
         self._rearm = True
 
     def eventFilter(self, obj, event) -> bool:
-        # PyQt aborts on exceptions escaping Qt virtuals, so never throw here.
+        # PyQt aborts on exceptions escaping Qt virtuals, so never throw here
         try:
             t = event.type()
             if t == QtCore.QEvent.Type.TouchBegin:
                 self._set_visible(False)
             elif t == QtCore.QEvent.Type.MouseMove:
-                # Names real device even for touch-synthesized events. Fingers never summon cursor.
+                # Names real device even for touch-synthesized events. Fingers never summon cursor
                 dev = event.pointingDevice()
                 if dev is not None:
                     touch = dev.type() == QtGui.QInputDevice.DeviceType.TouchScreen
@@ -401,7 +401,7 @@ class CursorPolicy(QtCore.QObject):
             self._app.setOverrideCursor(QtGui.QCursor(QtCore.Qt.CursorShape.BlankCursor))
 
 
-# At 0 the operator cannot find the slider to bring the picture back.
+# At 0 the operator cannot find the slider to bring the picture back
 BACKLIGHT_FLOOR_PCT = 5
 
 

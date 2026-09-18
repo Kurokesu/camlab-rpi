@@ -21,7 +21,7 @@ CAMLAB_TAG="drivers"
 source "$(dirname "${BASH_SOURCE[0]}")/../common.sh"
 
 # Driver packages come from camlab/data/sensors.yaml, adding a sensor is a single
-# edit there.
+# edit there
 REPO_DIR="$(resolve_repo_dir)"
 SENSORS_YAML="$REPO_DIR/camlab/data/sensors.yaml"
 
@@ -61,7 +61,7 @@ require_root
 # DKMS builds against the running kernel, so modules built before a pending
 # kernel reboot would not load afterwards. Check the reboot-required flag rather
 # than comparing /lib/modules, which carries several flavors (rpi-2712, rpi-v8)
-# of one version and would misfire on a CM5. Block only on kernel packages.
+# of one version and would misfire on a CM5. Block only on kernel packages
 if [ -f /run/reboot-required ] \
    && grep -qiE 'linux-image|raspi-firmware|rpi-.*kernel' /run/reboot-required.pkgs 2>/dev/null; then
     die "a kernel update is pending a reboot ($(uname -r) is running). Reboot first, then re-run."
@@ -72,7 +72,7 @@ FW_OVERLAYS="/boot/firmware/overlays"
 header "Installing sensor drivers: ${SENSORS[*]}"
 
 # Trixie: drivers install overlays to /boot/overlays, but the active dir is
-# /boot/firmware/overlays.
+# /boot/firmware/overlays
 if [ -d "$FW_OVERLAYS" ] && [ ! -e /boot/overlays ]; then
     ln -s firmware/overlays /boot/overlays
     log "Symlinked /boot/overlays -> firmware/overlays"
@@ -90,7 +90,7 @@ for sensor in "${SENSORS[@]}"; do
     PACKAGES+=("$package")
 done
 
-# dkms only recommends gcc and recommends are off here.
+# dkms only recommends gcc and recommends are off here
 mapfile -t MISSING < <(missing_packages gcc)
 # Drivers every run, so an outdated one upgrades
 apt_get install -y "${MISSING[@]}" "${PACKAGES[@]}"

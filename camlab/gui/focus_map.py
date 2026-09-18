@@ -16,7 +16,7 @@ from .style import GLASS_BG
 _FALLBACK_FRAME = (16, 9)
 _PAD = 8
 _CELL_GAP = 1
-# Cells span about 250:1 in one frame, 0.4 lifts the dim floor into mid gray.
+# Cells span about 250:1 in one frame, 0.4 lifts the dim floor into mid gray
 _GAMMA = 0.4
 _TINT = (215, 218, 224)  # histogram neutral
 _ALPHA = (18, 232)
@@ -32,7 +32,7 @@ class FocusMapOverlay(QtWidgets.QWidget):
 
     def __init__(self, metered: int = 2, parent=None):
         super().__init__(parent)
-        # Informational only: never steal viewfinder taps.
+        # Informational only: never steal viewfinder taps
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self._metered = metered
         self._levels: np.ndarray | None = None
@@ -108,7 +108,7 @@ class FocusMapOverlay(QtWidgets.QWidget):
         y = _PAD + r0 * ch - edge
         w = n * cw - _CELL_GAP + 2 * edge
         h = n * ch - _CELL_GAP + 2 * edge
-        # Corner brackets with gapped sides read as an ROI, not one more cell.
+        # Corner brackets with gapped sides read as an ROI, not one more cell
         ax, ay = w * _ARM, h * _ARM
         path = QtGui.QPainterPath()
         for cx, cy, sx, sy in (

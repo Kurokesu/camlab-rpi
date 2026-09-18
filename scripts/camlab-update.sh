@@ -5,7 +5,7 @@
 # Privileged update shim - rendered to /usr/local/bin/camlab-update by
 # scripts/setup/update.sh (CAMLAB_APP_DIR substituted). Sudoers grants the GUI
 # user check and apply only (deploy/camlab-sudoers), and camlab.updater resolves
-# component ids itself, so no caller ever names a package.
+# component ids itself, so no caller ever names a package
 
 set -euo pipefail
 cd "CAMLAB_APP_DIR" || exit 1

@@ -42,7 +42,7 @@ require_root
 
 # Installed kernel packages: flavor metapackages plus versioned image and headers
 # packages. Shared linux-headers-*-common-rpi matches too, holding it keeps a
-# header tree from moving on its own.
+# header tree from moving on its own
 kernel_packages() {
     dpkg-query -Wf '${db:Status-Status} ${Package}\n' \
             'linux-image-*' 'linux-headers-*' 2>/dev/null \
@@ -51,7 +51,7 @@ kernel_packages() {
 
 # The sibling flavor at any release, plus releases older than the running one.
 # A newer release stays: an upgrade without a reboot has already pointed firmware
-# at its image. Flavor metapackages carry no release and stay.
+# at its image. Flavor metapackages carry no release and stay
 doomed_packages() {
     local pkg release
     while read -r pkg; do
@@ -91,7 +91,7 @@ case "$RUNNING" in
 esac
 RUNNING_VER="${RUNNING%-rpi-*}"  # e.g. 6.18.34+rpt, shared by image and headers names
 
-# RPi OS arm64 ships exactly two flavors.
+# RPi OS arm64 ships exactly two flavors
 case "$FLAVOR" in
     2712) SIBLING="v8" ;;
     v8)   SIBLING="2712" ;;
@@ -109,7 +109,7 @@ header "Kernel trim - keeping $RUNNING alone"
 
 mapfile -t DOOMED < <(doomed_packages)
 
-# Hard guard: never remove what the running kernel needs, whatever matched above.
+# Hard guard: never remove what the running kernel needs, whatever matched above
 KEEP=(
     "linux-image-rpi-$FLAVOR"
     "linux-headers-rpi-$FLAVOR"
@@ -128,10 +128,10 @@ else
     done
 
     log "Purging: ${DOOMED[*]}"
-    # An earlier run held the kernel it ran under, which a reboot makes stale.
+    # An earlier run held the kernel it ran under, which a reboot makes stale
     apt-mark unhold "${DOOMED[@]}" >/dev/null
     # Separate autoremove: one pass misses linux-base-<ver>, which orphans
-    # only once linux-base-rpi-<flavor> is gone.
+    # only once linux-base-rpi-<flavor> is gone
     apt_get purge -y "${DOOMED[@]}"
     apt_get autoremove --purge -y
     log "DKMS now builds for $RUNNING only."
@@ -139,7 +139,7 @@ fi
 
 header "Kernel hold"
 
-# Hold after the purge, so packages on their way out are never held first.
+# Hold after the purge, so packages on their way out are never held first
 mapfile -t KEPT < <(kernel_packages)
 if [ "${#KEPT[@]}" -eq 0 ]; then
     warn "No installed kernel packages found, nothing held. Check 'dpkg -l linux-image-*'."

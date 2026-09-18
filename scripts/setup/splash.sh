@@ -45,7 +45,7 @@ FBSPLASH_FONT="/usr/local/lib/camlab/Roboto-Regular.ttf"
 FBSPLASH_UNIT="/etc/systemd/system/camlab-splash@.service"
 FBSPLASH_RULE="/etc/udev/rules.d/99-camlab-splash.rules"
 
-# Fullscreen logo cmdline tokens. boot.sh removes quiet/logo.nologo (suppress logo).
+# Fullscreen logo cmdline tokens. boot.sh removes quiet/logo.nologo (suppress logo)
 CMDLINE_TOKENS=(
     fullscreen_logo=1
     fullscreen_logo_name=logo.tga
@@ -65,7 +65,7 @@ stage_logo() {
     fi
     install -m 0644 "$SPLASH_SRC/logo.tga" "$LOGO_TGA"
     install -m 0755 "$SPLASH_SRC/initramfs-hook" "$INITRAMFS_HOOK"
-    # Costs 4 s, so only when the logo or the hook actually moved.
+    # Costs 4 s, so only when the logo or the hook actually moved
     update-initramfs -u >/dev/null
     log "logo.tga bundled into initramfs"
 }
@@ -80,7 +80,7 @@ stage_fbsplash() {
     fi
     log "Stage: fbdev splash writer"
     install -D -m 0755 "$SPLASH_SRC/fbsplash.py" "$FBSPLASH_BIN"
-    # Status line runs before any compositor, so it reads the face off disk.
+    # Status line runs before any compositor, so it reads the face off disk
     install -m 0644 "$REPO_DIR/camlab/assets/Roboto-Regular.ttf" "$FBSPLASH_FONT"
     install -m 0644 "$SPLASH_SRC/camlab-splash@.service" "$FBSPLASH_UNIT"
     install -m 0644 "$SPLASH_SRC/99-camlab-splash.rules" "$FBSPLASH_RULE"

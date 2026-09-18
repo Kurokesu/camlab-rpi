@@ -41,6 +41,6 @@ jobs:
           case "$GITHUB_REF_NAME" in
             *-*) prerelease="--prerelease" ;;
           esac
-          # Publishing is a hand step once the deb lands (RELEASING.md).
+          # Publishing is a hand step once the deb lands (RELEASING.md)
           gh release create "$GITHUB_REF_NAME" "camlab-rpi-${version}.tar.gz" \
             --title "$GITHUB_REF_NAME" --verify-tag --generate-notes --draft $prerelease

@@ -19,9 +19,9 @@ import sys
 from pathlib import Path
 
 _IMAGE_TYPE = 0xFFFD0002
-# Nominal sizes a compositor may ask for. One transparent pixel serves them all.
+# Nominal sizes a compositor may ask for. One transparent pixel serves them all
 _SIZES = (24, 32, 48, 64)
-# Cage requests left_ptr, wlroots maps CSS names onto default.
+# Cage requests left_ptr, wlroots maps CSS names onto default
 _NAMES = ("left_ptr", "default")
 
 

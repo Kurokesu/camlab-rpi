@@ -25,7 +25,7 @@ done
 
 require_root
 
-# Granting root rights to the wrong account is worse than granting none.
+# Granting root rights to the wrong account is worse than granting none
 [ "$CAMLAB_USER" != "root" ] || die "Cannot tell who owns the kiosk. Re-run under sudo from that account."
 save_camlab_user
 

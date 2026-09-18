@@ -34,7 +34,7 @@ done
 require_root
 REPO_DIR="$(resolve_repo_dir)"
 
-# Path override shared with config.txt scripts.
+# Path override shared with config.txt scripts
 FW_DIR="${CAMLAB_FW_DIR:-/boot/firmware}"
 export CAMLAB_CONFIG_TXT="$FW_DIR/config.txt"
 export CAMLAB_OVERLAYS_DIR="$FW_DIR/overlays"
@@ -51,7 +51,7 @@ fi
 
 header "Display overlay - installing ($OVERLAY)"
 
-# display_auto_detect=0 breaks Pi 5 panel auto-detect. Warn likely misuse.
+# display_auto_detect=0 breaks Pi 5 panel auto-detect. Warn likely misuse
 MODEL="$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || true)"
 case "$MODEL" in
     *"Compute Module"*|"") ;;

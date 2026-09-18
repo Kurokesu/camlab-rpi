@@ -18,7 +18,7 @@ from .rpi_stats import RpiStatsCard
 
 
 class ViewfinderArea(QtWidgets.QWidget):
-    # Press on the picture, dismisses whatever control is open over it.
+    # Press on the picture, dismisses whatever control is open over it
     tapped = Signal()
 
     def __init__(
@@ -40,7 +40,7 @@ class ViewfinderArea(QtWidgets.QWidget):
             self._live: QtWidgets.QWidget = live
         elif engine.picam2 is not None:
             self._live = engine.make_viewfinder()
-            # Evaluation hook: boot with live frost on to judge the shader.
+            # Evaluation hook: boot with live frost on to judge the shader
             if os.environ.get("CAMLAB_FROST"):
                 self.set_frost(True)
         else:
@@ -73,7 +73,7 @@ class ViewfinderArea(QtWidgets.QWidget):
             self._place_stats_card()
 
     def mousePressEvent(self, event) -> None:
-        # Live widget and corner overlays ignore presses, so they land here.
+        # Live widget and corner overlays ignore presses, so they land here
         self.tapped.emit()
         event.accept()
 
@@ -129,7 +129,7 @@ class ViewfinderArea(QtWidgets.QWidget):
             return
         mode = self._engine.current_mode
         if mode is not None:
-            # Cheap while the mode holds, and picks a new one up without a hook.
+            # Cheap while the mode holds, and picks a new one up without a hook
             self._focus_map.set_frame_shape(*mode.size)
         self._focus_map.set_levels(levels)
 
@@ -139,7 +139,7 @@ class ViewfinderArea(QtWidgets.QWidget):
 
     def _place_focus_map(self) -> None:
         """Keyed on enabled, not visible, so a modal's frost does not shuffle it."""
-        # Right of histogram, or in its slot when it is off.
+        # Right of histogram, or in its slot when it is off
         x = MARGIN + self._histogram.width() + MARGIN if self._hist_enabled else MARGIN
         self._focus_map.move(x, MARGIN)
 
@@ -175,7 +175,7 @@ class ViewfinderArea(QtWidgets.QWidget):
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
-        # Hidden card is re-placed on show.
+        # Hidden card is re-placed on show
         if self._stats_card.isVisible():
             self._place_stats_card()
 

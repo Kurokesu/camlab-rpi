@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# Tooling config only, install stays script-based (install.sh).
+# Tooling config only, install stays script-based (install.sh)
 
 [tool.ruff]
 # Trixie ships Python 3.13
@@ -10,5 +10,5 @@ line-length = 100
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# Repo root on sys.path, tests import camlab without an install.
+# Repo root on sys.path, tests import camlab without an install
 pythonpath = ["."]
