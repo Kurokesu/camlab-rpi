@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from string import Template
 
 from ..qt import QtGui
 from . import icons
@@ -21,7 +22,7 @@ from . import icons
 GLASS_BG = QtGui.QColor(24, 26, 32, 175)
 GLASS_BORDER = QtGui.QColor(70, 76, 90, 200)
 
-# Severity accents, mirroring the [sev=...] rules in the stylesheet below.
+# Severity accents, substituted into [sev=...] stylesheet rules below
 SEV_COLOR = {"error": "#e06c75", "warning": "#e5c07b"}
 
 
@@ -116,7 +117,7 @@ def profile_for_screen(screen) -> UiProfile:
     return profile_for_rect(None if screen is None else screen.geometry())
 
 
-_STYLE = """
+_STYLE = Template("""
 QWidget { background: #1b1d22; color: #d7dae0; }
 QFrame#statusStrip { background: #23262d; border-bottom: 1px solid #2f333c; }
 QFrame#controls { background: #1b1d22; border-top: 1px solid #2f333c; }
@@ -145,8 +146,8 @@ QPushButton#segment:checked { background: #3d4858; border-color: #7f8aa0; color:
 QPushButton#segment:checked:disabled { background: #2f3540; border-color: #4a505c; color: #aeb4bf; }
 QPushButton#segment:focus { border-color: #7aa2f7; background: #2f3949; outline: none; }
 QPushButton#segment:checked:focus { border-color: #9db8ff; background: #45526a; color: #ffffff; }
-QPushButton#segment[sev="warning"], QPushButton#segment[sev="warning"]:checked { color: #e5c07b; }
-QPushButton#segment[sev="error"], QPushButton#segment[sev="error"]:checked { color: #e06c75; }
+QPushButton#segment[sev="warning"], QPushButton#segment[sev="warning"]:checked { color: $warning; }
+QPushButton#segment[sev="error"], QPushButton#segment[sev="error"]:checked { color: $error; }
 QPushButton#chip { text-align: left; }
 QPushButton#chip[iconOnly="true"] { text-align: center; }
 QPushButton[manual="true"] { border-color: #7f6a3d; color: #e5c07b; }
@@ -187,8 +188,8 @@ QFrame#modalCard QPushButton#segment:focus { background: #2f3949; }
 QFrame#modalCard QPushButton#segment:checked:focus { background: #45526a; }
 QLabel#modalTitle { font-weight: 500; color: #e8eaed; }
 QLabel#modalText { color: #aeb4bf; }
-QLabel#modalHint[sev="warning"] { color: #e5c07b; }
-"""
+QLabel#modalHint[sev="warning"] { color: $warning; }
+""").substitute(SEV_COLOR)
 
 # Hover is mouse-only feedback: tap parks synthesized mouse on widget, pinning :hover until next tap.
 # Compact skips these rules. Prepended so checked/focus rules win equal-specificity ties.
