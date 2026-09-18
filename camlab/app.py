@@ -21,7 +21,7 @@ from .gui.main_window import MainWindow
 from .gui.style import profile_for_screen
 from .integrity import LOG_DATEFMT, LOG_FORMAT, LogClassifier, NullCapture, StderrCapture
 from .modes import resolve_initial_mode
-from .qt import QtWidgets
+from .qt import QtCore, QtWidgets
 from .sensors import SensorRegistry
 from .settings import AwbMode, DisplayMode, SettingsStore
 
@@ -139,8 +139,8 @@ def main(argv: list[str] | None = None) -> int:
     win.showFullScreen()
     display_manager.start()
 
-    # Sent by ExecStop.
-    signal.signal(signal.SIGUSR1, lambda *_: win.flush_settings())
+    # Sent by ExecStop. Handler lands between bytecodes, so event loop does the write
+    signal.signal(signal.SIGUSR1, lambda *_: QtCore.QTimer.singleShot(0, win.flush_settings))
 
     rc = app.exec()
 
