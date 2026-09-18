@@ -13,14 +13,12 @@ from collections.abc import Callable
 
 from ..qt import Qt, QtCore, QtGui, QtWidgets
 from . import icons
-from .style import SEV_COLOR
+from .style import SEV_COLOR, SHUTDOWN_TINT
 
 _GLYPH_PX = 36
 _TILE_W = 170
 _TILE_H = 104
 _CANCEL_H = 48
-# Same tint as controls-row Shutdown icon
-_SHUTDOWN_TINT = "#d98b80"
 _REBOOT_TINT = SEV_COLOR["warning"]
 
 
@@ -69,7 +67,7 @@ class PowerCard(QtWidgets.QFrame):
         self.reboot_btn.setProperty("sev", "warning")
         self.reboot_btn.clicked.connect(on_reboot)
         self.shutdown_btn = _Tile(
-            "Shutdown", icons.pixmap("power_settings_new", _GLYPH_PX, _SHUTDOWN_TINT)
+            "Shutdown", icons.pixmap("power_settings_new", _GLYPH_PX, SHUTDOWN_TINT)
         )
         self.shutdown_btn.setObjectName("danger")
         self.shutdown_btn.clicked.connect(on_shutdown)

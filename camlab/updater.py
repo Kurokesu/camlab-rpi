@@ -55,14 +55,14 @@ UPDATE_BIN = os.environ.get("CAMLAB_UPDATE_BIN", "/usr/local/bin/camlab-update")
 FW_DIR = Path(os.environ.get("CAMLAB_FW_DIR", "/boot/firmware"))
 CMDLINE = FW_DIR / "cmdline.txt"
 OVERLAY_CONF = Path(os.environ.get("CAMLAB_OVERLAY_CONF", "/etc/overlayroot.local.conf"))
-# Present boots writable, absent boots read-only. Same token camlabctl rw uses.
+# Present boots writable, absent boots read-only. Same token camlabctl rw uses
 WRITABLE = "overlayroot=disabled"
 
 APP_DIR = Path(__file__).resolve().parent.parent
 SETUP_DIR = APP_DIR / "scripts" / "setup"
-# Version setup last converged for. Root fs, so a reflash resets it.
+# Version setup last converged for. Root fs, so a reflash resets it
 CONVERGED = Path(os.environ.get("CAMLAB_CONVERGED_FILE", "/var/lib/camlab-setup/converged"))
-# Wiring only, so an update boot never rewrites an operator choice or moves a package.
+# Wiring only, so an update boot never rewrites an operator choice or moves a package
 CONVERGE_SCRIPTS = (
     ("journald.sh",),
     ("boot.sh",),
@@ -74,15 +74,15 @@ CONVERGE_SCRIPTS = (
 
 FBSPLASH = Path(os.environ.get("CAMLAB_FBSPLASH", "/usr/local/lib/camlab/fbsplash.py"))
 
-# A power cut mid-update retries once, then the update gives up.
+# A power cut mid-update retries once, then the update gives up
 MAX_ATTEMPTS = 2
 
-# dpkg states that mean an install never finished. Anything else apt can work with.
+# dpkg states that mean an install never finished. Anything else apt can work with
 BROKEN_STATES = frozenset({"half-installed", "unpacked", "half-configured"})
 
 _STATE_VERSION = 1
 
-# About row values standing in for a version.
+# About row values standing in for a version
 MAINLINE = "mainline"  # driver and overlay ship with RPi OS
 ABSENT = "not installed"
 
@@ -138,7 +138,7 @@ def archive_packages() -> set[str]:
         try:
             text = path.read_text(errors="replace")
         except OSError:
-            # An index that vanished between glob and read is one apt never fetched.
+            # An index that vanished between glob and read is one apt never fetched
             continue
         for line in text.splitlines():
             if line.startswith("Package: "):
@@ -158,7 +158,7 @@ def installed_versions(packages: Sequence[str]) -> dict[str, str]:
     if not packages:
         return {}
     fmt = r"${db:Status-Status} ${Package} ${Version}\n"
-    # dpkg-query exits 1 for any name it does not know while still printing the rest.
+    # dpkg-query exits 1 for any name it does not know while still printing the rest
     proc = subprocess.run(
         ["dpkg-query", "-Wf", fmt, *packages], capture_output=True, text=True, check=False
     )
@@ -200,7 +200,7 @@ def _parse_policy(text: str) -> dict[str, dict]:
         parts = body.split()
         if len(parts) < 2:
             continue
-        # Version rows read "<version> <pin>", origin rows "<pin> <site>".
+        # Version rows read "<version> <pin>", origin rows "<pin> <site>"
         if parts[1].isdigit():
             version = parts[0]
             entry["sites"].setdefault(version, [])
@@ -306,7 +306,7 @@ def refresh() -> None:
             "apt-get",
             "update",
             # Renaming the archive's suite otherwise wedges refresh until someone
-            # clears /var/lib/apt/lists by hand.
+            # clears /var/lib/apt/lists by hand
             "--allow-releaseinfo-change",
             "-o",
             f"Dir::Etc::sourcelist={ARCHIVE_SOURCES}",
@@ -386,7 +386,7 @@ def arm(ids: Sequence[str]) -> list[Component]:
     try:
         unlock_next_boot()
     except Exception:
-        # A plan without a writable boot only costs the operator a reboot to learn that.
+        # A plan without a writable boot only costs the operator a reboot to learn that
         disarm()
         raise
     return chosen
@@ -475,7 +475,7 @@ def _refresh_with_retry(progress: _Progress | None = None, tries: int = 6, delay
         except UpdateError as exc:
             attempt += 1
             print(f"refresh attempt {attempt} failed: {exc}", file=sys.stderr)
-            # An index apt cannot read fails the same way however long we wait for it.
+            # An index apt cannot read fails the same way however long we wait for it
             if not dropped and (_unreadable_index(str(exc)) or attempt >= tries):
                 dropped = True
                 if drop_lists():
@@ -588,7 +588,7 @@ def run() -> str:
     if attempts > MAX_ATTEMPTS:
         error = f"update did not finish in {MAX_ATTEMPTS} boots"
     else:
-        # Counted before the work, so a power cut counts as an attempt too.
+        # Counted before the work, so a power cut counts as an attempt too
         _write_json(plan_file(), {**plan, "attempts": attempts})
         try:
             progress.phase(0.0, 0.10, "Checking for updates")
@@ -718,7 +718,7 @@ def inventory(registry: SensorRegistry | None = None) -> list[dict]:
     found = installed_versions([APP_PACKAGE, *drivers.values()])
 
     rows = [_row("app", APP_PACKAGE, found.get(APP_PACKAGE, ""))]
-    # Every sensor, not only packaged ones, or the card leaves half of them unexplained.
+    # Every sensor, not only packaged ones, or the card leaves half of them unexplained
     for sensor in sorted(reg, key=lambda s: s.overlay):
         ident, label = f"driver:{sensor.overlay}", f"{sensor.overlay} driver"
         package = drivers.get(sensor.overlay)
@@ -728,7 +728,7 @@ def inventory(registry: SensorRegistry | None = None) -> list[dict]:
             rows.append(_row(ident, label, found.get(package, "")))
     for source, version in sorted(stack_versions(drivers.values()).items()):
         rows.append(_row(f"stack:{source}", source, version, updatable=False))
-    # Running kernel, not the held package version, which sits a step ahead until a reboot.
+    # Running kernel, not the held package version, which sits a step ahead until a reboot
     rows.append(_row("kernel", "kernel", os.uname().release, updatable=False))
     return rows
 
@@ -847,7 +847,7 @@ def _main(argv: list[str] | None = None) -> int:
         if not _require_root(args.cmd):
             return 2
         refresh()
-        # Merged, so a check does not erase the last update's outcome.
+        # Merged, so a check does not erase the last update's outcome
         state = {**read_state(), **survey(), "checked": _now()}
         write_state(state)
         if state["blocked"]:

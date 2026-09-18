@@ -29,7 +29,7 @@ _POINTER_EVENTS = frozenset(
 
 
 class LogPanel(QtWidgets.QWidget):
-    # Clearing the view also resets the counts, so the two cannot disagree.
+    # Clearing the view also resets the counts, so the two cannot disagree
     cleared = Signal()
 
     def __init__(self, classifier: LogClassifier | None = None, parent=None):
@@ -84,7 +84,7 @@ class LogPanel(QtWidgets.QWidget):
 
         self.view = QtWidgets.QTextEdit()
         self.view.setReadOnly(True)
-        # Read-only still records undo history, which grows without bound here.
+        # Read-only still records undo history, which grows without bound here
         self.view.setUndoRedoEnabled(False)
         self.view.setObjectName("logView")
         font = QtGui.QFont("monospace")
@@ -128,10 +128,10 @@ class LogPanel(QtWidgets.QWidget):
             text = f"{word} {count}"
             if btn.text() != text:
                 btn.setText(text)
-                # Ratchet width so a digit rollover cannot shift the header.
+                # Ratchet width so a digit rollover cannot shift the header
                 btn.setMinimumWidth(max(btn.minimumWidth(), btn.sizeHint().width()))
             sev = value if count else None
-            # Tint flips are rare, restyle only then.
+            # Tint flips are rare, restyle only then
             if btn.property("sev") != sev:
                 btn.setProperty("sev", sev)
                 repolish(btn)
@@ -140,7 +140,7 @@ class LogPanel(QtWidgets.QWidget):
     def append_line(self, line: str) -> None:
         _cat, sev = self._classifier.classify_with_severity(line)
         self._buffer.append((line, sev))
-        # Frozen: keep recording but leave the view still. It catches up on resume.
+        # Frozen: keep recording but leave the view still. It catches up on resume
         if not self.autoscroll_btn.isChecked():
             self._pending = True
             return
@@ -161,7 +161,7 @@ class LogPanel(QtWidgets.QWidget):
         color = SEV_COLOR.get(sev or "")
         if color:
             safe = f"<span style='color:{color}'>{safe}</span>"
-        # Fresh formats, else severity color bleeds into following lines.
+        # Fresh formats, else severity color bleeds into following lines
         if not cur.document().isEmpty():
             cur.insertBlock(QtGui.QTextBlockFormat(), QtGui.QTextCharFormat())
         cur.insertHtml(safe)
@@ -195,14 +195,14 @@ class LogPanel(QtWidgets.QWidget):
         """Leaving the bottom freezes the view, returning resumes."""
         if self._syncing:
             return
-        # Scrollbar counts pixels, so grant a line of grace before calling it away.
+        # Scrollbar counts pixels, so grant a line of grace before calling it away
         slop = self.view.fontMetrics().lineSpacing()
         at_bottom = value >= self.view.verticalScrollBar().maximum() - slop
         if at_bottom != self.autoscroll_btn.isChecked():
             self.autoscroll_btn.setChecked(at_bottom)
 
     def _on_autoscroll(self, checked: bool) -> None:
-        # Only pay for a re-render when lines actually arrived while frozen.
+        # Only pay for a re-render when lines actually arrived while frozen
         if not checked:
             return
         if self._pending:
@@ -215,7 +215,7 @@ class LogPanel(QtWidgets.QWidget):
         self.view.clear()
         cur = QtGui.QTextCursor(self.view.document())
         cur.movePosition(QtGui.QTextCursor.MoveOperation.End)
-        # One edit block, so 2000 inserts relayout once instead of 2000 times.
+        # One edit block, so 2000 inserts relayout once instead of 2000 times
         cur.beginEditBlock()
         try:
             for line, sev in self._buffer:

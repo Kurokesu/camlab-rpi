@@ -20,7 +20,7 @@ import pytest
 
 import camlab
 
-# Absent on a runner, present on a Pi. Any other missing module is a real break.
+# Absent on a runner, present on a Pi. Any other missing module is a real break
 HARDWARE_DEPS = {"picamera2", "libcamera", "PyQt6", "OpenGL"}
 
 MODULES = sorted(m.name for m in pkgutil.walk_packages(camlab.__path__, "camlab."))
@@ -29,7 +29,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def test_walk_reaches_subpackages():
-    # Empty parametrize reads as a skip, not a failure, so assert the walk worked.
+    # Empty parametrize reads as a skip, not a failure, so assert the walk worked
     assert MODULES, "no camlab modules discovered"
     assert any(name.startswith("camlab.gui.") for name in MODULES), MODULES
 

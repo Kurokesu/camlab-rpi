@@ -38,21 +38,21 @@ class SensorCard(QtWidgets.QFrame):
         self._on_apply = on_apply
         self._display_auto_detected = bool(display_auto_detected)
         self._blocked_ports = set(blocked_ports)
-        # Off-catalog display blocks kept as-is on apply, port they claim locks while selected.
+        # Off-catalog display blocks kept as-is on apply, port they claim locks while selected
         self._offcat_name = (
             current_display
             if current_display is not None and panels.by_name(current_display) is None
             else None
         )
         # Remember the initially-selected sensor + its variant so re-selecting it
-        # restores the choice (other sensors default to color).
+        # restores the choice (other sensors default to color)
         self._init_name = current_name
         self._init_mono = bool(current_mono)
 
         title = QtWidgets.QLabel("Select sensor")
         title.setObjectName("modalTitle")
 
-        # Selected sensor note (Sensor.notes), right of title.
+        # Selected sensor note (Sensor.notes), right of title
         self.notes_lbl = QtWidgets.QLabel()
         self.notes_lbl.setObjectName("modalText")
         self.notes_lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
@@ -69,13 +69,13 @@ class SensorCard(QtWidgets.QFrame):
 
         self.display_sel = SegmentedSelector()
         if self._display_auto_detected:
-            # Pi 5 firmware owns the panel, nothing to choose here.
+            # Pi 5 firmware owns the panel, nothing to choose here
             self.display_sel.set_options([("Auto-detected", None)], current=None, enabled=False)
         else:
             options: list[tuple[str, str | None]] = [("None", None)]
             options += [(name, name) for name in panels.names]
             if self._offcat_name is not None:
-                # Keep off-catalog overlays selectable so Apply does not clobber them.
+                # Keep off-catalog overlays selectable so Apply does not clobber them
                 options.append((self._offcat_name, self._offcat_name))
             self.display_sel.set_options(options, current=current_display)
         self.display_sel.changed.connect(self._on_wiring_changed)
@@ -90,7 +90,7 @@ class SensorCard(QtWidgets.QFrame):
             disabled_values=self._port_locks_applied,
         )
         self.port_sel.changed.connect(self._on_wiring_changed)
-        # Persisted port not selector state: forced shift off locked port registers pending change.
+        # Persisted port not selector state: forced shift off locked port registers pending change
         self._init_port = port
 
         self.wiring_note = QtWidgets.QLabel()
@@ -113,7 +113,6 @@ class SensorCard(QtWidgets.QFrame):
 
         hint = QtWidgets.QLabel("Shutdown and unplug RPi before rewiring")
         hint.setObjectName("modalHint")
-        hint.setProperty("sev", "warning")
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         buttons = QtWidgets.QHBoxLayout()
@@ -123,7 +122,7 @@ class SensorCard(QtWidgets.QFrame):
         self.apply_btn.setObjectName("danger")
         self.apply_btn.clicked.connect(self._apply)
         # Apply powers off. Bare Enter must not trigger it: Cancel is primary.
-        # Apply needs Tab-to-Apply then Enter or click.
+        # Apply needs Tab-to-Apply then Enter or click
         self.primary_button = cancel_btn
         buttons.addWidget(cancel_btn)
         buttons.addStretch(1)
@@ -143,7 +142,7 @@ class SensorCard(QtWidgets.QFrame):
 
     def _on_sensor_changed(self) -> None:
         name = self.sensor_sel.current_value()
-        # Restore the variant only for the sensor we opened on. Others start color.
+        # Restore the variant only for the sensor we opened on. Others start color
         mono = self._init_mono if name == self._init_name else False
         self._rebuild_variant(name, mono)
         self._update_notes(name)

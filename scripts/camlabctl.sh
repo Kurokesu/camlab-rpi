@@ -51,7 +51,7 @@ cmd_logs() {
         args+=("$@")
     fi
     # PAMName puts the app in its own session scope, so unit alone misses every
-    # app line. Match the identifier too, unit keeps systemd start/stop/crash.
+    # app line. Match the identifier too, unit keeps systemd start/stop/crash
     journalctl "${args[@]}" _SYSTEMD_UNIT="$SERVICE" + SYSLOG_IDENTIFIER=camlab
 }
 
@@ -106,7 +106,7 @@ cmd_rec() {
         sleep 1
     done
     log "recording ${secs}s to $out"
-    # SIGINT lets wf-recorder flush the container.
+    # SIGINT lets wf-recorder flush the container
     timeout -s INT "$secs" wf-recorder -f "$out" -c libx264 -p preset=veryfast -p crf=20 ||
         [ "$?" -eq 124 ]  # timeout reports 124 after a clean stop
     log "saved $out ($(du -h "$out" | cut -f1))"
@@ -119,7 +119,7 @@ cmd_tap() {
         die "tap requires x and y"
     fi
     _kiosk_session
-    # Pointer moves are relative, so clamp into the corner for a known origin first.
+    # Pointer moves are relative, so clamp into the corner for a known origin first
     wlrctl pointer move -4000 -4000
     wlrctl pointer move "$x" "$y"
     wlrctl pointer click left
@@ -127,7 +127,7 @@ cmd_tap() {
 
 # Networking toggle: off for production (faster boot), on for SSH dev. Masked,
 # not just disabled, so a dependency cannot pull units back in. *-wait-online
-# gates only the unused network-online.target, so 'net on' leaves it masked.
+# gates only the unused network-online.target, so 'net on' leaves it masked
 NET_MANAGERS=(
     NetworkManager.service
     wpa_supplicant.service
@@ -144,7 +144,7 @@ _overlay_active() { [ "$(findmnt -no FSTYPE / 2>/dev/null)" = "overlay" ]; }
 
 # Under overlayroot, systemctl writes land in the tmpfs upper and vanish on
 # reboot. Repeat against the lower root to persist. These verbs only manage
-# symlinks, so the chroot needs no running systemd.
+# symlinks, so the chroot needs no running systemd
 _persist_net() {
     _overlay_active || return 0
     if ! command -v overlayroot-chroot >/dev/null 2>&1; then
@@ -163,7 +163,7 @@ cmd_net() {
                 sudo systemctl unmask "$u" >/dev/null 2>&1 || true
                 _persist_net unmask "$u"
                 # Unmask only. Stock RPi OS ships networkd disabled and NM owns
-                # the interfaces, starting both invites a conflict.
+                # the interfaces, starting both invites a conflict
                 [ "$u" = "systemd-networkd.service" ] && continue
                 sudo systemctl enable --now "$u" >/dev/null 2>&1 || true
                 _persist_net enable "$u"
@@ -188,7 +188,7 @@ cmd_net() {
                 _net_present "$u" || continue
                 any=1
                 # is-enabled/is-active print the state but exit nonzero when
-                # disabled/inactive, so || true keeps set -e out of the way.
+                # disabled/inactive, so || true keeps set -e out of the way
                 en="$(systemctl is-enabled "$u" 2>/dev/null || true)"; [ -n "$en" ] || en="n/a"
                 act="$(systemctl is-active "$u" 2>/dev/null || true)"; [ -n "$act" ] || act="inactive"
                 printf "%-42s %s / %s\n" "$u" "$en" "$act"
@@ -200,7 +200,7 @@ cmd_net() {
 }
 
 # Touch calibration confines panel touch to its own pane when the layout spans
-# a monitor too. Runtime rule, so a reboot starts clean.
+# a monitor too. Runtime rule, so a reboot starts clean
 TOUCHMAP_RULE="/run/udev/rules.d/90-camlab-touchmap.rules"
 
 _touchscreens() {
@@ -243,7 +243,7 @@ cmd_touch() {
 
 # Read-only root toggle. overlayroot=disabled in cmdline.txt boots writable,
 # absent boots read-only. Flipping it needs the boot partition remounted rw and
-# takes effect on next reboot.
+# takes effect on next reboot
 FW_DIR="${CAMLAB_FW_DIR:-/boot/firmware}"
 CMDLINE="$FW_DIR/cmdline.txt"
 
@@ -256,7 +256,7 @@ cmd_rw() {
         return
     fi
     sudo mount -o remount,rw "$FW_DIR" 2>/dev/null || true
-    # cmdline.txt is one line, so append space-separated with no newline.
+    # cmdline.txt is one line, so append space-separated with no newline
     sudo sed -i 's/[[:space:]]*$/ overlayroot=disabled/' "$CMDLINE"
     log "writable on next boot. Apply: sudo reboot"
 }

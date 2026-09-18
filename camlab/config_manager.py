@@ -47,7 +47,7 @@ DISPLAY_END = "# <<< camlab display <<<"
 
 VALID_PORTS = ("cam0", "cam1")
 
-# No whitespace, so a shim caller cannot smuggle extra config.txt lines in.
+# No whitespace, so a shim caller cannot smuggle extra config.txt lines in
 _SAFE_PART = re.compile(r"[A-Za-z0-9._=-]+")
 
 
@@ -62,7 +62,7 @@ def _run_privileged(cmd: list[str]) -> None:
     if proc.returncode == 0:
         return
     lines = (proc.stderr or proc.stdout).strip().splitlines()
-    # Last line carries the message, for a clean error and for a traceback.
+    # Last line carries the message, for a clean error and for a traceback
     reason = lines[-1].removeprefix("error: ") if lines else f"exit status {proc.returncode}"
     raise ConfigError(reason)
 
@@ -74,7 +74,7 @@ def is_compute_module() -> bool:
         return False
 
 
-# Privileged shim from scripts/setup/config.sh. Only config write GUI may sudo.
+# Privileged shim from scripts/setup/config.sh. Only config write GUI may sudo
 APPLY_BIN = "/usr/local/bin/camlab-apply"
 
 
@@ -204,7 +204,7 @@ class ConfigManager:
     # write (root)
     def apply(self, token: str, port: str, options: list[str] | None) -> None:
         """Rewrite camera block. In-process as root, else via sudo helper."""
-        # Fail before spawning sudo. Privileged path re-checks.
+        # Fail before spawning sudo. Privileged path re-checks
         self._require_free_port(port)
         if os.geteuid() == 0:
             self._rewrite_in_place(token, port, options)
@@ -234,7 +234,7 @@ class ConfigManager:
                 f"(is the driver installed?)"
             )
         self._require_free_port(port)
-        # Append last so block sits under [all] context.
+        # Append last so block sits under [all] context
         body = self._body_without()
         block = self._render_block(token, port, options)
         new_text = (body + "\n\n" if body else "") + block + "\n"
@@ -271,7 +271,7 @@ class ConfigManager:
             block = "\n".join(
                 [
                     DISPLAY_BEGIN,
-                    # Explicit overlay owns panel. Stop Pi 5 firmware loading it twice.
+                    # Explicit overlay owns panel. Stop Pi 5 firmware loading it twice
                     "display_auto_detect=0",
                     f"dtoverlay={raw_overlay}",
                     DISPLAY_END,
@@ -286,7 +286,7 @@ class ConfigManager:
             tmp.write_text(text)
             os.replace(tmp, self.config_path)
         except OSError:
-            # Never strand a half-written temp file next to config.txt.
+            # Never strand a half-written temp file next to config.txt
             tmp.unlink(missing_ok=True)
             raise
 
@@ -394,7 +394,7 @@ if __name__ == "__main__":
         print(f"error: {exc}", file=sys.stderr)
         code = 2
     except OSError as exc:
-        # GUI shows this line verbatim, so name the file and skip the traceback.
+        # GUI shows this line verbatim, so name the file and skip the traceback
         print(f"error: cannot write {CONFIG_PATH}: {exc.strerror or exc}", file=sys.stderr)
         code = 2
     raise SystemExit(code)

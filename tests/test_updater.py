@@ -342,7 +342,7 @@ class TestInventory:
             },
             {"camlab-rpi", "ar0234-rpi-dkms", "libcamera0.7", "python3-libcamera"},
         )
-        # raising=False: os.uname is Linux only, and the suite runs on Windows too.
+        # raising=False: os.uname is Linux only, and the suite runs on Windows too
         monkeypatch.setattr(
             updater.os,
             "uname",
@@ -901,7 +901,7 @@ class TestStateFile:
 class TestCli:
     @pytest.fixture(autouse=True)
     def rooted(self, monkeypatch):
-        # os.geteuid is absent on the dev machines these tests also run on.
+        # os.geteuid is absent on the dev machines these tests also run on
         monkeypatch.setattr(updater, "_require_root", lambda cmd: True)
         monkeypatch.setattr(updater, "resolve", fake_resolve)
         self.armed: list[list[str]] = []

@@ -36,7 +36,7 @@ log = logging.getLogger(__name__)
 # Travel past a sensor's own curve is clamped by IPA
 _CT_UI_RANGE = (2000, 10000)
 
-# Sentinel so set_control_state can tell "not passed" from "None = auto".
+# Sentinel so set_control_state can tell "not passed" from "None = auto"
 _UNSET = object()
 
 # PispStatsOutput blob layout, packed struct pisp_statistics from
@@ -53,7 +53,7 @@ _CDAF_SIZE = 8  # 8x8 grid of focus figures of merit
 # Frame duration ceiling when FPS is exposure driven
 _MAX_FRAME_US = 1_000_000
 
-# Flush controls when queued frames would add visible latency.
+# Flush controls when queued frames would add visible latency
 _SLOW_FRAME_US = 100_000
 
 _MISSED_FRAME_GAP = 1.5  # frames
@@ -122,7 +122,7 @@ class CameraEngine:
         self.current_mode: SensorMode | None = None
         self.fps_current: float | None = None
         self.fps_fixed = True  # False lets exposure extend frame duration to 1 s
-        # Stream shape from last configure, replayed on a lores refit.
+        # Stream shape from last configure, replayed on a lores refit
         self._main_size: tuple[int, int] | None = None
         self._raw = False
         self.control_state = ControlState()
@@ -132,11 +132,11 @@ class CameraEngine:
         self._wb_applied: tuple[float, float] | None = None
         self.stats_output = False  # ISP statistics in metadata
         self._stats_owners: set[str] = set()
-        # Latch histogram because stats arrive below frame rate.
+        # Latch histogram because stats arrive below frame rate
         self.latest_histogram: np.ndarray | None = None
         self.telemetry = Telemetry()  # latest per-frame snapshot
         self._last_ts = 0  # previous SensorTimestamp (ns), for fps
-        # Wall clock between callbacks, to tell a stalled GUI from a stack skip.
+        # Wall clock between callbacks, to tell a stalled GUI from a stack skip
         self._last_cb = 0.0
         self._cb_gaps: deque[float] = deque(maxlen=_CALLBACK_SPACING_WINDOW)
         self._seq_base = 0  # frame counter offset, continuous across flushes
@@ -146,7 +146,7 @@ class CameraEngine:
         self._first_frame_cb = None
         self._first_frame_seen = False
         self._flush_pending = False
-        # Drain timer, created on first use (needs QApplication).
+        # Drain timer, created on first use (needs QApplication)
         self._flush_timer: QtCore.QTimer | None = None
 
     def open(self, camera_num: int = 0) -> None:
@@ -230,7 +230,7 @@ class CameraEngine:
         self.fps_current = float(fps)
         self.size = tuple(self.lores_config.get("size", lores_size))
         # configure() resets picam2.controls, so re-clamp manual values against
-        # the new mode and push them again.
+        # the new mode and push them again
         self._clamp_control_state()
         self._apply_controls()
         log.info(
@@ -339,7 +339,7 @@ class CameraEngine:
     ) -> ControlState:
         """Update controls (None = auto) and push to libcamera. Coalesced flush on slow pipeline."""
         # Sample before applying: slowness must reflect already queued requests,
-        # not the control being set now.
+        # not the control being set now
         flush_worthwhile = self._slow_pipeline
         st = self.control_state
         if exposure_us is not _UNSET:
@@ -399,7 +399,7 @@ class CameraEngine:
         self._sync_grey_world()
         st = self.control_state
         ctrls: dict = {}
-        # 0 = auto, 1 = manual (libcamera split AE API, always present on the fork).
+        # 0 = auto, 1 = manual (libcamera split AE API, always present on the fork)
         ctrls["ExposureTimeMode"] = 0 if st.exposure_us is None else 1
         if st.exposure_us is not None:
             ctrls["ExposureTime"] = int(st.exposure_us)
@@ -461,7 +461,7 @@ class CameraEngine:
             return
         if not self._flush_ready:
             # No frame since last restart. Next frame re-arms at 0, this retry
-            # only covers a pipeline that stopped delivering.
+            # only covers a pipeline that stopped delivering
             self._schedule_flush(500)
             return
         self._flush_pending = False
@@ -482,7 +482,7 @@ class CameraEngine:
         log.debug("flush: restart with exposure=%s gain=%s", st.exposure_us, st.gain)
         self.stop()
         # Re-apply after stop: picamera2 controls are a pending delta wiped by
-        # start, and queued requests that held them are gone.
+        # start, and queued requests that held them are gone
         self._apply_controls()
         self.start(reset_telemetry=False)
 
@@ -573,7 +573,7 @@ class CameraEngine:
         self._first_frame_cb = callback
 
     def _pre_callback(self, request) -> None:
-        # Picamera2 calls this from Qt's event loop. Sensor timestamps yield fps.
+        # Picamera2 calls this from Qt's event loop. Sensor timestamps yield fps
         prev = self.telemetry
         lib_req = getattr(request, "request", None)
         frame = lib_req.sequence + self._seq_base if lib_req is not None else prev.frame
@@ -592,7 +592,7 @@ class CameraEngine:
                 fps = 1e9 / (ts - self._last_ts)
                 self._note_gap(ts - self._last_ts, md.get("FrameDuration"))
             self._last_ts = ts
-        # Publish as one snapshot so readers get a consistent set.
+        # Publish as one snapshot so readers get a consistent set
         self.telemetry = Telemetry(frame=frame, fps=fps, metadata=md)
         if not self._frame_since_start:
             self._frame_since_start = True
@@ -603,10 +603,10 @@ class CameraEngine:
             )
         if self._flush_pending:
             # Restart is off limits inside request processing, so drain on the
-            # event loop.
+            # event loop
             self._schedule_flush(0)
         # Latch off any frame carrying stats (~30 Hz), so GUI sampling never
-        # lands on a blob-less frame.
+        # lands on a blob-less frame
         if self.stats_output:
             hist = self.agc_histogram(md)
             if hist is not None:
@@ -649,13 +649,13 @@ class CameraEngine:
         if self.current_mode is None:
             raise RuntimeError("camera not configured (call configure_mode first)")
         if reset_telemetry:
-            # Fresh run: clear last snapshot so a mode switch reads as new.
+            # Fresh run: clear last snapshot so a mode switch reads as new
             self.telemetry = Telemetry()
             self.latest_histogram = None
             self._seq_base = 0
         else:
             # libcamera restarts the request sequence at 0, so offset to
-            # continue the frame counter.
+            # continue the frame counter
             self._seq_base = self.telemetry.frame + 1 if self.telemetry.frame is not None else 0
         self._last_ts = 0
         self._last_cb = 0.0

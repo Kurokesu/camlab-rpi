@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 
 from .qt import QtCore, Signal
 
-# Own records: _setup_logging formats them, the regexes below parse them back.
+# Own records: _setup_logging formats them, the regexes below parse them back
 LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 LOG_DATEFMT = "%H:%M:%S"
 _APP_STAMP = r"^\d\d:\d\d:\d\d "
@@ -39,7 +39,7 @@ class Category:
 
 
 # First match wins. Drift note leads because it is an own record that would read as app,
-# and app leads the rest because an own record can quote libcamera's wording.
+# and app leads the rest because an own record can quote libcamera's wording
 CATEGORIES: tuple[Category, ...] = (
     Category("stack_pairing", r"camera stack:"),
     Category("app", _APP_STAMP + r"(WARNING|ERROR|CRITICAL) ", tints_warning=False),
@@ -57,7 +57,7 @@ _TINTING = frozenset(cat.name for cat in CATEGORIES if cat.tints_warning)
 # libcamera puts a level word mid-line ("... ERROR RPI ..."), own records lead with theirs
 _LEVEL_RE = re.compile(r"\b(CRITICAL|ERROR|FATAL|WARN(?:ING)?)\b")
 
-# journald parses a leading <N>. Syslog: 2 crit, 3 err, 4 warning, 6 info, 7 debug.
+# journald parses a leading <N>. Syslog: 2 crit, 3 err, 4 warning, 6 info, 7 debug
 _APP_PRIORITY = {"CRITICAL": 2, "ERROR": 3, "WARNING": 4, "INFO": 6, "DEBUG": 7}
 _SEVERITY_PRIORITY = {"error": 3, "warning": 4}
 _INFO_PRIORITY = 6
@@ -181,7 +181,7 @@ class StderrCapture(LineSource):
         super().__init__(parent)
         self._classifier = classifier
         self._orig_fd = os.dup(2)
-        # journald consumes the <N> prefix, a terminal would just show it.
+        # journald consumes the <N> prefix, a terminal would just show it
         self._priorities = not os.isatty(self._orig_fd)
         r, w = os.pipe()
         os.dup2(w, 2)
@@ -229,7 +229,7 @@ class IntegrityMonitor(QtCore.QObject):
     """Consumes log lines, classifies integrity issues, emits rolling stats."""
 
     stats_changed = Signal(object)  # IntegrityStats
-    # Never name a signal 'event', it shadows QObject.event() and aborts.
+    # Never name a signal 'event', it shadows QObject.event() and aborts
 
     def __init__(self, classifier: LogClassifier | None = None, emit_hz: float = 4.0, parent=None):
         super().__init__(parent)
@@ -240,7 +240,7 @@ class IntegrityMonitor(QtCore.QObject):
         }
         self._dirty = False
         # feed() runs on the capture thread. Timer publishes rolled-up counts only when
-        # they changed, so bursts coalesce.
+        # they changed, so bursts coalesce
         self._timer = QtCore.QTimer(self)
         self._timer.setInterval(int(1000 / emit_hz))
         self._timer.timeout.connect(self._emit)

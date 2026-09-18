@@ -26,7 +26,7 @@ class StatusStrip(QtWidgets.QFrame):
         lay.setContentsMargins(12, 5, 12, 5)
         lay.setSpacing(_GAP)
 
-        # Per-frame telemetry at 10 Hz, sensor temperature split off behind a hairline.
+        # Per-frame telemetry at 10 Hz, sensor temperature split off behind a hairline
         self._tele_row = QtWidgets.QWidget(self)
         self.telemetry_lbl = QtWidgets.QLabel(self._tele_row)
         self.telemetry_lbl.setObjectName("telemetry")
@@ -51,7 +51,7 @@ class StatusStrip(QtWidgets.QFrame):
         lrow.addWidget(self.version_lbl)
         lrow.addStretch(1)
 
-        # Two renders of one 1 Hz sample: monitor fits all five fields, panel keeps CPU/GPU.
+        # Two renders of one 1 Hz sample: monitor fits all five fields, panel keeps CPU/GPU
         self.stats = RpiStatsView(parent=self)
         self.stats_compact = RpiStatsView(fields=("cpu", "gpu"), parent=self)
         self._right = QtWidgets.QWidget(self)
@@ -104,7 +104,7 @@ class StatusStrip(QtWidgets.QFrame):
         self._sync_balance()
 
     def eventFilter(self, obj, ev) -> bool:
-        # On press, not release: Qt folds a quick second tap into DblClick.
+        # On press, not release: Qt folds a quick second tap into DblClick
         if (
             obj is self._right
             and self._compact
@@ -166,7 +166,7 @@ class StatusStrip(QtWidgets.QFrame):
         self.telemetry_lbl.setVisible(live)
         if live:
             fps = f"{self._fps:.2f}" if self._fps is not None else "--.--"
-            # Compact drops the frame counter: gains carry more per pixel.
+            # Compact drops the frame counter: gains carry more per pixel
             parts = [f"{fps} fps" if self._compact else f"#{self._frame} ({fps} fps)"]
             if self._exp_us is not None:
                 parts.append(f"exp {round(self._exp_us)}")
@@ -175,7 +175,7 @@ class StatusStrip(QtWidgets.QFrame):
             if self._dg is not None:
                 parts.append(f"dg {self._dg:.2f}")
             text = " ".join(parts)
-            # QLabel relayouts even on identical text, skip: this runs at 10 Hz.
+            # QLabel relayouts even on identical text, skip: this runs at 10 Hz
             if text != self.telemetry_lbl.text():
                 self.telemetry_lbl.setText(text)
         has_temp = self._temp is not None

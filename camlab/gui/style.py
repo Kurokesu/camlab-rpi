@@ -18,12 +18,15 @@ from ..qt import QtGui
 from . import icons
 
 # Glass background/border shared by sheets (painted) and modal cards (QSS).
-# Alpha tuned so live picture reads through while labels keep contrast.
+# Alpha tuned so live picture reads through while labels keep contrast
 GLASS_BG = QtGui.QColor(24, 26, 32, 175)
 GLASS_BORDER = QtGui.QColor(70, 76, 90, 200)
 
 # Severity accents, substituted into [sev=...] stylesheet rules below
 SEV_COLOR = {"error": "#e06c75", "warning": "#e5c07b"}
+
+# Shutdown glyph tint, softer than the error accent
+SHUTDOWN_TINT = "#d98b80"
 
 
 @dataclass(frozen=True)
@@ -70,7 +73,7 @@ REGULAR = UiProfile(
 )
 
 # 13 px is ~1.5 mm on 800x480 4.3" panel: unreadable. 30 px touch targets unhittable.
-# Larger type, thicker sliders, taller buttons.
+# Larger type, thicker sliders, taller buttons
 COMPACT = UiProfile(
     compact=True,
     font_px=16,
@@ -91,7 +94,7 @@ COMPACT = UiProfile(
     overlay_card_h=72,
 )
 
-# Anything at or below this height is a small touch panel, not a monitor.
+# Anything at or below this height is a small touch panel, not a monitor
 _COMPACT_MAX_HEIGHT = 600
 
 
@@ -188,11 +191,11 @@ QFrame#modalCard QPushButton#segment:focus { background: #2f3949; }
 QFrame#modalCard QPushButton#segment:checked:focus { background: #45526a; }
 QLabel#modalTitle { font-weight: 500; color: #e8eaed; }
 QLabel#modalText { color: #aeb4bf; }
-QLabel#modalHint[sev="warning"] { color: $warning; }
+QLabel#modalHint { color: $warning; }
 """).substitute(SEV_COLOR)
 
 # Hover is mouse-only feedback: tap parks synthesized mouse on widget, pinning :hover until next tap.
-# Compact skips these rules. Prepended so checked/focus rules win equal-specificity ties.
+# Compact skips these rules. Prepended so checked/focus rules win equal-specificity ties
 _HOVER = """
 QPushButton:hover { background: #353b47; }
 QPushButton#danger:hover { background: #50211a; }
@@ -212,7 +215,7 @@ def _rgba(c: QtGui.QColor) -> str:
 
 
 def _slider_rules(p: UiProfile) -> str:
-    # Hit box follows dial. Groove remains independent.
+    # Hit box follows dial. Groove remains independent
     margin = (p.slider_dial_px - p.slider_groove_px) // 2
     radius = (p.slider_dial_px + 1) // 2
     groove_radius = p.slider_groove_px // 2
@@ -248,7 +251,7 @@ QLabel#modalTitle {{ font-size: {p.modal_title_font_px}px; }}
 
 
 def build_stylesheet(profile: UiProfile = REGULAR) -> str:
-    # Modal cards wear same glass as sheets. Sheets paint in paintEvent, cards via QSS.
+    # Modal cards wear same glass as sheets. Sheets paint in paintEvent, cards via QSS
     glass = (
         f"QFrame#modalCard {{ background: {_rgba(GLASS_BG)};"
         f" border-radius: 10px;"

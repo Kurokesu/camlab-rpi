@@ -14,13 +14,13 @@ def test_no_tree_reads_empty(drm_root):
 
 
 def test_has_dsi_connector_ignores_status(fake_drm):
-    # DSI has no hotplug detect, presence of the connector is what counts.
+    # DSI has no hotplug detect, presence of the connector is what counts
     fake_drm({"DSI-2": "disconnected"})
     assert drm.has_dsi_connector() is True
 
 
 def test_dsi_display_needs_touchscreen(fake_drm, fake_input):
-    # Bare connector with no panel wired. A mouse reads 0, a pointer prop reads 1.
+    # Bare connector with no panel wired. A mouse reads 0, a pointer prop reads 1
     fake_drm({"DSI-2": "connected"})
     fake_input({"event0": "0", "event1": "1"})
     assert drm.has_dsi_display() is False
@@ -46,7 +46,7 @@ def test_malformed_properties_ignored(fake_drm, fake_input):
 
 def test_dsi_display_survives_touch_readd(fake_drm, fake_input):
     # Applying the calibration matrix re-adds the device. A live re-read would
-    # flip to False and blank the panel.
+    # flip to False and blank the panel
     fake_drm({"DSI-2": "connected"})
     root = fake_input({"event8": "2"})
     assert drm.has_dsi_display() is True

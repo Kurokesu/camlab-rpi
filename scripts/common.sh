@@ -19,11 +19,11 @@ else
     _C_RED=''; _C_GREEN=''; _C_YELLOW=''; _C_CYAN=''; _C_RESET=''
 fi
 
-# Primitives set CAMLAB_TAG before sourcing, else fall back to "camlab".
+# Primitives set CAMLAB_TAG before sourcing, else fall back to "camlab"
 : "${CAMLAB_TAG:=camlab}"
 
 # camlab owner. An update boot runs as root with no SUDO_USER, so the stamp and
-# the installed unit are what keep convergence from re-rendering a root kiosk.
+# the installed unit are what keep convergence from re-rendering a root kiosk
 CAMLAB_USER_FILE="${CAMLAB_USER_FILE:-/var/lib/camlab-setup/user}"
 CAMLAB_UNIT="${CAMLAB_UNIT:-/etc/systemd/system/camlab.service}"
 
@@ -64,7 +64,7 @@ resolve_repo_dir() {
     (cd "$(dirname "${BASH_SOURCE[1]}")/../.." && pwd)
 }
 
-# Primitives touching /etc, /boot or systemd call this first.
+# Primitives touching /etc, /boot or systemd call this first
 require_root() {
     if [ "$(id -u)" -ne 0 ]; then
         die "This script must be run as root (use sudo)."
@@ -72,7 +72,7 @@ require_root() {
 }
 
 # eatmydata skips dpkg per-package fsyncs, slow on eMMC/SD and pointless for a
-# re-runnable install.
+# re-runnable install
 apt_get() {
     if command -v eatmydata >/dev/null 2>&1; then
         eatmydata apt-get "$@"
@@ -81,7 +81,7 @@ apt_get() {
     fi
 }
 
-# Presence only, no upgrades: lets callers skip apt, which rescans all of dpkg.
+# Presence only, no upgrades: lets callers skip apt, which rescans all of dpkg
 missing_packages() {
     local pkg
     for pkg in "$@"; do
@@ -111,9 +111,9 @@ atomic_write() {
 }
 
 # Managed-block editing. Each setup script owns a marker pair, so edits to shared
-# files (config.txt, fstab) stay greppable and removable.
+# files (config.txt, fstab) stay greppable and removable
 
-# Drop the block between begin/end markers (no-op if file or block absent).
+# Drop the block between begin/end markers (no-op if file or block absent)
 block_strip() {
     local path="$1" begin="$2" end="$3" kept
     [ -f "$path" ] || return 0
@@ -123,7 +123,7 @@ block_strip() {
 }
 
 # Strip any existing copy, then append content wrapped in the markers. One write,
-# so an unchanged block leaves the file untouched.
+# so an unchanged block leaves the file untouched
 block_write() {
     local path="$1" begin="$2" end="$3" content="$4" kept block
     kept="$(sed "/^${begin}$/,/^${end}$/d" "$path" 2>/dev/null || true)"
@@ -132,7 +132,7 @@ block_write() {
 }
 
 # cmdline.txt token editing. Whole-token match, one token at a time, so tokens
-# owned by other scripts survive.
+# owned by other scripts survive
 cmdline_has() { tr ' ' '\n' < "$1" | grep -qFx "$2"; }
 
 cmdline_add() {
@@ -153,7 +153,7 @@ cmdline_remove() {
 }
 
 # Print the caller's top-of-file description block as help text. A lone "#" line
-# separates it from the SPDX header. It ends at the first non-comment line.
+# separates it from the SPDX header. It ends at the first non-comment line
 help_text() {
     awk '
         !in_desc && /^#$/ { in_desc=1; next }

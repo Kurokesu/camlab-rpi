@@ -27,7 +27,7 @@ require_root
 
 header "Installing camlab apt dependencies"
 
-# Same path the updater keys provenance off.
+# Same path the updater keys provenance off
 ARCHIVE_SOURCES="/etc/apt/sources.list.d/kurokesu.sources"
 ARCHIVE_KEYRING="/etc/apt/keyrings/kurokesu-archive-keyring.gpg"
 
@@ -50,7 +50,7 @@ enable_archive
 # Refresh every run
 apt_get update
 
-# eatmydata first (plain apt-get) so apt_get can use it below.
+# eatmydata first (plain apt-get) so apt_get can use it below
 if ! command -v eatmydata >/dev/null 2>&1; then
     log "Installing eatmydata..."
     apt-get install -y eatmydata

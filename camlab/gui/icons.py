@@ -67,7 +67,7 @@ def _glyph(name: str) -> str:
     return chr(cp)
 
 
-# Rendered once per key. QPixmap is shared, so callers can ask freely.
+# Rendered once per key. QPixmap is shared, so callers can ask freely
 _PIXMAP_CACHE: dict[tuple[str, int, str], QtGui.QPixmap] = {}
 _ICON_CACHE: dict[tuple[str, int, str], QtGui.QIcon] = {}
 
