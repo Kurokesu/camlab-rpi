@@ -67,7 +67,7 @@ def main(argv: list[str] | None = None) -> int:
     _setup_logging()
 
     # Splice stderr before libcamera/Picamera2 init so IPA child inherits it.
-    classifier = LogClassifier(dmesg.PATTERNS)
+    classifier = LogClassifier()
     capture = NullCapture() if os.environ.get("CAMLAB_NO_CAPTURE") else StderrCapture(classifier)
 
     registry = SensorRegistry.load()
@@ -81,6 +81,11 @@ def main(argv: list[str] | None = None) -> int:
         engine.open(camera_num=int(os.environ.get("CAMLAB_CAMERA_NUM", "0")))
     except Exception as exc:  # noqa: BLE001
         log.error("camera open failed: %s", exc)
+        # Kernel probe failures behind a missing camera, libcamera reports none of them
+        overlay = config.get_current()["overlay"]
+        if overlay:
+            for line in dmesg.read(overlay):
+                capture.deliver(line)
 
     # Force native Wayland under Wayland session. picamera2 import sets xcb, which breaks
     # in-scene viewfinder (PyOpenGL needs EGL-current, Xwayland makes GLX-current).

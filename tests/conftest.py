@@ -1,17 +1,25 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Shared log samples and fixtures faking DRM and input sysfs trees under tmp_path."""
+"""Shared log samples, engine stub, sysfs fakes under tmp_path and an offscreen window."""
 
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
-from camlab import drm
-from camlab.integrity import LOG_DATEFMT, LOG_FORMAT
+from camlab import config_manager, drm
+from camlab.config_manager import ConfigManager
+from camlab.dsi_panels import PanelRegistry
+from camlab.gui import settings_dialog
+from camlab.integrity import LOG_DATEFMT, LOG_FORMAT, LineSource, LogClassifier, NullCapture
+from camlab.qt import QtWidgets
+from camlab.sensors import SensorRegistry
+from camlab.settings import SettingsStore
 
 # dmesg -x after an ar0822 probe failure, device-tree chatter and a foreign driver included
 DMESG_SAMPLE = """\
@@ -94,3 +102,120 @@ def fake_drm(drm_root: Path):
         return drm_root
 
     return build
+
+
+def telemetry(frame=None, fps=0.0, **metadata) -> SimpleNamespace:
+    """One published frame as the views read it."""
+    return SimpleNamespace(frame=frame, fps=fps, metadata=metadata)
+
+
+class FakeLive(QtWidgets.QWidget):
+    """Mirror stand-in, the GL widget no offscreen test can render."""
+
+    def __init__(self):
+        super().__init__()
+        self.assists = None
+
+    def set_assists(self, peaking: bool, zebra: bool, threshold: float) -> None:
+        self.assists = (peaking, zebra, threshold)
+
+
+class FakeEngine:
+    """Engine the window and monitor view build against. Exposure and gain only, no WB chip."""
+
+    def __init__(self):
+        self.picam2 = object()
+        self.telemetry = telemetry()
+        self.control_state = SimpleNamespace(exposure_us=None, gain=None, colour_temp=None)
+        self.current_mode = SimpleNamespace(
+            size=(1920, 1080), label=lambda: "1920x1080 SRGGB12 30fps"
+        )
+        self.latest_histogram = None
+        self.mirrors: list[FakeLive] = []
+        self.modes: list = []
+        self.info: dict = {}
+
+    def make_mirror(self) -> FakeLive:
+        self.mirrors.append(FakeLive())
+        return self.mirrors[-1]
+
+    def make_viewfinder(self) -> QtWidgets.QWidget:
+        return QtWidgets.QWidget()
+
+    def control_ranges(self) -> dict[str, tuple]:
+        return {"exposure_us": (100, 100_000), "gain": (1.0, 16.0)}
+
+    def refit_lores(self, avail_size) -> bool:
+        return False
+
+    def set_stats_output(self, enabled: bool) -> None:
+        pass
+
+    def set_grey_world(self, enabled: bool) -> None:
+        pass
+
+    def on_first_frame(self, callback) -> None:
+        pass
+
+    def start(self) -> None:
+        pass
+
+    def stop(self) -> None:
+        pass
+
+
+@pytest.fixture(scope="session")
+def qapp():
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    return QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+
+
+PANEL_NAME = "Waveshare 43H"
+PANEL_OVERLAY = "vc4-kms-dsi-7inch"
+
+
+@pytest.fixture
+def cm(tmp_path: Path, drm_root: Path, monkeypatch: pytest.MonkeyPatch) -> ConfigManager:
+    """Empty config over tmp_path, no DRM connector and model reading as Pi 5."""
+    monkeypatch.setattr(config_manager, "MODEL_PATH", tmp_path / "model")
+    overlays = tmp_path / "overlays"
+    overlays.mkdir()
+    (overlays / f"{PANEL_OVERLAY}.dtbo").touch()
+    return ConfigManager(config_path=tmp_path / "config.txt", overlays_dir=overlays)
+
+
+@pytest.fixture
+def build_win(qapp, cm: ConfigManager, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Builder for a shown MainWindow, reading config.txt as the test left it."""
+    # picamera2 is absent on a CI runner, so this import waits until a test wants a window
+    main_window = pytest.importorskip("camlab.gui.main_window")
+    monkeypatch.delenv("CAMLAB_SCREEN", raising=False)
+    monkeypatch.setattr(settings_dialog.network, "is_enabled", lambda: True)
+    built = []
+
+    def build(capture: LineSource | None = None):
+        window = main_window.MainWindow(
+            FakeEngine(),
+            SensorRegistry.load(),
+            PanelRegistry.load(),
+            cm,
+            capture or NullCapture(),
+            LogClassifier(),
+            SettingsStore(tmp_path / "state.json"),
+        )
+        window.resize(800, 480)
+        window.show()
+        qapp.processEvents()
+        built.append(window)
+        return window
+
+    yield build
+    for window in built:
+        window._close_modal()
+        window.close()
+
+
+@pytest.fixture
+def win(build_win):
+    """Shown window over an empty config, so no panel is forced."""
+    return build_win()

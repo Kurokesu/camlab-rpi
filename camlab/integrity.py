@@ -23,33 +23,36 @@ LOG_DATEFMT = "%H:%M:%S"
 _APP_STAMP = r"^\d\d:\d\d:\d\d "
 _APP_LEVEL_RE = re.compile(_APP_STAMP + r"(DEBUG|INFO|WARNING|ERROR|CRITICAL) ")
 
-APP_CATEGORY = "app"
+# Kernel device prefix, "ar0822 10-0010:" on i2c and "rp1-cfe 1f00110000.csi:" on the platform bus
+I2C_CLIENT = r"\d+-[0-9a-f]+"
+# Subdevice notice shares the prefix but reports success, so it stays out of the category
+SUBDEVICE = "found subdevice"
+_KERNEL_DEVICE = rf"(?:^|] )[\w-]+ (?:{I2C_CLIENT}|[0-9a-f]+\.[\w-]+): (?!{SUBDEVICE})"
 
-# category -> regex, order matters (first match wins).
-DEFAULT_PATTERNS: dict[str, str] = {
-    # Drift note opts in with this lead, so it beats the own-record prefix below
-    "stack_pairing": r"camera stack:",
-    # Own records prove origin, so they beat heuristics reading libcamera's wording
-    APP_CATEGORY: _APP_STAMP + r"(WARNING|ERROR|CRITICAL) ",
-    "embedded_data": r"Embedded data buffer parsing failed",
-    "register_tags": r"Incorrect register value tags",
-    "csi_crc": r"\bCRC\b|corrupt(ed)? (frame|buffer)|pixel error",
-    "frame_timeout": r"(?i)\b(timed out|timeout)\b|Dequeue timer|no buffers",
-    "frame_drop": r"(?i)dropp(ed|ing) (a )?frame|frame drop",
-    "v4l2_error": r"(?i)\bVIDIOC_\w+ failed|Failed to queue buffer|Failed to start",
-}
 
-# Severity fallback, used when a matched line carries no level word
-CATEGORY_SEVERITY: dict[str, str] = {
-    "embedded_data": "error",
-    "register_tags": "error",
-    "csi_crc": "error",
-    "v4l2_error": "error",
-    "kernel_driver": "error",
-    "frame_timeout": "warning",
-    "frame_drop": "warning",
-    "stack_pairing": "warning",
-}
+@dataclass(frozen=True)
+class Category:
+    name: str
+    pattern: str
+    severity: str = "warning"  # fallback when the line carries no level word
+    tints_warning: bool = True  # errors always tint, this decides whether a warning does
+
+
+# First match wins. Drift note leads because it is an own record that would read as app,
+# and app leads the rest because an own record can quote libcamera's wording.
+CATEGORIES: tuple[Category, ...] = (
+    Category("stack_pairing", r"camera stack:"),
+    Category("app", _APP_STAMP + r"(WARNING|ERROR|CRITICAL) ", tints_warning=False),
+    Category("embedded_data", r"Embedded data buffer parsing failed", "error"),
+    Category("register_tags", r"Incorrect register value tags", "error"),
+    Category("csi_crc", r"\bCRC\b|corrupt(ed)? (frame|buffer)|pixel error", "error"),
+    Category("frame_timeout", r"(?i)\b(timed out|timeout)\b|Dequeue timer|no buffers"),
+    Category("frame_drop", r"(?i)dropp(ed|ing) (a )?frame|frame drop"),
+    Category("v4l2_error", r"(?i)\bVIDIOC_\w+ failed|Failed to (queue buffer|start)", "error"),
+    Category("kernel_driver", _KERNEL_DEVICE, "error"),
+)
+
+_TINTING = frozenset(cat.name for cat in CATEGORIES if cat.tints_warning)
 
 # libcamera puts a level word mid-line ("... ERROR RPI ..."), own records lead with theirs
 _LEVEL_RE = re.compile(r"\b(CRITICAL|ERROR|FATAL|WARN(?:ING)?)\b")
@@ -60,31 +63,24 @@ _SEVERITY_PRIORITY = {"error": 3, "warning": 4}
 _INFO_PRIORITY = 6
 
 
-def severity_for(line: str, category: str) -> str:
-    """'error' or 'warning' for a line, from its own level word or category default."""
+def _severity(line: str, category: Category) -> str:
+    """'error' or 'warning' for a line, from its own level word or the category fallback."""
     m = _LEVEL_RE.search(line)
     if m:
         return "warning" if m.group(1).startswith("WARN") else "error"
-    return CATEGORY_SEVERITY.get(category, "warning")
+    return category.severity
 
 
 class LogClassifier:
-    def __init__(self, patterns: dict[str, str] | None = None):
-        pats = patterns or DEFAULT_PATTERNS
-        self._compiled = [(cat, re.compile(rx)) for cat, rx in pats.items()]
-
-    def classify(self, line: str) -> str | None:
-        for cat, rx in self._compiled:
-            if rx.search(line):
-                return cat
-        return None
+    def __init__(self):
+        self._compiled = [(cat, re.compile(cat.pattern)) for cat in CATEGORIES]
 
     def classify_with_severity(self, line: str) -> tuple[str | None, str | None]:
         """(category, severity) for a line, or (None, None) when nothing matches."""
-        cat = self.classify(line)
-        if cat is None:
-            return None, None
-        return cat, severity_for(line, cat)
+        for cat, rx in self._compiled:
+            if rx.search(line):
+                return cat.name, _severity(line, cat)
+        return None, None
 
 
 def journal_priority(line: str, classifier: LogClassifier) -> int:
@@ -127,17 +123,18 @@ class IntegrityStats:
 def tint_severity(stats: IntegrityStats) -> str:
     """Severity the Log button tints, '' for none.
 
-    App warnings count but never tint. Standing amber teaches the operator to ignore the button.
+    Every error tints. A warning tints only from a category flagged for it, so a standing
+    amber cannot teach the operator to ignore the button.
     """
     if stats.total("error"):
         return "error"
-    if any(cat != APP_CATEGORY for cat in stats.by_severity.get("warning", ())):
+    if any(cat in _TINTING for cat in stats.by_severity.get("warning", ())):
         return "warning"
     return ""
 
 
-# Log panel keeps 2000 lines, so a deeper backlog would never show
-_BACKLOG_LINES = 2000
+# Lines the log panel keeps, so a deeper backlog would never show
+PANEL_LINES = 2000
 
 
 class LineSource(QtCore.QObject):
@@ -147,11 +144,11 @@ class LineSource(QtCore.QObject):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._backlog: collections.deque[str] | None = collections.deque(maxlen=_BACKLOG_LINES)
+        self._backlog: collections.deque[str] | None = collections.deque(maxlen=PANEL_LINES)
         # Capture thread appends while main thread drains, so no line goes out twice
         self._lock = threading.Lock()
 
-    def _deliver(self, line: str) -> None:
+    def deliver(self, line: str) -> None:
         with self._lock:
             if self._backlog is not None:
                 self._backlog.append(line)
@@ -159,7 +156,11 @@ class LineSource(QtCore.QObject):
         self.line_received.emit(line)
 
     def replay(self) -> None:
-        """Emit backlog, then stop buffering. Qt drops a signal with nothing connected."""
+        """Emit backlog, then stop buffering. Qt drops a signal with nothing connected.
+
+        Call on the main thread before the event loop runs, so a live line queued from the
+        capture thread cannot reach the panel ahead of an older replayed one.
+        """
         with self._lock:
             backlog, self._backlog = self._backlog, None
         for line in backlog or ():
@@ -200,7 +201,7 @@ class StderrCapture(LineSource):
                 out, lines, buf = mirror_lines(buf + chunk, self._classifier, self._priorities)
                 self._mirror(out)
                 for line in lines:
-                    self._deliver(line)
+                    self.deliver(line)
         except OSError:
             pass
         if buf:  # unterminated tail still belongs in the journal

@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from conftest import logged
 
-from camlab import dmesg, stack
+from camlab import stack
 from camlab.integrity import LogClassifier
 
 # What Picamera2.camera_manager.version reports, and the pin it pairs with
@@ -80,7 +80,4 @@ def test_drift_line_classifies_as_warning(pin):
     """The trap: unclassified, a drift warning hides under the Warnings filter."""
     pin(LIBCAMERA_VERSION=PINNED)
     line = logged(stack.mismatches("v0.7.3")[0])
-    assert LogClassifier(dmesg.PATTERNS).classify_with_severity(line) == (
-        "stack_pairing",
-        "warning",
-    )
+    assert LogClassifier().classify_with_severity(line) == ("stack_pairing", "warning")

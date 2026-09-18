@@ -11,12 +11,11 @@ from __future__ import annotations
 import collections
 import html
 
-from ..integrity import IntegrityStats, LogClassifier
+from ..integrity import PANEL_LINES, IntegrityStats, LogClassifier
 from ..qt import Qt, QtCore, QtGui, QtWidgets, Signal, Slot
 from .style import SEV_COLOR
 from .widgets import SegmentedSelector, kinetic_scroll, repolish
 
-_MAX_LINES = 2000
 _TRIM_SLACK = 256
 
 _POINTER_EVENTS = frozenset(
@@ -37,7 +36,7 @@ class LogPanel(QtWidgets.QWidget):
         super().__init__(parent)
         self._classifier = classifier or LogClassifier()
         self._buffer: collections.deque[tuple[str, str | None]] = collections.deque(
-            maxlen=_MAX_LINES
+            maxlen=PANEL_LINES
         )
         self._filter = "all"
         self._pending = False  # lines arrived while frozen
@@ -170,14 +169,14 @@ class LogPanel(QtWidgets.QWidget):
     def _trim(self) -> None:
         """Drop oldest lines in batches, cheaper than trimming on every append."""
         doc = self.view.document()
-        if doc.blockCount() <= _MAX_LINES + _TRIM_SLACK:
+        if doc.blockCount() <= PANEL_LINES + _TRIM_SLACK:
             return
         self._syncing = True
         cur = QtGui.QTextCursor(doc.firstBlock())
         cur.movePosition(
             QtGui.QTextCursor.MoveOperation.NextBlock,
             QtGui.QTextCursor.MoveMode.KeepAnchor,
-            doc.blockCount() - _MAX_LINES,
+            doc.blockCount() - PANEL_LINES,
         )
         cur.removeSelectedText()
         self._syncing = False
