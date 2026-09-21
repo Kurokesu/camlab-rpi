@@ -335,6 +335,10 @@ def install_gles_format() -> None:
     fmt = QtGui.QSurfaceFormat()
     fmt.setRenderableType(QtGui.QSurfaceFormat.RenderableType.OpenGLES)
     fmt.setVersion(2, 0)
+    # Unset sizes reach EGL as EGL_DONT_CARE, whose smallest-buffer tiebreak picks 565
+    fmt.setRedBufferSize(8)
+    fmt.setGreenBufferSize(8)
+    fmt.setBlueBufferSize(8)
     QtGui.QSurfaceFormat.setDefaultFormat(fmt)
 
 
