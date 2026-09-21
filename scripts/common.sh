@@ -103,6 +103,17 @@ stack_relations() {
     done
 }
 
+# No ceiling, a newer build still brings what the floor was set for
+floor_relations() {
+    local pin floor packages pkg
+    for pin in "$@"; do
+        read -r floor packages <<<"$pin"
+        for pkg in $packages; do
+            printf '%s (>= %s)\n' "$pkg" "$floor"
+        done
+    done
+}
+
 # Write via a temp file in the same dir, so readers never see a half-written
 # boot-critical file. Mode of an existing file is preserved. An unchanged file is
 # left alone, convergence runs this over config.txt on the FAT partition
