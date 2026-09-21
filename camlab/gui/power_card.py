@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from ..qt import Qt, QtCore, QtGui, QtWidgets
+from ..qt import Qt, QtGui, QtWidgets
 from . import icons
 from .style import SEV_COLOR, SHUTDOWN_TINT
 
@@ -26,28 +26,19 @@ class _Tile(QtWidgets.QPushButton):
     """Glyph over label. Frame and colour come from shared button QSS."""
 
     def __init__(self, label: str, glyph: QtGui.QPixmap):
-        super().__init__(label)
-        self._glyph = glyph
+        super().__init__()
+        # Button carries no text of its own, so its name lives here
+        self.setAccessibleName(label)
         self.setMinimumSize(_TILE_W, _TILE_H)
-
-    def paintEvent(self, event) -> None:
-        opt = QtWidgets.QStyleOptionButton()
-        self.initStyleOption(opt)
-        opt.text = ""
-        painter = QtWidgets.QStylePainter(self)
-        painter.drawControl(QtWidgets.QStyle.ControlElement.CE_PushButton, opt)
-        mid = self.height() / 2.0
-        painter.drawPixmap(
-            int((self.width() - self._glyph.width()) / 2),
-            int(mid - self._glyph.height() - 2),
-            self._glyph,
-        )
-        painter.setPen(self.palette().color(QtGui.QPalette.ColorRole.ButtonText))
-        painter.drawText(
-            QtCore.QRect(0, int(mid) + 8, self.width(), int(mid) - 8),
-            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop,
-            self.text(),
-        )
+        glyph_lbl = QtWidgets.QLabel()
+        glyph_lbl.setPixmap(glyph)
+        lay = QtWidgets.QVBoxLayout(self)
+        lay.addStretch(1)
+        for child in (glyph_lbl, QtWidgets.QLabel(label)):
+            # Press must reach button, not stop at child under it
+            child.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+            lay.addWidget(child, 0, Qt.AlignmentFlag.AlignHCenter)
+        lay.addStretch(1)
 
 
 class PowerCard(QtWidgets.QFrame):
