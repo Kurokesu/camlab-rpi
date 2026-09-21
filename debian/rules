@@ -3,7 +3,7 @@
 include /usr/share/dpkg/pkg-info.mk
 
 # Runtime relations for control, rendered from the source tree's apt-packages.
-# Camera stack forks carry a floor and a ceiling, rest carry bare names.
+# Camera stack forks carry floor and ceiling, cage a floor, rest bare names.
 # PICAMERA2_VERSION is recorded for drift checks, not rendered.
 # ':?' stops the build on a missing key, rather than dropping dependencies.
 # Unquoted expansion splits names, test_stack_pin.py on main asserts glob-free
@@ -12,8 +12,10 @@ $(error apt-packages missing from source tree)
 endif
 DEPENDS := $(shell . ./apt-packages && set -o pipefail && { \
 	pin() { for p in $$2; do echo "$$p (>= $$1)"; echo "$$p (<< $$1.)"; done; }; \
+	floor() { for p in $$2; do echo "$$p (>= $$1)"; done; }; \
 	pin "$${LIBCAMERA_VERSION:?}" "$${LIBCAMERA_PACKAGES:?}"; \
 	pin "$${RPICAM_APPS_VERSION:?}" "$${RPICAM_APPS_PACKAGES:?}"; \
+	floor "$${CAGE_VERSION:?}" "$${CAGE_PACKAGES:?}"; \
 	printf '%s\n' $${APP_PACKAGES:?} $${PICAMERA2_PACKAGES:?}; \
 	} | awk '{ printf "%s%s", sep, $$0; sep = ", " }')
 ifneq ($(.SHELLSTATUS),0)
