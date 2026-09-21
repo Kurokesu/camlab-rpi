@@ -127,8 +127,9 @@ class FakeEngine:
         self.picam2 = object()
         self.telemetry = telemetry()
         self.control_state = SimpleNamespace(exposure_us=None, gain=None, colour_temp=None)
+        # Compact chrome reads width and height, a monitor reads the label
         self.current_mode = SimpleNamespace(
-            size=(1920, 1080), label=lambda: "1920x1080 SRGGB12 30fps"
+            size=(1920, 1080), width=1920, height=1080, label=lambda: "1920x1080 SRGGB12 30fps"
         )
         self.latest_histogram = None
         self.mirrors: list[FakeLive] = []
