@@ -9,7 +9,7 @@ import pytest
 
 main_window = pytest.importorskip("camlab.gui.main_window")
 
-from camlab.qt import QtWidgets
+from camlab.qt import Qt, QtCore, QtGui, QtWidgets
 
 
 @pytest.fixture
@@ -25,7 +25,23 @@ def calls(monkeypatch):
 
 
 def buttons(card) -> dict[str, QtWidgets.QPushButton]:
-    return {b.text(): b for b in card.findChildren(QtWidgets.QPushButton)}
+    """Keyed on label. Tile label is a child widget, so tile name comes off accessibleName."""
+    return {b.text() or b.accessibleName(): b for b in card.findChildren(QtWidgets.QPushButton)}
+
+
+def press(widget, pos: QtCore.QPoint) -> None:
+    """Mouse press and release at pos, which is the delivery click() skips."""
+    for kind in (QtCore.QEvent.Type.MouseButtonPress, QtCore.QEvent.Type.MouseButtonRelease):
+        QtWidgets.QApplication.sendEvent(
+            widget,
+            QtGui.QMouseEvent(
+                kind,
+                QtCore.QPointF(pos),
+                Qt.MouseButton.LeftButton,
+                Qt.MouseButton.LeftButton,
+                Qt.KeyboardModifier.NoModifier,
+            ),
+        )
 
 
 def test_escape_offers_reboot_next_to_shutdown_and_cancel_takes_enter(win, calls):
@@ -48,6 +64,17 @@ def test_each_choice_flushes_settings_then_runs(win, calls, label, call):
     buttons(win._overlay.card)[label].click()
     assert calls == ["flush", call]
     assert win._overlay is None
+
+
+def test_press_over_glyph_and_label_reaches_tile(win, calls):
+    """Tile children are transparent to mouse events, so neither swallows a press."""
+    win._on_escape()
+    tile = buttons(win._overlay.card)["Reboot"]
+    centers = [lbl.geometry().center() for lbl in tile.findChildren(QtWidgets.QLabel)]
+    assert len(centers) == 2
+    assert [tile.childAt(pos) for pos in centers] == [None, None]
+    press(tile, centers[0])
+    assert calls == ["flush", "reboot"]
 
 
 def test_failed_action_is_reported_and_app_stays_up(win, calls, monkeypatch):
