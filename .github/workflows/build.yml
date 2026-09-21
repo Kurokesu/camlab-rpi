@@ -148,6 +148,20 @@ jobs:
           ! grep -q ' \./opt/camlab/debian' contents.txt \
             || { echo "::error::debian/ leaked into the payload."; exit 1; }
 
+      # Lintian from the build image, so tag set matches the target suite
+      - name: Lint source and binary package
+        env:
+          IMAGE: ${{ inputs.container-image }}
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD":/w -w /w "$IMAGE" bash -euo pipefail -c '
+            apt-get update -qq
+            apt-get install -y --no-install-recommends lintian
+
+            # Warnings stay visible, only errors fail
+            lintian --fail-on error ./*.changes
+          '
+
       - name: Upload .deb set + source package
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

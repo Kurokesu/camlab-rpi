@@ -1,0 +1,9 @@
+# Payload is the whole source tree at /opt/camlab
+camlab-rpi: dir-or-file-in-opt
+
+# Bundled Roboto, so every unit renders the same
+camlab-rpi: duplicate-font-file
+
+# Installed with mode 0755 by camlab-setup, never run from the tree
+camlab-rpi: script-not-executable [opt/camlab/scripts/camlab-update.sh]
+camlab-rpi: script-not-executable [opt/camlab/deploy/splash/initramfs-hook]
