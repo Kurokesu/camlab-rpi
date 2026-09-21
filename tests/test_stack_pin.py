@@ -31,10 +31,10 @@ def next_fork(floor: str) -> str:
     return re.sub(r"\d+$", lambda m: str(int(m.group()) + 1), floor)
 
 
-def relation_bounds(*given: str) -> dict[str, dict[str, str]]:
-    """Bounds stack_relations emits per package, keyed by apt operator."""
+def relation_bounds(*given: str, helper: str = "stack_relations") -> dict[str, dict[str, str]]:
+    """Bounds the named helper emits per package, keyed by apt operator."""
     # Pre-set owner, or common.sh resolves one off the running unit
-    script = f'CAMLAB_USER=root; source "{COMMON}"; stack_relations "$@"'
+    script = f'CAMLAB_USER=root; source "{COMMON}"; {helper} "$@"'
     emitted = subprocess.run(
         ["bash", "-c", script, "bash", *given],
         capture_output=True,
@@ -96,6 +96,28 @@ def test_stack_relations_cover_both_fork_pins():
     assert set(relation_bounds(*given)) == wanted
 
 
+def test_cage_floor_names_version_and_packages():
+    env = pins()
+    assert env["CAGE_VERSION"]
+    assert env["CAGE_PACKAGES"].split()
+
+
+def test_floor_relations_admit_every_newer_build():
+    """No ceiling, so a cage release past the floor needs no edit here."""
+    floor = pins()["CAGE_VERSION"]
+    bounds = relation_bounds(f"{floor} pkg-a pkg-b", helper="floor_relations")
+    assert set(bounds) == {"pkg-a", "pkg-b"}
+    for pkg, bound in bounds.items():
+        assert set(bound) == {">="}, pkg
+        assert dpkg_says(floor, "ge", bound[">="]), pkg
+        assert dpkg_says(next_fork(floor), "ge", bound[">="]), pkg
+
+
+def test_cage_is_named_once():
+    """deps.sh installs it off CAGE_PACKAGES, so APP_PACKAGES must not repeat it."""
+    assert set(pins()["CAGE_PACKAGES"].split()).isdisjoint(app_packages())
+
+
 def test_picamera2_is_recorded():
     env = pins()
     assert env["PICAMERA2_VERSION"]
@@ -113,7 +135,7 @@ def test_app_packages_leave_fork_packages_to_pin():
     assert forked.isdisjoint(app_packages())
 
 
-def test_app_packages_are_bare_names():
-    """Rendered straight into deb Depends, so a stray comma or range breaks it."""
-    for pkg in app_packages():
+def test_package_names_are_bare():
+    """Names reach deb Depends and unquoted shell arrays, so a glob breaks both."""
+    for pkg in app_packages() + pins()["CAGE_PACKAGES"].split():
         assert re.fullmatch(r"[a-z0-9][a-z0-9+.-]*", pkg), pkg

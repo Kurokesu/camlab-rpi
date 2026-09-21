@@ -20,9 +20,12 @@ RPICAM_APPS_VERSION="1:1.13.0+krks1"
 PICAMERA2_PACKAGES="python3-picamera2"
 PICAMERA2_VERSION="0.3.37"
 
+# Floor pin, dmabuf feedback for direct scanout landed in 0.3.1
+CAGE_PACKAGES="cage"
+CAGE_VERSION="0.3.1"
+
 APP_PACKAGES="
 awb-nn
-cage
 python3-opengl
 python3-pil
 python3-pyqt6

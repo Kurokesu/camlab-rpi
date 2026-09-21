@@ -30,9 +30,9 @@ done
 # shellcheck source=../../apt-packages
 source "$(resolve_repo_dir)/apt-packages"
 
-# Fork pins apt enforces, then picamera2, which is recorded only
 PINNED=("$LIBCAMERA_VERSION $LIBCAMERA_PACKAGES"
         "$RPICAM_APPS_VERSION $RPICAM_APPS_PACKAGES")
+FLOORED=("$CAGE_VERSION $CAGE_PACKAGES")
 RECORDED=("$PICAMERA2_VERSION $PICAMERA2_PACKAGES")
 
 FAILED=0
@@ -94,7 +94,8 @@ for pin in "${PINNED[@]}" "${RECORDED[@]}"; do
     done
 done
 
-mapfile -t RELATIONS < <(stack_relations "${PINNED[@]}")
+# FLOORED has no upper bound for the loop above, so resolve is its only check
+mapfile -t RELATIONS < <(stack_relations "${PINNED[@]}"; floor_relations "${FLOORED[@]}")
 
 if resolution="$(apt-get satisfy -s --no-install-recommends "${RELATIONS[@]}" 2>&1)"; then
     log "resolve: apt satisfies the pinned set"

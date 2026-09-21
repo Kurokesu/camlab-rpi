@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # Install camlab APT dependencies: Kurokesu apt archive then everything
-# listed in apt-packages, camera stack pinned and the rest by presence.
+# apt-packages lists, with the pins that file declares.
 # Safe to re-run. Requires sudo.
 #
 # Usage: sudo scripts/setup/deps.sh
@@ -97,6 +97,23 @@ else
     log "Camera stack already matches the pin."
 fi
 
+# Raising a floor can pull a new package, which plain upgrade refuses to do
+BELOW=()
+for pkg in $CAGE_PACKAGES; do
+    have="$(dpkg-query -Wf '${Version}' "$pkg" 2>/dev/null)" || have=""
+    if dpkg --compare-versions "${have:-0}" lt "$CAGE_VERSION"; then
+        BELOW+=("$pkg")
+    fi
+done
+
+if [ "${#BELOW[@]}" -gt 0 ]; then
+    log "Raising to floor $CAGE_VERSION: ${BELOW[*]}"
+    mapfile -t FLOORS < <(floor_relations "$CAGE_VERSION $CAGE_PACKAGES")
+    apt_get satisfy -y --no-install-recommends "${FLOORS[@]}"
+else
+    log "Floored packages already meet the floor."
+fi
+
 # After the stack, or picamera2 pulls apt's candidate bindings past the pin
 # shellcheck disable=SC2206  # test_stack_pin.py asserts names are glob-free
 UNPINNED=($APP_PACKAGES $PICAMERA2_PACKAGES)
@@ -111,6 +128,7 @@ else
 fi
 
 # Mark manual, or autoremove reclaims what a removed package left auto
-apt-mark manual "${UNPINNED[@]}"
+# shellcheck disable=SC2086  # test_stack_pin.py asserts names are glob-free
+apt-mark manual "${UNPINNED[@]}" $CAGE_PACKAGES
 
 log "Done. All apt dependencies installed."
