@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/bin/bash
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
@@ -205,7 +205,7 @@ stage_finalise() {
 
     install -d -m 0755 /usr/local/sbin
     cat > "$FINALISE_SCRIPT" <<'FINEOF'
-#!/usr/bin/bash
+#!/bin/bash
 # Installed by readonly.sh. Locks root read-only on first post-install boot
 set -euo pipefail
 PATH="/usr/sbin:/sbin:/usr/bin:/bin:$PATH"
