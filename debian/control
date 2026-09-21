@@ -1,7 +1,8 @@
 Source: camlab-rpi
 Section: video
 Priority: optional
-Maintainer: Kurokesu <info@kurokesu.com>
+Maintainer: UAB Kurokesu <info@kurokesu.com>
+Uploaders: Danius Kalvaitis <danius@kurokesu.com>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.7.0
 Homepage: https://github.com/Kurokesu/camlab-rpi
