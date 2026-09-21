@@ -79,8 +79,8 @@ def main(argv: list[str] | None = None) -> int:
     engine = CameraEngine()
     try:
         engine.open(camera_num=int(os.environ.get("CAMLAB_CAMERA_NUM", "0")))
-    except Exception as exc:  # noqa: BLE001
-        log.error("camera open failed: %s", exc)
+    except Exception:
+        log.exception("camera open failed")
         # Kernel probe failures behind a missing camera, libcamera reports none of them
         overlay = config.get_current()["overlay"]
         if overlay:
@@ -123,8 +123,8 @@ def main(argv: list[str] | None = None) -> int:
             # Restore manual overrides after configure, so they clamp to the new ranges
             engine.set_control_state(**settings.get_controls(overlay))
             engine.set_grey_world(settings.get_awb() is AwbMode.GREY)
-        except Exception as exc:  # noqa: BLE001
-            log.error("camera configure failed: %s", exc)
+        except Exception:
+            log.exception("camera configure failed")
 
     # CursorPolicy needs no handle: QApplication parentage keeps it alive
     display_manager = DisplayManager(app, settings.get_display)
