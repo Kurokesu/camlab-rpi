@@ -1,10 +1,9 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Sensor selection card: pick sensor, CSI port and touch display, then shut down.
+"""Sensor selection card: camera and display wiring for next boot.
 
-Rendered inside ModalOverlay (Cage kiosk renders separate windows unreliably).
-Apply writes config.txt blocks and powers off for rewire. Pi 5 locks display row to auto-detected.
+Rendered inside ModalOverlay.
 """
 
 from __future__ import annotations
@@ -28,7 +27,7 @@ class SensorCard(QtWidgets.QFrame):
         current_display: str | None,
         display_auto_detected: bool,
         blocked_ports: set[str],
-        on_apply: Callable[[str, str, bool, str | None], None],
+        on_apply: Callable[[str, str, bool, str | None, bool], None],
         on_cancel: Callable[[], None],
     ):
         super().__init__()
@@ -118,16 +117,19 @@ class SensorCard(QtWidgets.QFrame):
         buttons = QtWidgets.QHBoxLayout()
         cancel_btn = QtWidgets.QPushButton("Cancel")
         cancel_btn.clicked.connect(on_cancel)
+        self.reboot_btn = QtWidgets.QPushButton("Apply && Reboot")
+        self.reboot_btn.setProperty("sev", "warning")
+        self.reboot_btn.clicked.connect(lambda: self._apply(then_reboot=True))
         self.apply_btn = QtWidgets.QPushButton("Apply && Shutdown")
         self.apply_btn.setObjectName("danger")
-        self.apply_btn.clicked.connect(self._apply)
-        # Apply powers off. Bare Enter must not trigger it: Cancel is primary.
-        # Apply needs Tab-to-Apply then Enter or click
+        self.apply_btn.clicked.connect(lambda: self._apply(then_reboot=False))
         self.primary_button = cancel_btn
+
         buttons.addWidget(cancel_btn)
         buttons.addStretch(1)
         buttons.addWidget(hint)
         buttons.addStretch(1)
+        buttons.addWidget(self.reboot_btn)
         buttons.addWidget(self.apply_btn)
 
         lay = QtWidgets.QVBoxLayout(self)
@@ -183,7 +185,7 @@ class SensorCard(QtWidgets.QFrame):
         self.wiring_note.setVisible(bool(text))
 
     def _refresh_apply(self) -> None:
-        """Apply is live only when a selection changed."""
+        """Both apply buttons go live only on selection change."""
         selected = (
             self.sensor_sel.current_value(),
             self.port_sel.current_value(),
@@ -191,7 +193,9 @@ class SensorCard(QtWidgets.QFrame):
             self.display_sel.current_value(),
         )
         initial = (self._init_name, self._init_port, self._init_mono, self._init_display)
-        self.apply_btn.setEnabled(selected != initial)
+        changed = selected != initial
+        self.reboot_btn.setEnabled(changed)
+        self.apply_btn.setEnabled(changed)
 
     def _update_notes(self, sensor_name: str | None) -> None:
         sensor = self._registry.by_name(sensor_name) if sensor_name else None
@@ -210,10 +214,11 @@ class SensorCard(QtWidgets.QFrame):
         self.variant_lbl.setVisible(capable)
         self.variant_sel.setVisible(capable)
 
-    def _apply(self) -> None:
+    def _apply(self, then_reboot: bool) -> None:
         self._on_apply(
             self.sensor_sel.current_value(),
             self.port_sel.current_value(),
             bool(self.variant_sel.current_value()),
             self.display_sel.current_value(),
+            then_reboot,
         )
