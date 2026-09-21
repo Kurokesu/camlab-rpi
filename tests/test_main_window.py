@@ -11,6 +11,8 @@ from types import SimpleNamespace
 import pytest
 from conftest import FAILURES, PANEL_NAME, PANEL_OVERLAY, logged
 
+main_window = pytest.importorskip("camlab.gui.main_window")
+
 from camlab import config_manager
 from camlab.gui.style import COMPACT, REGULAR, build_stylesheet
 from camlab.integrity import IntegrityStats, NullCapture
@@ -26,6 +28,16 @@ def sensor_card(win):
     """Card the Sensor button opens over whatever the test left in config.txt."""
     win._choose_sensor()
     return win._overlay.card
+
+
+@pytest.fixture
+def calls(win, monkeypatch):
+    """Config write and both power calls recorded instead of run."""
+    seen: list[str] = []
+    monkeypatch.setattr(win.config, "apply", lambda *_a: seen.append("write"))
+    monkeypatch.setattr(main_window, "poweroff", lambda: seen.append("poweroff"))
+    monkeypatch.setattr(main_window, "reboot", lambda: seen.append("reboot"))
+    return seen
 
 
 def test_profile_follows_pane_screen_across_display_switch(win):
@@ -104,3 +116,37 @@ def test_off_catalog_display_block_keeps_claimed_port(win, cm):
     card = sensor_card(win)
     assert card.display_sel.current_value() == "vc4-kms-dsi-generic,dsi0"
     assert not card.port_sel.button("cam0").isEnabled()
+
+
+def test_sensor_card_offers_reboot_left_of_shutdown_and_cancel_takes_enter(win):
+    """Reboot sits left of Shutdown as on the power card, and Enter still reaches Cancel."""
+    card = sensor_card(win)
+    assert card.reboot_btn.text() == "Apply && Reboot"
+    assert card.reboot_btn.x() < card.apply_btn.x()
+    assert card.primary_button.text() == "Cancel"
+
+
+@pytest.mark.parametrize(("attr", "call"), [("reboot_btn", "reboot"), ("apply_btn", "poweroff")])
+def test_each_apply_writes_config_before_its_power_action(win, calls, attr, call):
+    getattr(sensor_card(win), attr).click()
+    assert calls == ["write", call]
+
+
+def test_neither_apply_is_live_until_selection_changes(win, cm):
+    """Operator opening the card to look must not be one press from a power cycle."""
+    (cm.overlays_dir / "imx477.dtbo").touch()
+    cm._rewrite_in_place("imx477", "cam1", [])
+    card = sensor_card(win)
+    assert not card.reboot_btn.isEnabled() and not card.apply_btn.isEnabled()
+    card.port_sel.button("cam0").click()
+    assert card.reboot_btn.isEnabled() and card.apply_btn.isEnabled()
+
+
+def test_sensor_card_footer_fits_compact_panel(win):
+    """Three footer buttons beside the rewire warning still fit 800x480 touch panel."""
+    win._on_topology_changed(PANEL_ONLY)
+    assert win.profile is COMPACT
+    card = sensor_card(win)
+    inset = win._overlay.layout().contentsMargins()
+    avail = win._overlay.width() - inset.left() - inset.right()
+    assert card.sizeHint().width() <= avail

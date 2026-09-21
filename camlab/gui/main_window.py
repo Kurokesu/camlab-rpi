@@ -749,7 +749,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._open_modal(card)
 
     def _apply_sensor(
-        self, sensor_name: str, port: str, mono: bool, display_name: str | None
+        self, sensor_name: str, port: str, mono: bool, display_name: str | None, then_reboot: bool
     ) -> None:
         self._close_modal()
         chosen = self.registry.by_name(sensor_name)
@@ -787,7 +787,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     detail += " The display change stuck, re-apply to undo it."
             self._show_message("Apply failed", detail)
             return
-        poweroff()
+        (reboot if then_reboot else poweroff)()
 
     def _open_settings(self) -> None:
         # Also the way back from About, so drop that card first. No-op from chrome

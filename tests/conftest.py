@@ -15,7 +15,7 @@ import pytest
 from camlab import config_manager, drm
 from camlab.config_manager import ConfigManager
 from camlab.dsi_panels import PanelRegistry
-from camlab.gui import settings_dialog
+from camlab.gui import fonts, settings_dialog
 from camlab.integrity import LOG_DATEFMT, LOG_FORMAT, LineSource, LogClassifier, NullCapture
 from camlab.qt import QtWidgets
 from camlab.sensors import SensorRegistry
@@ -168,7 +168,9 @@ class FakeEngine:
 @pytest.fixture(scope="session")
 def qapp():
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-    return QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    fonts.apply(app)
+    return app
 
 
 PANEL_NAME = "Waveshare 43H"
