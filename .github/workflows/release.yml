@@ -6,7 +6,7 @@ name: Release
 # packaging stabilizes. Preflight and sign are ports of
 # dkms-release.yml and deb-sign.yml, kept contract-identical so apt
 # archive ingest sees identical assets. See
-# debian/source/README.source for the release procedure.
+# debian/README.source for the release procedure.
 
 on:
   push:
