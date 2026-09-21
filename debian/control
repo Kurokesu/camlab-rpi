@@ -6,6 +6,8 @@ Uploaders: Danius Kalvaitis <danius@kurokesu.com>
 Build-Depends: debhelper-compat (= 13)
 Standards-Version: 4.7.0
 Homepage: https://github.com/Kurokesu/camlab-rpi
+Vcs-Browser: https://github.com/Kurokesu/camlab-rpi/tree/debian/latest
+Vcs-Git: https://github.com/Kurokesu/camlab-rpi.git -b debian/latest
 Rules-Requires-Root: no
 
 Package: camlab-rpi
