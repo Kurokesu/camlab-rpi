@@ -1,23 +1,41 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Log button tint, boot backlog replay and the sensor card the window opens."""
+"""UI density, log button tint, boot backlog replay and the sensor card the window opens."""
 
 from __future__ import annotations
 
 import logging
+from types import SimpleNamespace
 
 import pytest
 from conftest import FAILURES, PANEL_NAME, PANEL_OVERLAY, logged
 
 from camlab import config_manager
+from camlab.gui.style import COMPACT, REGULAR, build_stylesheet
 from camlab.integrity import IntegrityStats, NullCapture
+from camlab.qt import QtCore
+
+PANEL_RECT = QtCore.QRect(0, 0, 800, 480)
+MONITOR_RECT = QtCore.QRect(0, 0, 1920, 1080)
+PANEL_ONLY = SimpleNamespace(panel=PANEL_RECT, monitor=None, bounds=PANEL_RECT)
+MONITOR_ONLY = SimpleNamespace(panel=None, monitor=MONITOR_RECT, bounds=MONITOR_RECT)
 
 
 def sensor_card(win):
     """Card the Sensor button opens over whatever the test left in config.txt."""
     win._choose_sensor()
     return win._overlay.card
+
+
+def test_profile_follows_pane_screen_across_display_switch(win):
+    """Accessor follows the pane screen, matching the profile the window skinned with."""
+    win._on_topology_changed(MONITOR_ONLY)
+    assert win.profile is REGULAR
+    assert win.styleSheet() == build_stylesheet(REGULAR)
+    win._on_topology_changed(PANEL_ONLY)
+    assert win.profile is COMPACT
+    assert win.styleSheet() == build_stylesheet(COMPACT)
 
 
 @pytest.mark.parametrize(

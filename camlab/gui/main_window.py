@@ -152,6 +152,11 @@ class MainWindow(QtWidgets.QMainWindow):
         if display_manager is not None:
             display_manager.topology_changed.connect(self._on_topology_changed)
 
+    @property
+    def profile(self) -> UiProfile:
+        """Density the panel pane draws at, live across a display switch."""
+        return self._profile
+
     # construction
     def _build_sheets(self) -> None:
         # Sheets dock over viewfinder bottom edge. Exposure and gain span decades, log sliders
