@@ -21,7 +21,8 @@ jobs:
           ruff format --check camlab tests deploy
 
       - name: Shellcheck
-        run: git ls-files '*.sh' | xargs shellcheck
+        # Not every script carries a .sh suffix
+        run: git ls-files | xargs awk 'FNR == 1 && /^#!.*sh/ { print FILENAME }' | xargs shellcheck
 
       - name: REUSE lint
         uses: fsfe/reuse-action@v6
