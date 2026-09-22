@@ -357,15 +357,20 @@ def plan_file() -> Path:
     return default_state_file().parent / "plan.json"
 
 
-def read_plan() -> dict:
+def _read_versioned_json(path: Path) -> dict:
+    """Recorded dict at path. Missing, corrupt or written by another version reads as empty."""
     try:
-        with open(plan_file(), "r") as f:
-            plan = json.load(f)
+        with open(path, "r") as f:
+            data = json.load(f)
     except (OSError, ValueError):
         return {}
-    if not isinstance(plan, dict) or plan.get("version") != _STATE_VERSION:
+    if not isinstance(data, dict) or data.get("version") != _STATE_VERSION:
         return {}
-    return plan
+    return data
+
+
+def read_plan() -> dict:
+    return _read_versioned_json(plan_file())
 
 
 def arm(ids: Sequence[str]) -> list[Component]:
@@ -783,15 +788,7 @@ def default_state_file() -> Path:
 
 def read_state(path: Path | None = None) -> dict:
     """Last recorded check. Missing or corrupt reads as never checked."""
-    path = path or default_state_file()
-    try:
-        with open(path, "r") as f:
-            data = json.load(f)
-    except (OSError, ValueError):
-        return {}
-    if not isinstance(data, dict) or data.get("version") != _STATE_VERSION:
-        return {}
-    return data
+    return _read_versioned_json(path or default_state_file())
 
 
 def write_state(data: dict, path: Path | None = None) -> None:
