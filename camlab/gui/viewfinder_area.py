@@ -9,8 +9,6 @@ overlays stack above. Takes a pre-made mirror widget for a display-only twin.
 
 from __future__ import annotations
 
-import os
-
 from ..qt import Qt, QtWidgets, Signal
 from .focus_map import FocusMapOverlay
 from .histogram import MARGIN, HistogramOverlay
@@ -40,9 +38,6 @@ class ViewfinderArea(QtWidgets.QWidget):
             self._live: QtWidgets.QWidget = live
         elif engine.picam2 is not None:
             self._live = engine.make_viewfinder()
-            # Evaluation hook: boot with live frost on to judge the shader
-            if os.environ.get("CAMLAB_FROST"):
-                self.set_frost(True)
         else:
             self._live = QtWidgets.QLabel("No camera detected")
             self._live.setAlignment(Qt.AlignmentFlag.AlignCenter)
