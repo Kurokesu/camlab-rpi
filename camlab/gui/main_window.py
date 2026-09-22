@@ -658,17 +658,13 @@ class MainWindow(QtWidgets.QMainWindow):
             return  # one modal at a time
         # Sheet under backdrop would look interactive, close it. State lives in engine
         self._close_sheet()
-        # Frost viewfinder, leave its area undimmed. Without camera hides placeholder text
+        # Frost viewfinder. Without camera hides placeholder text
         self.viewfinder_area.set_frost(True)
-        clear = None
-        if self.viewfinder_area.has_camera:
-            clear = self.viewfinder_area.geometry()
         # Overlay traps Tab. Backdrop press cancels, same as Escape. Enter/Escape are shortcuts
         margin = 16 if self._profile.compact else 40
         self._overlay = ModalOverlay(
             self._root.panel_pane,
             card,
-            clear_rect=clear,
             margin=margin,
             on_backdrop=self._close_modal,
         )
