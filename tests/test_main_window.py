@@ -14,6 +14,7 @@ from conftest import FAILURES, PANEL_NAME, PANEL_OVERLAY, logged
 main_window = pytest.importorskip("camlab.gui.main_window")
 
 from camlab import config_manager
+from camlab.gui.monitor_view import MonitorView
 from camlab.gui.status_strip import StatusStrip
 from camlab.gui.style import COMPACT, REGULAR, build_stylesheet
 from camlab.integrity import IntegrityStats, NullCapture
@@ -77,6 +78,15 @@ def test_mirror_is_addressed_only_while_lit(win):
     assert win._live_monitor is None
     win._on_topology_changed(BOTH)
     assert win._live_monitor is win._root.monitor_view
+
+
+def test_one_telemetry_snapshot_reaches_the_mirror(win, monkeypatch):
+    """Mirror ticking itself left the heads on frames up to a tick apart."""
+    win._on_topology_changed(BOTH)
+    seen: list = []
+    monkeypatch.setattr(MonitorView, "update_status", lambda _self, t: seen.append(t))
+    win._update_status()
+    assert len(seen) == 1 and seen[0] is win.engine.telemetry
 
 
 @pytest.mark.parametrize(
