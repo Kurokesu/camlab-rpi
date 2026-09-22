@@ -358,7 +358,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._refresh_sensor_status()
         self._refresh_mode_status()
         self._refresh_control_buttons()
-        self._render_chips()
+        self._render_chips(self.engine.telemetry.metadata or {})
         self._reserve_chip_widths()
 
     def _apply_chrome_texts(self) -> None:
@@ -447,7 +447,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._sync_log_button(self.log_btn.isChecked())
 
     def _update_status(self) -> None:
-        # One snapshot read: frame, fps and metadata from same published frame
+        # One snapshot read, so strip, chips and the mirror sit on the same frame
         t = self.engine.telemetry
         md = t.metadata or {}
         self.status.set_telemetry(
@@ -464,14 +464,15 @@ class MainWindow(QtWidgets.QMainWindow):
             self.viewfinder_area.update_histogram(self.engine.latest_histogram)
         if self.focus_sampler.sampling:
             self.focus_sampler.poll()
-        self._render_chips()
+        self._render_chips(md)
+        if (monitor := self._live_monitor) is not None:
+            monitor.update_status(t)
 
-    def _render_chips(self) -> None:
+    def _render_chips(self, md: dict) -> None:
         """Chips carry live values, open sheet tracks value in auto.
 
         Metadata drops keys across a pipeline restart, so a gap keeps the last reading.
         """
-        md = self.engine.telemetry.metadata or {}
         for key, spec in CTRL_SPEC.items():
             value = md.get(spec.md_key)
             if value is None:

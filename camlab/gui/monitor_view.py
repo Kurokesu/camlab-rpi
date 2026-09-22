@@ -4,8 +4,8 @@
 """MonitorView: display-only twin of the panel UI for the monitor in Both mode.
 
 Same strip, viewfinder, control chips and assists as the panel at REGULAR
-density. Consumer driven: its own 10 Hz tick reads the engine and the panel's
-monitor sheet state.
+density. Panel pushes each telemetry snapshot, assists come from its monitor
+sheet state.
 """
 
 from __future__ import annotations
@@ -59,15 +59,7 @@ class MonitorView(QtWidgets.QWidget):
         self._reserve_chip_widths()
         focus_sampler.sample.connect(lambda s: self.viewfinder_area.update_focus_map(s.heat))
 
-        # Telemetry at 10 Hz
-        self._tick_timer = self._timer(100, self._tick)
-        self._tick()
-
-    def _timer(self, ms: int, slot) -> QtCore.QTimer:
-        timer = QtCore.QTimer(self)
-        timer.setInterval(ms)
-        timer.timeout.connect(slot)
-        return timer
+        self.update_status(engine.telemetry)  # first paint, panel pushes on every tick after
 
     def _build_chips(self) -> QtWidgets.QFrame:
         controls = QtWidgets.QFrame()
@@ -106,18 +98,8 @@ class MonitorView(QtWidgets.QWidget):
             btn.setText(chip_sample(spec, False))
             btn.setMinimumWidth(btn.sizeHint().width())
 
-    # Ticks run only while on screen
-    def showEvent(self, event) -> None:
-        super().showEvent(event)
-        self._tick()
-        self._tick_timer.start()
-
-    def hideEvent(self, event) -> None:
-        super().hideEvent(event)
-        self._tick_timer.stop()
-
-    def _tick(self) -> None:
-        t = self._engine.telemetry
+    def update_status(self, t) -> None:
+        """Panel pushes its snapshot, so both heads never sit on different frames."""
         md = t.metadata or {}
         self.status.set_telemetry(
             t.frame,
@@ -134,7 +116,7 @@ class MonitorView(QtWidgets.QWidget):
         self._sync_assists()
         if self._engine.latest_histogram is not None:
             self.viewfinder_area.update_histogram(self._engine.latest_histogram)
-        self._render_chips()
+        self._render_chips(md)
 
     def _sync_assists(self) -> None:
         """Both heads draw the assists picked on the panel's monitor sheet."""
@@ -146,9 +128,8 @@ class MonitorView(QtWidgets.QWidget):
         self.viewfinder_area.set_histogram_enabled(state.histogram)
         self.viewfinder_area.set_focus_map_enabled(state.focus_map)
 
-    def _render_chips(self) -> None:
+    def _render_chips(self, md: dict) -> None:
         """Same sources as the panel: metadata for value, control state for accent."""
-        md = self._engine.telemetry.metadata or {}
         for key, spec in CTRL_SPEC.items():
             value = md.get(spec.md_key)
             if value is None:

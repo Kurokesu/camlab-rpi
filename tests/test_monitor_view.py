@@ -47,6 +47,11 @@ def bench(qapp):
     return SimpleNamespace(engine=engine, sampler=sampler, sheet=sheet, view=view)
 
 
+def tick(bench) -> None:
+    """One panel tick, which is what pushes a snapshot here now."""
+    bench.view.update_status(bench.engine.telemetry)
+
+
 def test_viewfinder_wraps_mirror(bench):
     assert len(bench.engine.mirrors) == 1
     assert bench.engine.mirrors[0].parent() is bench.view.viewfinder_area
@@ -67,7 +72,7 @@ def test_tick_reads_telemetry_into_strip_and_chips(bench):
     bench.engine.telemetry = telemetry(
         frame=42, fps=30.0, ExposureTime=20000, AnalogueGain=2.0, SensorTemperature=41.2
     )
-    bench.view._tick()
+    tick(bench)
     assert bench.view.status.telemetry_lbl.text() == "#42 (30.00 fps) exp 20000 ag 2.00"
     assert bench.view.status.temp_lbl.text() == "41.2\u00b0C"
     assert bench.view.mode_btn.text() == " Mode: 1920x1080 SRGGB12 30fps"
@@ -79,9 +84,9 @@ def test_tick_reads_telemetry_into_strip_and_chips(bench):
 
 def test_metadata_gap_holds_last_reading(bench):
     bench.engine.telemetry = telemetry(frame=1, fps=30.0, ExposureTime=20000)
-    bench.view._tick()
+    tick(bench)
     bench.engine.telemetry = telemetry(frame=2, fps=30.0)
-    bench.view._tick()
+    tick(bench)
     assert bench.view._chips["exposure_us"].text() == chip_text(
         CTRL_SPEC["exposure_us"], 20000, False
     )
@@ -89,22 +94,22 @@ def test_metadata_gap_holds_last_reading(bench):
 
 def test_manual_control_tints_chip(bench):
     bench.engine.control_state.gain = 4.0
-    bench.view._tick()
+    tick(bench)
     assert bench.view._chips["gain"].property("manual") is True
     bench.engine.control_state.gain = None
-    bench.view._tick()
+    tick(bench)
     assert bench.view._chips["gain"].property("manual") is False
 
 
 def test_assists_follow_monitor_sheet(bench):
     bench.sheet.state = OFF._replace(peaking=True, zebra=True, zebra_threshold=0.8, histogram=True)
-    bench.view._tick()
+    tick(bench)
     area = bench.view.viewfinder_area
     assert bench.engine.mirrors[0].assists == (True, True, 0.8)
     assert area.findChild(HistogramOverlay).isVisibleTo(area)
     assert not area.findChild(FocusMapOverlay).isVisibleTo(area)
     bench.sheet.state = OFF
-    bench.view._tick()
+    tick(bench)
     assert bench.engine.mirrors[0].assists == (False, False, 0.95)
     assert not area.findChild(HistogramOverlay).isVisibleTo(area)
 
@@ -117,7 +122,7 @@ def test_focus_samples_reach_map_while_enabled(bench, monkeypatch):
     assert seen == []
     bench.sheet.state = OFF._replace(focus_map=True)
     bench.view.show()
-    bench.view._tick()
+    tick(bench)
     bench.sampler.sample.emit(SimpleNamespace(heat=heat))
     assert len(seen) == 1 and seen[0] is heat
 
@@ -129,7 +134,7 @@ def test_histogram_pushed_on_tick_when_shown(bench, monkeypatch):
     bench.view.show()
     assert seen == []
     bench.sheet.state = OFF._replace(histogram=True)
-    bench.view._tick()
+    tick(bench)
     assert len(seen) == 1
 
 
@@ -142,13 +147,12 @@ def test_no_input_surface(bench):
     assert not any(b.isCheckable() for b in buttons)
 
 
-def test_ticks_run_only_while_shown(bench):
-    view = bench.view
-    assert not view._tick_timer.isActive()
-    view.show()
-    assert view._tick_timer.isActive()
-    view.hide()
-    assert not view._tick_timer.isActive()
+def test_no_timer_of_its_own(bench):
+    """Panel drives every refresh, a second timer would put the heads out of phase."""
+    timers = bench.view.findChildren(
+        QtCore.QTimer, options=Qt.FindChildOption.FindDirectChildrenOnly
+    )
+    assert timers == []
 
 
 def test_board_stats_are_not_sampled_here(bench):
