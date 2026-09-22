@@ -146,9 +146,14 @@ def test_ticks_run_only_while_shown(bench):
     view = bench.view
     assert not view._tick_timer.isActive()
     view.show()
-    assert view._tick_timer.isActive() and view._stats_timer.isActive()
+    assert view._tick_timer.isActive()
     view.hide()
-    assert not view._tick_timer.isActive() and not view._stats_timer.isActive()
+    assert not view._tick_timer.isActive()
+
+
+def test_board_stats_are_not_sampled_here(bench):
+    """Panel owns the one sampler, so the twin must not read the counters again."""
+    assert not hasattr(bench.view, "_rpi_stats")
 
 
 def test_viewfinder_takes_width_under_strip_and_chips(bench, qapp):

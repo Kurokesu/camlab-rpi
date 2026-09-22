@@ -18,6 +18,8 @@ from dataclasses import dataclass
 # rasterization work (tfu/csd are transfer/compute, rarely the bottleneck)
 _GPU_STATS_GLOB = "/sys/devices/platform/axi/*.v3d/gpu_stats"
 _SOC_TEMP = "/sys/class/thermal/thermal_zone0/temp"
+_PROC_STAT = "/proc/stat"
+_MEMINFO = "/proc/meminfo"
 
 # RP1 hosts the camera's CSI-2 front end. hwmon indices are not boot-stable
 _HWMON_GLOB = "/sys/class/hwmon/hwmon*"
@@ -63,7 +65,7 @@ class RpiStats:
 
     def _cpu(self) -> float | None:
         try:
-            with open("/proc/stat") as f:
+            with open(_PROC_STAT) as f:
                 fields = [int(v) for v in f.readline().split()[1:]]
         except (OSError, ValueError):
             return None
@@ -104,7 +106,7 @@ class RpiStats:
     def _ram() -> dict:
         try:
             fields = {}
-            with open("/proc/meminfo") as f:
+            with open(_MEMINFO) as f:
                 for line in f:
                     key, _, rest = line.partition(":")
                     fields[key] = int(rest.split()[0])  # kB
