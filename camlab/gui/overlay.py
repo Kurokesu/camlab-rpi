@@ -169,7 +169,7 @@ def message_card(title: str, message: str, buttons: list[Button]) -> QtWidgets.Q
             btn.setObjectName("danger")
         btn.clicked.connect(callback)
         row.addWidget(btn)
-        # Last non-danger button is Enter target. Fall back if all destructive
+        # Enter goes to Cancel where the action is destructive, Apply where it is not
         if role != "danger" or primary is None:
             primary = btn
     lay.addLayout(row)

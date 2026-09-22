@@ -89,7 +89,6 @@ class AboutCard(QtWidgets.QFrame):
         # the next button when Check disables itself mid-check
         for btn in (self.check_btn, self.all_btn, back_btn):
             btn.setFocusPolicy(Qt.FocusPolicy.TabFocus)
-        # Every other button here reboots the unit, so Enter lands on Back
         self.primary_button = back_btn
         buttons = QtWidgets.QHBoxLayout()
         buttons.addWidget(self.check_btn)

@@ -134,7 +134,6 @@ class SettingsCard(QtWidgets.QFrame):
         self.apply_btn = QtWidgets.QPushButton("Apply")
         self.apply_btn.clicked.connect(self._apply)
         self.apply_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        # Networking off cuts reachability. Bare Enter must not trigger Apply: Cancel is primary
         self.primary_button = cancel_btn
         buttons.addWidget(cancel_btn)
         buttons.addStretch(1)

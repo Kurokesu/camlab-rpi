@@ -3,8 +3,7 @@
 
 """Power card: Reboot and Shutdown as glyph tiles, Cancel plain beneath them.
 
-Rendered inside ModalOverlay. Cancel takes Enter, so neither action is one
-keypress away. Amber marks the recoverable choice, red the terminal one.
+Rendered inside ModalOverlay. Amber marks the recoverable choice, red the terminal one.
 """
 
 from __future__ import annotations
@@ -23,7 +22,7 @@ _REBOOT_TINT = SEV_COLOR["warning"]
 
 
 class _Tile(QtWidgets.QPushButton):
-    """Glyph over label. Frame and colour come from shared button QSS."""
+    """Glyph over label. Frame and color come from shared button QSS."""
 
     def __init__(self, label: str, glyph: QtGui.QPixmap):
         super().__init__()
