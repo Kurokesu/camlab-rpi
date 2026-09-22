@@ -193,7 +193,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.mode_btn = QtWidgets.QPushButton()
         self.mode_btn.clicked.connect(self._choose_mode)
         self.mode_btn.setEnabled(bool(self.engine.modes))
-        # Control chips: live value on button, amber when manual, click opens sheet.
+        # Control chips: live value on button, amber when manual, click opens sheet
         # Born bare, _populate_static renders icon and placeholder before first paint
         self._ctrl_buttons: dict[str, QtWidgets.QPushButton] = {
             key: QtWidgets.QPushButton() for key in CTRL_SPEC
@@ -225,7 +225,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.log_btn,
             self.shutdown_btn,
         )
-        # QPushButton clamps icon to small default, set size explicitly.
+        # QPushButton clamps icon to small default, set size explicitly
         # TabFocus keeps mouse click from leaving focus ring
         for btn in self._chrome_btns:
             btn.setIconSize(QtCore.QSize(px, px))
@@ -509,7 +509,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._sync_log_button(checked)
 
     def _sync_log_button(self, checked: bool) -> None:
-        # One button both ways, pressed and relabeled when open, severity tinted when closed.
+        # One button both ways, pressed and relabeled when open, severity tinted when closed
         # Integrity ticks mostly re-report the same severity, skip those
         compact = self._profile.compact
         state = (checked, self._sev, compact, self._profile.icon_px)
@@ -630,7 +630,7 @@ class MainWindow(QtWidgets.QMainWindow):
         return self._overlay is not None
 
     def _on_return(self) -> None:
-        # Activate focused button. In modal, fall back to card primary so Enter works before tabbing.
+        # Activate focused button. In modal, fall back to card primary so Enter works before tabbing
         # On inert sink, do nothing
         focused = QtWidgets.QApplication.focusWidget()
         if isinstance(focused, QtWidgets.QPushButton) and focused.isEnabled():

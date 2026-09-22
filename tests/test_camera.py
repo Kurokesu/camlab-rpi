@@ -81,7 +81,7 @@ class TestEstimator:
     def test_grey_scene_gives_unit_gains(self):
         assert grey_world_gains(zones(64, GREY, GREY, GREY)) == pytest.approx((1.0, 1.0), abs=1e-3)
 
-    def test_tinted_scene_equalises_channels(self):
+    def test_tinted_scene_equalizes_channels(self):
         got = grey_world_gains(zones(64, GREY / 2, GREY, GREY / 3))
         assert got == pytest.approx((2.0, 3.0), abs=1e-2)
 

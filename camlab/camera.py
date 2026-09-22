@@ -32,7 +32,7 @@ from .qt import QtCore
 
 log = logging.getLogger(__name__)
 
-# Widest ct_curve across supported sensors runs 2220 to 9400 K.
+# Widest ct_curve across supported sensors runs 2220 to 9400 K
 # Travel past a sensor's own curve is clamped by IPA
 _CT_UI_RANGE = (2000, 10000)
 
@@ -72,7 +72,7 @@ _WB_EPSILON = 0.005
 
 
 def grey_world_gains(zones: np.ndarray) -> tuple[float, float] | None:
-    """(red, blue) gains equalising lit AWB zones, middle half by G/R and by G/B."""
+    """(red, blue) gains equalizing lit AWB zones, middle half by G/R and by G/B."""
     zones = zones.astype(np.float64)
     counted = zones[:, 3]
     lit = counted >= _AWB_ZONE_MIN_PIXELS

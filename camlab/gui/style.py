@@ -17,7 +17,7 @@ from string import Template
 from ..qt import QtGui
 from . import icons
 
-# Glass background/border shared by sheets (painted) and modal cards (QSS).
+# Glass background/border shared by sheets (painted) and modal cards (QSS)
 # Alpha tuned so live picture reads through while labels keep contrast
 GLASS_BG = QtGui.QColor(24, 26, 32, 175)
 GLASS_BORDER = QtGui.QColor(70, 76, 90, 200)
@@ -72,7 +72,7 @@ REGULAR = UiProfile(
     overlay_card_h=96,
 )
 
-# 13 px is ~1.5 mm on 800x480 4.3" panel: unreadable. 30 px touch targets unhittable.
+# 13 px is ~1.5 mm on 800x480 4.3" panel: unreadable. 30 px touch targets unhittable
 # Larger type, thicker sliders, taller buttons
 COMPACT = UiProfile(
     compact=True,
@@ -194,7 +194,7 @@ QLabel#modalText { color: #aeb4bf; }
 QLabel#modalHint { color: $warning; }
 """).substitute(SEV_COLOR)
 
-# Hover is mouse-only feedback: tap parks synthesized mouse on widget, pinning :hover until next tap.
+# Hover is mouse-only feedback: tap parks synthesized mouse on widget, pinning :hover until next tap
 # Compact skips these rules. Prepended so checked/focus rules win equal-specificity ties
 _HOVER = """
 QPushButton:hover { background: #353b47; }
