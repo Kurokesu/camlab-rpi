@@ -20,24 +20,18 @@ _DIM = QtGui.QColor(12, 13, 16, 165)
 
 
 class ModalOverlay(QtWidgets.QWidget):
-    """Covers host, dims it, blocks input and centers a card.
-
-    Dim skips optional clear_rect (frosted viewfinder) so frost stays full
-    strength. Tab stays in card.
-    """
+    """Covers host, dims it, blocks input and centers a card. Tab stays in card."""
 
     def __init__(
         self,
         host: QtWidgets.QWidget,
         card: QtWidgets.QWidget,
-        clear_rect: QtCore.QRect | None = None,
         margin: int = 40,
         on_backdrop: Callable[[], None] | None = None,
     ):
         super().__init__(host)
         self._host = host
         self.card = card
-        self._clear_rect = clear_rect
         self._on_backdrop = on_backdrop
         self.setObjectName("modalOverlay")
         for btn in card.findChildren(QtWidgets.QPushButton):
@@ -67,11 +61,7 @@ class ModalOverlay(QtWidgets.QWidget):
         self.setFocus(QtCore.Qt.FocusReason.OtherFocusReason)
 
     def paintEvent(self, event) -> None:
-        painter = QtGui.QPainter(self)
-        if self._clear_rect is not None and self._clear_rect.isValid():
-            region = QtGui.QRegion(self.rect()).subtracted(QtGui.QRegion(self._clear_rect))
-            painter.setClipRegion(region)
-        painter.fillRect(self.rect(), _DIM)
+        QtGui.QPainter(self).fillRect(self.rect(), _DIM)
 
     def mousePressEvent(self, event) -> None:
         # Card widgets ignore presses as well, so geometry decides what is backdrop
