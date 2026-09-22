@@ -57,7 +57,7 @@ def _require_safe(value: str, what: str) -> None:
 
 
 def _run_privileged(cmd: list[str]) -> None:
-    """Run the sudo helper, re-raising its reason. GUI shows this text on Apply failed."""
+    """Run the sudo helper, re-raising its reason. Failure card shows this text."""
     proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
     if proc.returncode == 0:
         return

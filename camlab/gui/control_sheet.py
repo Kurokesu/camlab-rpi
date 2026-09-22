@@ -258,7 +258,7 @@ class MonitorSheet(SheetCard):
         self.peak_btn = QtWidgets.QPushButton()
         self.zebra_btn = QtWidgets.QPushButton()
         for btn in (self.hist_btn, self.map_btn, self.peak_btn, self.zebra_btn):
-            # Segment look (square corners) to match the Auto/Manual rows.
+            # Segment look (square corners) to match the Auto/Manual rows
             # No pos property, so these stay visually separate toggles
             btn.setObjectName("segment")
             btn.setCheckable(True)

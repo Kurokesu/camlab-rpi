@@ -27,7 +27,7 @@ from .settings import AwbMode, DisplayMode, SettingsStore
 
 log = logging.getLogger("camlab")
 
-# Chrome height (status strip + controls row) sizing the boot lores stream.
+# Chrome height (status strip + controls row) sizing the boot lores stream
 # Errors are free, the stream refits to the real viewfinder before camera start
 _CHROME_PX = 90
 _CHROME_COMPACT_PX = 85

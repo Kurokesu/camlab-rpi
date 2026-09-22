@@ -117,7 +117,7 @@ log = logging.getLogger(__name__)
 # equivalent), two together read as the intended frost strength
 _BLUR_PASSES = 2
 
-# uRotate turns sampled texcoord about center, portrait panel shows landscape sensor upright.
+# uRotate turns sampled texcoord about center, portrait panel shows landscape sensor upright
 # Identity at 0 degrees
 _VERT = """
     attribute vec2 aPosition;
@@ -183,7 +183,7 @@ _FRAG_2D = """
     }
 """
 
-# Peaking guide: mean and gradient sector, smooth enough for half resolution.
+# Peaking guide: mean and gradient sector, smooth enough for half resolution
 # Paint does the sharp work against them
 _FRAG_GUIDE = """
     precision mediump float;
@@ -233,7 +233,7 @@ _FRAG_LUMA = """
 """
 
 # Paint pass: marks and zebra over the frame, gated by 0/1 uniforms and compiled
-# on first assist use.
+# on first assist use
 # Zebra: animated diagonal black/white stripes where luma clips zebraThr
 _FRAG_EXT_FX = """
     #extension GL_OES_EGL_image_external : enable
@@ -301,7 +301,7 @@ _PEAK_THR = 0.12
 _LUMA_GAIN = 255.0 / 219.0
 
 
-# 9-tap separable Gaussian using linear-sampling offsets (5 fetches).
+# 9-tap separable Gaussian using linear-sampling offsets (5 fetches)
 # texel is one texel along the blur axis, zero on the other
 _FRAG_BLUR = """
     precision mediump float;
