@@ -127,7 +127,7 @@ class CameraEngine:
         self._raw = False
         self.control_state = ControlState()
         self.grey_world = False  # software AWB in place of libcamera's while auto
-        self._grey_world_on = False  # grey_world in effect: auto WB on a colour sensor
+        self._grey_world_on = False  # grey_world in effect: auto WB on a color sensor
         self._wb_gains: tuple[float, float] | None = None  # smoothed (red, blue)
         self._wb_applied: tuple[float, float] | None = None
         self.stats_output = False  # ISP statistics in metadata

@@ -1,26 +1,26 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# One-shot read-only finaliser. Installed and enabled by scripts/setup/readonly.sh
+# One-shot read-only finalizer. Installed and enabled by scripts/setup/readonly.sh
 # but deliberately NOT run during install. It fires on the first boot AFTER
 # install, once the system has come up writable one last time so first-boot tasks
 # (resize2fs_once, host-key generation) settle. It then enables the overlay,
 # disables itself so it can never run again, and reboots once to bring the system
-# up read-only. ExecStart points at the finaliser script readonly.sh drops in
+# up read-only. ExecStart points at the finalizer script readonly.sh drops in
 
 [Unit]
-Description=camlab read-only root finaliser (one-shot, self-disabling)
+Description=camlab read-only root finalizer (one-shot, self-disabling)
 # Run late, after the persistent data mount and normal startup are up
 After=multi-user.target var-lib-camlab.mount
 Wants=var-lib-camlab.mount
-# Only meaningful while the data mount is healthy. The finaliser itself re-checks
+# Only meaningful while the data mount is healthy. The finalizer itself re-checks
 # writability and only acts when the overlay is staged-but-disabled, so it is a
 # no-op on an already-read-only boot (and it disables itself after locking in)
 ConditionPathExists=/var/lib/camlab/.camlab-data
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/sbin/camlab-readonly-finalise
+ExecStart=/usr/local/sbin/camlab-readonly-finalize
 RemainAfterExit=no
 
 [Install]

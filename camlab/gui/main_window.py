@@ -481,7 +481,7 @@ class MainWindow(QtWidgets.QMainWindow):
         btn = self._ctrl_buttons[key]
         if btn.text() != text:
             btn.setText(text)
-            # Ratchet width so a metadata gap never shrinks a chip and shifts neighbours
+            # Ratchet width so a metadata gap never shrinks a chip and shifts neighbors
             btn.setMinimumWidth(max(btn.minimumWidth(), btn.sizeHint().width()))
         self._set_chip_accent(btn, spec.glyph, getattr(self.engine.control_state, key) is not None)
 
@@ -509,7 +509,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._sync_log_button(checked)
 
     def _sync_log_button(self, checked: bool) -> None:
-        # One button both ways, pressed and relabelled when open, severity tinted when closed.
+        # One button both ways, pressed and relabeled when open, severity tinted when closed.
         # Integrity ticks mostly re-report the same severity, skip those
         compact = self._profile.compact
         state = (checked, self._sev, compact, self._profile.icon_px)

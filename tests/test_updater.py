@@ -401,7 +401,7 @@ class TestInventory:
         )
         assert rows["stack:rpicam-apps"]["installed"] == "1.13.0+krks1"
 
-    def test_fork_row_is_labelled_by_its_source_package(self, registry):
+    def test_fork_row_is_labeled_by_its_source_package(self, registry):
         assert self.rows(registry)["stack:libcamera"]["label"] == "libcamera"
 
     def test_epoch_stays_out_of_row(self, registry):
