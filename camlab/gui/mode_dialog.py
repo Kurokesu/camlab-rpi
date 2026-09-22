@@ -83,7 +83,6 @@ class ModeCard(QtWidgets.QFrame):
         cancel_btn.clicked.connect(on_cancel)
         self.apply_btn = QtWidgets.QPushButton("Apply")
         self.apply_btn.clicked.connect(self._apply)
-        # Apply is safe (no reboot), so it is primary Enter target
         self.primary_button = self.apply_btn
         buttons.addWidget(cancel_btn)
         buttons.addStretch(1)
