@@ -14,6 +14,7 @@ from conftest import FAILURES, PANEL_NAME, PANEL_OVERLAY, logged
 main_window = pytest.importorskip("camlab.gui.main_window")
 
 from camlab import config_manager
+from camlab.gui.status_strip import StatusStrip
 from camlab.gui.style import COMPACT, REGULAR, build_stylesheet
 from camlab.integrity import IntegrityStats, NullCapture
 from camlab.qt import QtCore, QtWidgets
@@ -22,6 +23,11 @@ PANEL_RECT = QtCore.QRect(0, 0, 800, 480)
 MONITOR_RECT = QtCore.QRect(0, 0, 1920, 1080)
 PANEL_ONLY = SimpleNamespace(panel=PANEL_RECT, monitor=None, bounds=PANEL_RECT)
 MONITOR_ONLY = SimpleNamespace(panel=None, monitor=MONITOR_RECT, bounds=MONITOR_RECT)
+BOTH = SimpleNamespace(
+    panel=PANEL_RECT,
+    monitor=QtCore.QRect(800, 0, 1920, 1080),
+    bounds=QtCore.QRect(0, 0, 2720, 1080),
+)
 
 
 def sensor_card(win):
@@ -48,6 +54,29 @@ def test_profile_follows_pane_screen_across_display_switch(win):
     win._on_topology_changed(PANEL_ONLY)
     assert win.profile is COMPACT
     assert win.styleSheet() == build_stylesheet(COMPACT)
+
+
+def test_one_board_sample_feeds_both_strips(win, monkeypatch):
+    """Sampling per strip would let the two disagree, loads are deltas over each own phase."""
+    win._on_topology_changed(BOTH)
+    seen: list[tuple[object, dict]] = []
+    monkeypatch.setattr(
+        StatusStrip, "set_rpi_stats", lambda self, texts: seen.append((self, texts))
+    )
+    win._sample_rpi()
+    assert [strip for strip, _ in seen] == [win.status, win._root.monitor_view.status]
+    assert seen[0][1] is seen[1][1]
+
+
+def test_mirror_is_addressed_only_while_lit(win):
+    """One guard for every reader, so none of them can disagree about the mirror."""
+    assert win._live_monitor is None
+    win._on_topology_changed(BOTH)
+    assert win._live_monitor is win._root.monitor_view
+    win._on_topology_changed(PANEL_ONLY)
+    assert win._live_monitor is None
+    win._on_topology_changed(BOTH)
+    assert win._live_monitor is win._root.monitor_view
 
 
 @pytest.mark.parametrize(

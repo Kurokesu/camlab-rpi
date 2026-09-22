@@ -327,6 +327,12 @@ class MainWindow(QtWidgets.QMainWindow):
         sheet = self._sheets["monitor"]
         return MonitorView(self.engine, self.focus_sampler, lambda: sheet.state, parent)
 
+    @property
+    def _live_monitor(self) -> MonitorView | None:
+        """Mirror while both heads are lit. None before first plug and once hidden."""
+        monitor = self._root.monitor_view
+        return monitor if monitor is not None and not monitor.isHidden() else None
+
     # wiring
     def _wire(self) -> None:
         self.capture.line_received.connect(self.log_panel.append_line)
@@ -424,10 +430,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # slots
     def _sample_rpi(self) -> None:
-        """One sample rendered once, feeds the strip cluster and the overlay card."""
+        """One sample rendered once."""
         texts = field_texts(self._rpi_stats.sample())
         self.status.set_rpi_stats(texts)
         self.viewfinder_area.update_stats(texts)
+        if (monitor := self._live_monitor) is not None:
+            monitor.status.set_rpi_stats(texts)
 
     def _on_first_frame(self, boot_time: float) -> None:
         self.log_panel.set_boot_time(boot_time)
@@ -997,8 +1005,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _lores_avail(self) -> tuple[int, int]:
         """Largest viewfinder across both heads, lores never upscales on either."""
         sizes = [self.viewfinder_area.lores_size()]
-        monitor = self._root.monitor_view
-        if monitor is not None and not monitor.isHidden():
+        if (monitor := self._live_monitor) is not None:
             sizes.append(monitor.viewfinder_area.lores_size())
         return max(sizes, key=lambda s: s[0] * s[1])
 

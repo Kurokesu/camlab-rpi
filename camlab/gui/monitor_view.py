@@ -14,10 +14,8 @@ from collections.abc import Callable
 
 from ..qt import Qt, QtCore, QtWidgets
 from ..settings import MonitorState
-from ..stats import RpiStats
 from . import icons
 from .chips import CTRL_SPEC, chip_sample, chip_text
-from .rpi_stats import field_texts
 from .status_strip import StatusStrip
 from .style import REGULAR, build_stylesheet
 from .viewfinder_area import ViewfinderArea
@@ -61,10 +59,8 @@ class MonitorView(QtWidgets.QWidget):
         self._reserve_chip_widths()
         focus_sampler.sample.connect(lambda s: self.viewfinder_area.update_focus_map(s.heat))
 
-        # Same cadences as the panel: telemetry at 10 Hz, board loads at 1 Hz
-        self._rpi_stats = RpiStats()
+        # Telemetry at 10 Hz
         self._tick_timer = self._timer(100, self._tick)
-        self._stats_timer = self._timer(1000, self._sample_rpi)
         self._tick()
 
     def _timer(self, ms: int, slot) -> QtCore.QTimer:
@@ -115,12 +111,10 @@ class MonitorView(QtWidgets.QWidget):
         super().showEvent(event)
         self._tick()
         self._tick_timer.start()
-        self._stats_timer.start()
 
     def hideEvent(self, event) -> None:
         super().hideEvent(event)
         self._tick_timer.stop()
-        self._stats_timer.stop()
 
     def _tick(self) -> None:
         t = self._engine.telemetry
@@ -141,9 +135,6 @@ class MonitorView(QtWidgets.QWidget):
         if self._engine.latest_histogram is not None:
             self.viewfinder_area.update_histogram(self._engine.latest_histogram)
         self._render_chips()
-
-    def _sample_rpi(self) -> None:
-        self.status.set_rpi_stats(field_texts(self._rpi_stats.sample()))
 
     def _sync_assists(self) -> None:
         """Both heads draw the assists picked on the panel's monitor sheet."""
