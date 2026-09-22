@@ -44,14 +44,14 @@ CTRL_SPEC: dict[str, ChipSpec] = {
 }
 
 
-def _labelled(spec: ChipSpec, body: str, compact: bool) -> str:
+def _labeled(spec: ChipSpec, body: str, compact: bool) -> str:
     return f" {body}" if compact else f" {spec.label} {body}"
 
 
 def chip_text(spec: ChipSpec, value: float | None, compact: bool) -> str:
     """Value text, "--" until metadata. Compact drops label."""
-    return _labelled(spec, spec.fmt(value) if value is not None else "--", compact)
+    return _labeled(spec, spec.fmt(value) if value is not None else "--", compact)
 
 
 def chip_sample(spec: ChipSpec, compact: bool) -> str:
-    return _labelled(spec, spec.sample, compact)
+    return _labeled(spec, spec.sample, compact)

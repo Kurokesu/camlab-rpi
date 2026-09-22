@@ -111,7 +111,7 @@ def test_monitor_view_stacks_below_panel_pane(bench):
     assert children.index(root.monitor_view) < children.index(root.panel_pane)
 
 
-def test_forced_size_centres_panel_pane_and_skips_monitor(qapp):
+def test_forced_size_centers_panel_pane_and_skips_monitor(qapp):
     bench = Bench(forced=(800, 480))
     root = bench.settle((1920, 1080), BOTH)
     assert root.panel_pane.geometry() == QtCore.QRect(560, 300, 800, 480)

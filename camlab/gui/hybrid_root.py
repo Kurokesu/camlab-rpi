@@ -59,7 +59,7 @@ class HybridRoot(QtWidgets.QWidget):
 
     def _rects(self) -> tuple[QtCore.QRect, QtCore.QRect | None]:
         if self._forced is not None:
-            # Panel preview: Cage forces fullscreen, shrink and centre the pane instead
+            # Panel preview: Cage forces fullscreen, shrink and center the pane instead
             panel = QtCore.QRect(QtCore.QPoint(), QtCore.QSize(*self._forced))
             panel.moveCenter(self.rect().center())
             return panel, None

@@ -18,7 +18,7 @@ from camlab.camera import CameraEngine, grey_world_gains
 PIXELS = 1000
 GREY = 4000  # 16-bit channel mean well above the lit threshold
 
-COLOUR_CONTROLS = {
+COLOR_CONTROLS = {
     "ColourTemperature": (100, 100000, 4500),
     "AwbEnable": (False, True, True),
     "StatsOutputEnable": (False, True, False),
@@ -26,7 +26,7 @@ COLOUR_CONTROLS = {
 
 
 def zones(count: int, r: float, g: float, b: float, pixels: int = PIXELS) -> np.ndarray:
-    """count zones of the same colour, per-channel means times pixel count."""
+    """count zones of the same color, per-channel means times pixel count."""
     row = np.array([r * pixels, g * pixels, b * pixels, pixels], dtype=np.uint32)
     return np.tile(row, (count, 1))
 
@@ -48,7 +48,7 @@ class FakePicam2:
         self.pushed.append(dict(ctrls))
 
 
-def _engine(controls: dict = COLOUR_CONTROLS) -> tuple[CameraEngine, FakePicam2]:
+def _engine(controls: dict = COLOR_CONTROLS) -> tuple[CameraEngine, FakePicam2]:
     engine = CameraEngine()
     engine.picam2 = FakePicam2(controls)
     return engine, engine.picam2
@@ -85,7 +85,7 @@ class TestEstimator:
         got = grey_world_gains(zones(64, GREY / 2, GREY, GREY / 3))
         assert got == pytest.approx((2.0, 3.0), abs=1e-2)
 
-    def test_outer_quarters_drop_coloured_object(self):
+    def test_outer_quarters_drop_colored_object(self):
         red_object = zones(20, GREY * 3, GREY, GREY)
         got = grey_world_gains(np.vstack([zones(80, GREY, GREY, GREY), red_object]))
         assert got == pytest.approx((1.0, 1.0), abs=1e-3)
