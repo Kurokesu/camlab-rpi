@@ -198,6 +198,17 @@ class TestWriteFailures:
         assert list(cm.config_path.parent.glob("*.camlab-tmp")) == []
         assert cm.config_path.read_text() == "arm_boost=1\n"
 
+    @pytest.mark.parametrize("action", ["reboot", "poweroff"])
+    def test_refused_power_action_carries_sudo_reason(self, action, monkeypatch):
+        def deny(*_args, **_kwargs):
+            return subprocess.CompletedProcess(
+                args=[], returncode=1, stdout="", stderr="sudo: a password is required\n"
+            )
+
+        monkeypatch.setattr(config_manager.subprocess, "run", deny)
+        with pytest.raises(ConfigError, match="a password is required"):
+            getattr(config_manager, action)()
+
     def test_helper_reason_reaches_caller(self, monkeypatch):
         def fail(*_args, **_kwargs):
             return subprocess.CompletedProcess(

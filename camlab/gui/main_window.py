@@ -787,7 +787,8 @@ class MainWindow(QtWidgets.QMainWindow):
                     detail += " The display change stuck, re-apply to undo it."
             self._show_message("Apply failed", detail)
             return
-        (reboot if then_reboot else poweroff)()
+        action, label = (reboot, "Reboot") if then_reboot else (poweroff, "Shutdown")
+        self._power_action(action, label)
 
     def _open_settings(self) -> None:
         # Also the way back from About, so drop that card first. No-op from chrome

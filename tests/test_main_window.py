@@ -16,7 +16,7 @@ main_window = pytest.importorskip("camlab.gui.main_window")
 from camlab import config_manager
 from camlab.gui.style import COMPACT, REGULAR, build_stylesheet
 from camlab.integrity import IntegrityStats, NullCapture
-from camlab.qt import QtCore
+from camlab.qt import QtCore, QtWidgets
 
 PANEL_RECT = QtCore.QRect(0, 0, 800, 480)
 MONITOR_RECT = QtCore.QRect(0, 0, 1920, 1080)
@@ -130,6 +130,19 @@ def test_sensor_card_offers_reboot_left_of_shutdown_and_cancel_takes_enter(win):
 def test_each_apply_writes_config_before_its_power_action(win, calls, attr, call):
     getattr(sensor_card(win), attr).click()
     assert calls == ["write", call]
+
+
+def test_failed_reboot_from_sensor_card_is_reported(win, calls, monkeypatch):
+    """Config is already rewritten, so a refused reboot has to reach the operator."""
+
+    def refused() -> None:
+        raise RuntimeError("sudo: a password is required")
+
+    monkeypatch.setattr(main_window, "reboot", refused)
+    sensor_card(win).reboot_btn.click()
+    labels = [lbl.text() for lbl in win._overlay.card.findChildren(QtWidgets.QLabel)]
+    assert "Reboot failed" in labels
+    assert calls == ["write"]
 
 
 def test_neither_apply_is_live_until_selection_changes(win, cm):
