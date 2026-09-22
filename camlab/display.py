@@ -245,7 +245,7 @@ def apply_output_layout(mode: DisplayMode) -> None:
         if not _satisfied(outputs.get(target.name), target):
             args += _target_args(target)
     if args:
-        log.info("display layout (%s): %s", mode, " ".join(args))
+        log.info("applying display layout (%s): %s", mode, " ".join(args))
         if _wlr_randr(args) is None:
             return
     if has_dsi_display():
@@ -257,7 +257,7 @@ def apply_output_layout(mode: DisplayMode) -> None:
     if not layout.on or not _all_lit(layout.on):
         log.error("keeping %s enabled, target outputs did not light", ", ".join(stale))
         return
-    log.info("display off: %s", " ".join(stale))
+    log.info("disabling %s", " ".join(stale))
     _wlr_randr([a for n in stale for a in ("--output", n, "--off")])
 
 
