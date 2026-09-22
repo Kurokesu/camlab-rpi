@@ -325,11 +325,11 @@ class ConfigManager:
 
 def poweroff() -> None:
     # --no-wall: broadcast would flash tty1 between Cage exit and Plymouth
-    subprocess.run(["sudo", "systemctl", "poweroff", "--no-wall"], check=True)
+    _run_privileged(["sudo", "systemctl", "poweroff", "--no-wall"])
 
 
 def reboot() -> None:
-    subprocess.run(["sudo", "systemctl", "reboot", "--no-wall"], check=True)
+    _run_privileged(["sudo", "systemctl", "reboot", "--no-wall"])
 
 
 def _require_root(cmd: str) -> bool:
