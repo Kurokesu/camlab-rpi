@@ -80,7 +80,7 @@ def test_mirror_is_addressed_only_while_lit(win):
     assert win._live_monitor is win._root.monitor_view
 
 
-def test_one_telemetry_snapshot_reaches_the_mirror(win, monkeypatch):
+def test_one_telemetry_snapshot_reaches_mirror(win, monkeypatch):
     """Mirror ticking itself left the heads on frames up to a tick apart."""
     win._on_topology_changed(BOTH)
     seen: list = []

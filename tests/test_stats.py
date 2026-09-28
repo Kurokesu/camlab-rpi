@@ -94,7 +94,7 @@ class TestGpu:
         board.gpu({"bin": (100, 30), "render": (100, 60)})
         assert rpi.sample().gpu_pct == pytest.approx(60.0)
 
-    def test_runtime_past_the_interval_clamps_to_full(self, board):
+    def test_runtime_past_interval_clamps_to_full(self, board):
         board.gpu({"bin": (0, 0)})
         rpi = RpiStats()
         rpi.sample()
