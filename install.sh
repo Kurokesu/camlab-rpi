@@ -45,7 +45,8 @@ done
 
 require_root
 
-exec > >(tee -a "$LOG_FILE") 2>&1
+# Log file drops color codes and in-place progress, terminal keeps both
+exec > >(tee >(sed -u 's/\x1b\[[0-9;?]*[A-Za-z]//g; s/\r$//; s/.*\r//' >> "$LOG_FILE")) 2>&1
 header "camlab install started at $(date)"
 log "Logging to $LOG_FILE"
 
