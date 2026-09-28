@@ -52,7 +52,7 @@ def test_picamera2_drift_names_loaded_version(pin):
 
 
 def test_debian_rebuild_still_pairs(pin):
-    """Pin ceiling admits a rebuild, which the loaded version never carries."""
+    """Loaded version never carries Debian revision, so rebuild still pairs."""
     pin(LIBCAMERA_VERSION=f"{PINNED}-2")
     assert stack.mismatches(LOADED) == []
 

@@ -56,7 +56,7 @@ if ! command -v eatmydata >/dev/null 2>&1; then
     apt-get install -y eatmydata
 fi
 
-# Deb holds stack range and app packages as Depends, leave them to apt
+# Deb holds floors and app packages as Depends, leave them to apt
 if [ -z "$(missing_packages camlab-rpi)" ]; then
     log "Done. Dependencies came with camlab-rpi."
     exit 0
@@ -67,54 +67,45 @@ REPO="$(resolve_repo_dir)"
 # shellcheck source=../../apt-packages
 source "$REPO/apt-packages"
 
-PINNED=("$LIBCAMERA_VERSION $LIBCAMERA_PACKAGES"
-        "$RPICAM_APPS_VERSION $RPICAM_APPS_PACKAGES")
+STACK=("$LIBCAMERA_VERSION $LIBCAMERA_PACKAGES"
+       "$RPICAM_APPS_VERSION $RPICAM_APPS_PACKAGES")
+FLOORED=("${STACK[@]}" "$CAGE_VERSION $CAGE_PACKAGES")
 
-mapfile -t RELATIONS < <(stack_relations "${PINNED[@]}")
-
-STALE=()
-AHEAD=()
-for pin in "${PINNED[@]}"; do
+# Raising a floor can pull a new package, which plain upgrade refuses to do
+BELOW=()
+for pin in "${FLOORED[@]}"; do
     read -r floor packages <<<"$pin"
     for pkg in $packages; do
         have="$(dpkg-query -Wf '${Version}' "$pkg" 2>/dev/null)" || have=""
         if dpkg --compare-versions "${have:-0}" lt "$floor"; then
-            STALE+=("$pkg")
-        elif dpkg --compare-versions "$have" ge "$floor."; then
-            AHEAD+=("$pkg")
+            BELOW+=("$pkg")
         fi
     done
 done
 
-if [ "${#AHEAD[@]}" -gt 0 ]; then
-    # Downgrading would drop rpicam-apps, which needs matching libcamera ABI
-    warn "Camera stack ahead of pin, left alone: ${AHEAD[*]}"
-    warn "Pin is $LIBCAMERA_VERSION / $RPICAM_APPS_VERSION in apt-packages"
-elif [ "${#STALE[@]}" -gt 0 ]; then
-    log "Pinning camera stack: ${STALE[*]}"
-    apt_get satisfy -y --no-install-recommends "${RELATIONS[@]}"
-else
-    log "Camera stack already matches the pin."
-fi
-
-# Raising a floor can pull a new package, which plain upgrade refuses to do
-BELOW=()
-for pkg in $CAGE_PACKAGES; do
-    have="$(dpkg-query -Wf '${Version}' "$pkg" 2>/dev/null)" || have=""
-    if dpkg --compare-versions "${have:-0}" lt "$CAGE_VERSION"; then
-        BELOW+=("$pkg")
-    fi
-done
-
 if [ "${#BELOW[@]}" -gt 0 ]; then
-    log "Raising to floor $CAGE_VERSION: ${BELOW[*]}"
-    mapfile -t FLOORS < <(floor_relations "$CAGE_VERSION $CAGE_PACKAGES")
+    log "Raising to floor: ${BELOW[*]}"
+    mapfile -t FLOORS < <(floor_relations "${FLOORED[@]}")
     apt_get satisfy -y --no-install-recommends "${FLOORS[@]}"
 else
     log "Floored packages already meet the floor."
 fi
 
-# After the stack, or picamera2 pulls apt's candidate bindings past the pin
+AHEAD=()
+for pin in "${STACK[@]}"; do
+    read -r floor packages <<<"$pin"
+    for pkg in $packages; do
+        have="$(dpkg-query -Wf '${Version}' "$pkg")"
+        if dpkg --compare-versions "$have" ge "$floor."; then
+            AHEAD+=("$pkg=$have")
+        fi
+    done
+done
+
+if [ "${#AHEAD[@]}" -gt 0 ]; then
+    warn "Camera stack newer than validated in apt-packages: ${AHEAD[*]}"
+fi
+
 # shellcheck disable=SC2206  # test_stack_pin.py asserts names are glob-free
 UNPINNED=($APP_PACKAGES $PICAMERA2_PACKAGES)
 

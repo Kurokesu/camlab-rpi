@@ -10,9 +10,9 @@ Maintainer notes for versioning and cutting releases.
 
 ## Camera stack pin
 
-`libcamera` and `rpicam-apps` fork versions a release is validated against are pinned in `apt-packages`, floor and ceiling per package. Range covers packaging rebuilds, so `1:1.13.0+krks1-2` lands on fresh installs while `1:1.13.0+krks2-1` waits for pin to move.
+`apt-packages` floors `libcamera` and `rpicam-apps` at fork versions each release is validated against. Newer builds still install, with a warning.
 
-To move it:
+To raise floors:
 
 1. Edit `apt-packages` in release commit.
 2. Run `scripts/dev/check-stack-pin.sh` on a Pi carrying Kurokesu archive.

@@ -14,7 +14,7 @@ FORKS = ("LIBCAMERA", "RPICAM_APPS")
 
 COMMON = Path(__file__).resolve().parent.parent / "scripts" / "common.sh"
 
-RELATION = re.compile(r"(\S+) \((>=|<<) (\S+)\)")
+RELATION = re.compile(r"(\S+) \(>= (\S+)\)")
 
 
 def app_packages() -> list[str]:
@@ -31,23 +31,24 @@ def next_fork(floor: str) -> str:
     return re.sub(r"\d+$", lambda m: str(int(m.group()) + 1), floor)
 
 
-def relation_bounds(*given: str, helper: str = "stack_relations") -> dict[str, dict[str, str]]:
-    """Bounds the named helper emits per package, keyed by apt operator."""
+def relation_floors(*given: str) -> dict[str, str]:
+    """Version floor_relations emits per package, one relation each."""
     # Pre-set owner, or common.sh resolves one off the running unit
-    script = f'CAMLAB_USER=root; source "{COMMON}"; {helper} "$@"'
+    script = f'CAMLAB_USER=root; source "{COMMON}"; floor_relations "$@"'
     emitted = subprocess.run(
         ["bash", "-c", script, "bash", *given],
         capture_output=True,
         text=True,
         check=True,
     ).stdout
-    bounds: dict[str, dict[str, str]] = {}
+    floors: dict[str, str] = {}
     for line in emitted.splitlines():
         relation = RELATION.fullmatch(line)
         assert relation, line
-        pkg, op, version = relation.groups()
-        bounds.setdefault(pkg, {})[op] = version
-    return bounds
+        pkg, version = relation.groups()
+        assert pkg not in floors, pkg
+        floors[pkg] = version
+    return floors
 
 
 def test_os_codename_is_well_formed():
@@ -69,48 +70,30 @@ def test_versions_carry_fork_epoch():
         assert ":" in env[f"{fork}_VERSION"], fork
 
 
-def test_ceiling_admits_rebuild_and_stops_next_fork():
-    """Trailing dot carries the whole ceiling, so prove it against real dpkg."""
-    floor = pins()["LIBCAMERA_VERSION"]
-    assert dpkg_says(f"{floor}-9", "lt", f"{floor}.")
-    assert dpkg_says(next_fork(floor), "ge", f"{floor}.")
-
-
-def test_stack_relations_admit_rebuild_and_stop_next_fork():
-    """Relations reach apt as argv, so prove emitted bounds against real dpkg."""
-    floor = "1:2.3.4+krks7"
-    bounds = relation_bounds(f"{floor} pkg-a pkg-b")
-    assert set(bounds) == {"pkg-a", "pkg-b"}
-    for pkg, bound in bounds.items():
-        assert set(bound) == {">=", "<<"}, pkg
-        assert dpkg_says(floor, "ge", bound[">="]), pkg
-        assert dpkg_says(f"{floor}-9", "lt", bound["<<"]), pkg
-        assert dpkg_says(next_fork(floor), "ge", bound["<<"]), pkg
-
-
-def test_stack_relations_cover_both_fork_pins():
-    """Callers pass both pins in one call, so every pinned package needs a pair."""
-    env = pins()
-    given = [" ".join((env[f"{fork}_VERSION"], env[f"{fork}_PACKAGES"])) for fork in FORKS]
-    wanted = {pkg for fork in FORKS for pkg in env[f"{fork}_PACKAGES"].split()}
-    assert set(relation_bounds(*given)) == wanted
-
-
 def test_cage_floor_names_version_and_packages():
     env = pins()
     assert env["CAGE_VERSION"]
     assert env["CAGE_PACKAGES"].split()
 
 
-def test_floor_relations_admit_every_newer_build():
-    """No ceiling, so a cage release past the floor needs no edit here."""
-    floor = pins()["CAGE_VERSION"]
-    bounds = relation_bounds(f"{floor} pkg-a pkg-b", helper="floor_relations")
-    assert set(bounds) == {"pkg-a", "pkg-b"}
-    for pkg, bound in bounds.items():
-        assert set(bound) == {">="}, pkg
-        assert dpkg_says(floor, "ge", bound[">="]), pkg
-        assert dpkg_says(next_fork(floor), "ge", bound[">="]), pkg
+def test_floor_relations_admit_rebuild_and_next_fork():
+    """Archive may serve only newer builds, so rebuild and next fork both pass."""
+    floor = "1:2.3.4+krks7"
+    floors = relation_floors(f"{floor} pkg-a pkg-b")
+    assert set(floors) == {"pkg-a", "pkg-b"}
+    for pkg, bound in floors.items():
+        assert dpkg_says(floor, "ge", bound), pkg
+        assert dpkg_says(f"{floor}-9", "ge", bound), pkg
+        assert dpkg_says(next_fork(floor), "ge", bound), pkg
+
+
+def test_floor_relations_cover_every_floored_package():
+    """Callers pass every floor in one call, so each package needs its relation."""
+    env = pins()
+    keys = (*FORKS, "CAGE")
+    given = [" ".join((env[f"{key}_VERSION"], env[f"{key}_PACKAGES"])) for key in keys]
+    wanted = {pkg for key in keys for pkg in env[f"{key}_PACKAGES"].split()}
+    assert set(relation_floors(*given)) == wanted
 
 
 def test_cage_is_named_once():
@@ -130,7 +113,7 @@ def test_picamera2_is_named_once():
 
 
 def test_app_packages_leave_fork_packages_to_pin():
-    """A presence-checked fork package would land outside the pinned range."""
+    """A presence-checked fork package would skip its floor."""
     forked = {pkg for fork in FORKS for pkg in pins()[f"{fork}_PACKAGES"].split()}
     assert forked.isdisjoint(app_packages())
 
