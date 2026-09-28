@@ -91,19 +91,7 @@ missing_packages() {
     done
 }
 
-# Apt relations for "<floor> <pkg>..." pins. Trailing dot on the ceiling admits
-# a floor rebuild and stops the next fork
-stack_relations() {
-    local pin floor packages pkg
-    for pin in "$@"; do
-        read -r floor packages <<<"$pin"
-        for pkg in $packages; do
-            printf '%s (>= %s)\n%s (<< %s.)\n' "$pkg" "$floor" "$pkg" "$floor"
-        done
-    done
-}
-
-# No ceiling, a newer build still brings what the floor was set for
+# Apt relations for "<floor> <pkg>..." pins
 floor_relations() {
     local pin floor packages pkg
     for pin in "$@"; do
