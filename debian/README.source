@@ -87,8 +87,7 @@ Setting up a unit
 The package owns /opt/camlab and /usr/bin/camlab-setup, a symlink to
 install.sh in the payload. Everything outside /opt, the service, boot
 config, sudoers and the read-only overlay, is camlab-setup's, run once
-after install. That work asks the operator questions and writes
-/usr/local, neither of which belongs in a postinst.
+after install.
 
 install.sh skips its copy step when it runs from /opt/camlab, so the
 same script serves both the package and a clone.
@@ -101,8 +100,7 @@ removes files under /opt/camlab the package does not own, so a first
 dpkg -i over a tarball install converts the tree cleanly and stale
 modules cannot shadow packaged ones.
 
-The /usr/local/bin/camlabctl symlink stays install.sh-owned. Debian
-policy keeps packages out of /usr/local.
+The /usr/local/bin/camlabctl symlink stays install.sh-owned.
 
 Forks
 -----
