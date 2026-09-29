@@ -66,3 +66,9 @@ sensors:
     options: []               # 4-lane default, color/mono selectable, not auto-detected
     mono_option: mono
     notes: "8.3MP rolling shutter, 3840x2160"
+
+  - name: OS08E10
+    overlay: os08e10
+    driver_package: os08e10-rpi-dkms
+    options: [4lane]          # 4-lane MIPI
+    notes: "8MP rolling shutter, 3840x2160"
