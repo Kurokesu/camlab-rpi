@@ -52,11 +52,7 @@ class ModeCard(QtWidgets.QFrame):
         self.fps_sel = SegmentedSelector()
         self.fps_lock_sel = SegmentedSelector()
 
-        init_size = tuple(current_mode.size) if current_mode else None
-        sep = "x" if self._compact else " x "
-        self.res_sel.set_options(
-            [(f"{w}{sep}{h}", (w, h)) for (w, h) in resolutions(modes)], current=init_size
-        )
+        self._rebuild_res(tuple(current_mode.size) if current_mode else None)
         self._rebuild_depths(current_mode.bit_depth if current_mode else None)
         self._rebuild_fps(fps_current)
         self.fps_lock_sel.set_options(
@@ -98,6 +94,11 @@ class ModeCard(QtWidgets.QFrame):
 
         self._refresh_apply()
 
+    def set_compact(self, compact: bool) -> None:
+        self._compact = bool(compact)
+        self._rebuild_res(self.res_sel.current_value())
+        self._rebuild_fps(self.fps_sel.current_value())
+
     def _selection(self) -> tuple:
         return (
             self.res_sel.current_value(),
@@ -120,6 +121,12 @@ class ModeCard(QtWidgets.QFrame):
     def _on_depth_changed(self) -> None:
         self._rebuild_fps(self.fps_sel.current_value())
         self._refresh_apply()
+
+    def _rebuild_res(self, current: tuple[int, int] | None) -> None:
+        sep = "x" if self._compact else " x "
+        self.res_sel.set_options(
+            [(f"{w}{sep}{h}", (w, h)) for (w, h) in resolutions(self._modes)], current=current
+        )
 
     def _rebuild_depths(self, prefer_depth: int | None) -> None:
         depths = bit_depths_for(self._modes, self.res_sel.current_value())  # deepest first

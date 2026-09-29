@@ -686,11 +686,10 @@ class MainWindow(QtWidgets.QMainWindow):
         # Frost viewfinder. Without camera hides placeholder text
         self.viewfinder_area.set_frost(True)
         # Overlay traps Tab. Backdrop press cancels, same as Escape. Enter/Escape are shortcuts
-        margin = 16 if self._profile.compact else 40
         self._overlay = ModalOverlay(
             self._root.chrome_pane,
             card,
-            margin=margin,
+            self._profile,
             on_backdrop=self._close_modal,
         )
 
@@ -1041,8 +1040,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._populate_static()
         self._refresh_monitor_chip()
         self._update_status()
-        if self._overlay is not None and hasattr(self._overlay.card, "set_compact"):
-            self._overlay.card.set_compact(profile.compact)
+        if self._overlay is not None:
+            self._overlay.apply_profile(profile)
 
     def _lores_avail(self) -> tuple[int, int]:
         """Largest viewfinder across both displays.

@@ -59,8 +59,6 @@ class AboutCard(QtWidgets.QFrame):
         # Right margin keeps Update buttons off the scrollbar
         self._grid.setContentsMargins(0, 0, 8, 0)
         self._grid.setHorizontalSpacing(12)
-        # Rows of Update buttons, so a thumb needs a gap even where height is tight
-        self._grid.setVerticalSpacing(6 if compact else 8)
         # Slack goes to versions, labels hug their text
         self._grid.setColumnStretch(1, 1)
 
@@ -97,8 +95,7 @@ class AboutCard(QtWidgets.QFrame):
         buttons.addWidget(back_btn)
 
         lay = QtWidgets.QVBoxLayout(self)
-        lay.setContentsMargins(*((18, 10, 18, 10) if compact else (22, 20, 22, 18)))
-        lay.setSpacing(6 if compact else 14)
+        self.set_compact(compact)
         lay.addWidget(title)
         lay.addWidget(self._scroll, 1)
         lay.addWidget(self.status_lbl)
@@ -106,6 +103,13 @@ class AboutCard(QtWidgets.QFrame):
         lay.addLayout(buttons)
 
         self._rebuild()
+
+    def set_compact(self, compact: bool) -> None:
+        lay = self.layout()
+        lay.setContentsMargins(*((18, 10, 18, 10) if compact else (22, 20, 22, 18)))
+        lay.setSpacing(6 if compact else 14)
+        # Rows of Update buttons, so a thumb needs a gap even where height is tight
+        self._grid.setVerticalSpacing(6 if compact else 8)
 
     def _rebuild(self) -> None:
         while self._grid.count():
