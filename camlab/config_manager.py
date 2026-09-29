@@ -346,6 +346,7 @@ def _main(argv: list[str] | None = None) -> int:
     p_set.add_argument("--overlay", required=True)
     p_set.add_argument("--port", default="cam1", choices=VALID_PORTS)
     p_set.add_argument("--options", action="append", default=[])
+    p_set.add_argument("--keep", action="store_true", help="leave an existing block as it is")
     sub.add_parser("get", help="print the current camera block as parsed")
     sub.add_parser("free-port", help="print a CSI port the display does not claim")
     p_disp = sub.add_parser("display-set", help="write the display block (root)")
@@ -367,6 +368,10 @@ def _main(argv: list[str] | None = None) -> int:
     if args.cmd == "set":
         if not _require_root(args.cmd):
             return 2
+        if args.keep and (cur := cm.get_current())["present"]:
+            line = cm.compose_dtoverlay(cur["overlay"], cur["port"], cur["options"])
+            print(f"camera block kept: {line}")
+            return 0
         cm._rewrite_in_place(args.overlay, args.port, args.options)
         print(
             f"camera block updated: {cm.compose_dtoverlay(args.overlay, args.port, args.options)}"
