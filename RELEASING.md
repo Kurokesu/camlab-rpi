@@ -37,10 +37,9 @@ Release stays a draft until deb lands on it. Publishing is the one notification 
 
 ## Debian package
 
-Deb ships from `debian/latest`, procedure in `debian/source/README.source` there. What that doc does not detail:
+Deb ships from `debian/latest`, procedure in `debian/README.source` there. What that doc does not detail:
 
-1. Sync `debian/control` Suggests with drivers `drivers.sh` installs, in changelog commit.
-2. Tag `origin/debian/latest` (`~` becomes `_` in tags):
+1. Tag `origin/debian/latest` (`~` becomes `_` in tags):
 
 ```bash
 git fetch origin
@@ -48,4 +47,4 @@ git tag -a debian/1.0.0_beta.3-1 -m "debian/1.0.0_beta.3-1" origin/debian/latest
 git push origin debian/1.0.0_beta.3-1
 ```
 
-3. Once assets land, rewrite draft description and publish, then add a manifest entry in `Kurokesu/apt` to serve it from [apt.kurokesu.com](https://apt.kurokesu.com). Ingest reads published releases, so publishing comes first.
+2. Once assets land, rewrite draft description and publish, then add a manifest entry in `Kurokesu/apt` to serve it from [apt.kurokesu.com](https://apt.kurokesu.com). Ingest reads published releases, so publishing comes first.

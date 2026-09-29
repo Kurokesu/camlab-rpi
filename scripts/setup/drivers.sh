@@ -4,8 +4,7 @@
 #
 # Install Kurokesu out-of-tree sensor drivers, DKMS source packages from the
 # Kurokesu apt archive (enabled by deps.sh). Package postinst compiles
-# <sensor>.dtbo into /boot/overlays, which on Trixie must be a symlink to the
-# live /boot/firmware/overlays dir.
+# <sensor>.dtbo into /boot/overlays.
 # Safe to re-run. Requires sudo.
 #
 # Usage:
@@ -23,7 +22,6 @@ source "$(dirname "${BASH_SOURCE[0]}")/../common.sh"
 # Driver packages come from camlab/data/sensors.yaml, adding a sensor is a single
 # edit there
 REPO_DIR="$(resolve_repo_dir)"
-SENSORS_YAML="$REPO_DIR/camlab/data/sensors.yaml"
 
 python3 -c 'import yaml' 2>/dev/null \
     || die "python3-yaml not installed (run scripts/setup/deps.sh first)"
@@ -31,20 +29,10 @@ python3 -c 'import yaml' 2>/dev/null \
 declare -A DRIVER_PACKAGE=()
 DEFAULT_SENSORS=()
 while IFS=$'\t' read -r overlay package; do
-    [ -n "$overlay" ] || continue
     DRIVER_PACKAGE["$overlay"]="$package"
     DEFAULT_SENSORS+=("$overlay")
-done < <(python3 - "$SENSORS_YAML" <<'PY'
-import sys, yaml
-with open(sys.argv[1]) as f:
-    data = yaml.safe_load(f) or {}
-for s in (data.get("sensors") or []):
-    overlay, package = s.get("overlay"), s.get("driver_package")
-    if overlay and package:
-        print(f"{overlay}\t{package}")
-PY
-)
-[ "${#DRIVER_PACKAGE[@]}" -gt 0 ] || die "no sensors with a driver_package in $SENSORS_YAML"
+done < <(cd "$REPO_DIR" && python3 -m camlab.sensors)
+[ "${#DRIVER_PACKAGE[@]}" -gt 0 ] || die "no sensors with a driver_package in camlab/data/sensors.yaml"
 
 SENSORS=()
 for arg in "$@"; do
@@ -70,18 +58,6 @@ fi
 FW_OVERLAYS="/boot/firmware/overlays"
 
 header "Installing sensor drivers: ${SENSORS[*]}"
-
-# Trixie: drivers install overlays to /boot/overlays, but the active dir is
-# /boot/firmware/overlays
-if [ -d "$FW_OVERLAYS" ] && [ ! -e /boot/overlays ]; then
-    ln -s firmware/overlays /boot/overlays
-    log "Symlinked /boot/overlays -> firmware/overlays"
-elif [ -L /boot/overlays ]; then
-    log "/boot/overlays already a symlink ($(readlink /boot/overlays))"
-elif [ -d /boot/overlays ] && [ ! -L /boot/overlays ]; then
-    warn "/boot/overlays is a real directory, not a symlink to $FW_OVERLAYS."
-    warn "Driver overlays may land in the wrong place; verify after build."
-fi
 
 PACKAGES=()
 for sensor in "${SENSORS[@]}"; do
