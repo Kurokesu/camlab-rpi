@@ -6,7 +6,7 @@
 # Safe to re-run. Requires sudo. Reboot for overlay changes.
 #
 # Usage:
-#   sudo scripts/setup/config.sh           # default ar0234 on a free CSI port
+#   sudo scripts/setup/config.sh           # keep current camera, else ar0234 on a free CSI port
 #   sudo scripts/setup/config.sh --sensor ar0822 --options 4lane
 
 set -euo pipefail
@@ -20,6 +20,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/../common.sh"
 SENSOR="ar0234"
 OPTIONS=("4lane")
 OPTIONS_GIVEN=0
+KEEP=()
+[ "$#" -gt 0 ] || KEEP=(--keep)
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -37,12 +39,12 @@ REPO_DIR="$(resolve_repo_dir)"
 # DSI shares connector with CSI. config_manager picks free port
 PORT="$(cd "$REPO_DIR" && python3 -m camlab.config_manager free-port)"
 
-header "Configuring overlay: $SENSOR on $PORT (options: ${OPTIONS[*]:-none})"
+header "Configuring camera overlay"
 
 opt_args=()
 for o in "${OPTIONS[@]:-}"; do [ -n "$o" ] && opt_args+=(--options "$o"); done
 ( cd "$REPO_DIR" && python3 -m camlab.config_manager set \
-    --overlay "$SENSOR" --port "$PORT" "${opt_args[@]}" )
+    --overlay "$SENSOR" --port "$PORT" "${opt_args[@]}" "${KEEP[@]}" )
 
 # Shims live in their own script because they converge and the overlay above does not
 "$REPO_DIR/scripts/setup/shims.sh"

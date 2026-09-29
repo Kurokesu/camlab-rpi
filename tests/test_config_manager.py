@@ -102,6 +102,21 @@ class TestCameraBlock:
         assert cur["present"] is False
         assert cur["port"] == "cam1"
 
+    def test_keep_leaves_existing_block(self, cm, monkeypatch, capsys):
+        """Reinstall must not swap sensor operator picked for default one."""
+        monkeypatch.setattr(config_manager.os, "geteuid", lambda: 0)
+        monkeypatch.setattr(config_manager, "ConfigManager", lambda: cm)
+        cm._rewrite_in_place("ar0822", "cam0", ["4lane"])
+        assert config_manager._main(["set", "--overlay", "ar0234", "--keep"]) == 0
+        assert cm.get_current()["overlay"] == "ar0822"
+        assert "kept: dtoverlay=ar0822,cam0,4lane" in capsys.readouterr().out
+
+    def test_keep_writes_block_when_absent(self, cm, monkeypatch):
+        monkeypatch.setattr(config_manager.os, "geteuid", lambda: 0)
+        monkeypatch.setattr(config_manager, "ConfigManager", lambda: cm)
+        assert config_manager._main(["set", "--overlay", "ar0234", "--keep"]) == 0
+        assert cm.get_current()["overlay"] == "ar0234"
+
 
 class TestDisplayBlock:
     def test_write_and_parse_dsi0(self, cm):
