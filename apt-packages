@@ -11,7 +11,7 @@ OS_CODENAME="trixie"
 # Floor pins for libcamera and rpicam-apps Kurokesu forks
 # libcamera-ipa needs no pin, libcamera0.7 depends on its exact version
 LIBCAMERA_PACKAGES="libcamera0.7 python3-libcamera"
-LIBCAMERA_VERSION="1:0.7.2+rpt20260817+krks3"
+LIBCAMERA_VERSION="1:0.7.2+rpt20260817+krks4"
 
 RPICAM_APPS_PACKAGES="librpicam-app1 rpicam-apps-core"
 RPICAM_APPS_VERSION="1:1.13.0+krks1"
