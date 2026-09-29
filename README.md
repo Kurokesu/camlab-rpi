@@ -12,13 +12,13 @@
 
 Kiosk app for live preview and testing MIPI CSI camera modules on Raspberry Pi.
 
-![OmniVision OS08E10](https://img.shields.io/badge/OmniVision-OS08E10-008E9B?style=flat-square)
-![onsemi AR0234](https://img.shields.io/badge/onsemi-AR0234-008E9B?style=flat-square)
-![onsemi AR0822](https://img.shields.io/badge/onsemi-AR0822-008E9B?style=flat-square)
-![Sony IMX283](https://img.shields.io/badge/Sony-IMX283-008E9B?style=flat-square)
-![Sony IMX462](https://img.shields.io/badge/Sony-IMX462-008E9B?style=flat-square)
-![Sony IMX477](https://img.shields.io/badge/Sony-IMX477-008E9B?style=flat-square)
-![Sony IMX585](https://img.shields.io/badge/Sony-IMX585-008E9B?style=flat-square)
+[![OmniVision OS08E10](https://img.shields.io/badge/OmniVision-OS08E10-008E9B?style=flat-square)](https://www.kurokesu.com/item/CAM-CSI)
+[![onsemi AR0234](https://img.shields.io/badge/onsemi-AR0234-008E9B?style=flat-square)](https://www.kurokesu.com/item/234C-CSI-M12)
+[![onsemi AR0822](https://img.shields.io/badge/onsemi-AR0822-008E9B?style=flat-square)](https://www.kurokesu.com/item/822C-CSI-M12)
+[![Sony IMX283](https://img.shields.io/badge/Sony-IMX283-008E9B?style=flat-square)](https://www.kurokesu.com/item/283C-CSI-CS)
+[![Sony IMX462](https://img.shields.io/badge/Sony-IMX462-008E9B?style=flat-square)](https://www.kurokesu.com/item/462C-CSI-M12)
+[![Sony IMX477](https://img.shields.io/badge/Sony-IMX477-008E9B?style=flat-square)](https://www.kurokesu.com/item/477C-CSI-M12)
+[![Sony IMX585](https://img.shields.io/badge/Sony-IMX585-008E9B?style=flat-square)](https://www.kurokesu.com/item/585C-CSI-CS)
 
 *Camera modules based on these sensors are available at [kurokesu.com](https://www.kurokesu.com/item/CAM-CSI)*
 
