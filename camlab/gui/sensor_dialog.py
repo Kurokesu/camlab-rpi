@@ -145,7 +145,6 @@ class SensorCard(QtWidgets.QFrame):
         self._refresh_apply()
 
     def set_compact(self, compact: bool) -> None:
-        """Follow chrome to other display while card stays open."""
         self._sensor_row.set_show_all(not compact)
 
     def _on_sensor_changed(self) -> None:

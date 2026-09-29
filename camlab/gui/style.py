@@ -50,6 +50,7 @@ class UiProfile:
     sheet_value_w: int  # pinned, so the row holds still as digits change
     zebra_slider_w: int  # coarse control, a short slider does
     overlay_card_h: int  # corner overlay cards share one height
+    modal_margin: int  # modal card clearance from screen edge
 
 
 REGULAR = UiProfile(
@@ -70,6 +71,7 @@ REGULAR = UiProfile(
     sheet_value_w=80,
     zebra_slider_w=260,
     overlay_card_h=96,
+    modal_margin=40,
 )
 
 # 13 px is ~1.5 mm on 800x480 4.3" panel: unreadable. 30 px touch targets unhittable
@@ -92,6 +94,7 @@ COMPACT = UiProfile(
     sheet_value_w=96,
     zebra_slider_w=170,
     overlay_card_h=72,
+    modal_margin=16,
 )
 
 # Anything at or below this height is a small touch panel, not a monitor

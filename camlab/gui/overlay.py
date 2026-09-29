@@ -14,6 +14,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from ..qt import QtCore, QtGui, QtWidgets
+from .style import UiProfile
 from .widgets import SegmentedSelector
 
 _DIM = QtGui.QColor(12, 13, 16, 165)
@@ -26,7 +27,7 @@ class ModalOverlay(QtWidgets.QWidget):
         self,
         host: QtWidgets.QWidget,
         card: QtWidgets.QWidget,
-        margin: int = 40,
+        profile: UiProfile,
         on_backdrop: Callable[[], None] | None = None,
     ):
         super().__init__(host)
@@ -40,7 +41,7 @@ class ModalOverlay(QtWidgets.QWidget):
         self.setFocusPolicy(QtCore.Qt.FocusPolicy.StrongFocus)
 
         outer = QtWidgets.QVBoxLayout(self)
-        outer.setContentsMargins(margin, margin, margin, margin)
+        outer.setContentsMargins(*(profile.modal_margin,) * 4)
         outer.addStretch(1)
         row = QtWidgets.QHBoxLayout()
         row.addStretch(1)
@@ -59,6 +60,12 @@ class ModalOverlay(QtWidgets.QWidget):
         self.show()
         # Focus overlay, not a button, until first Tab
         self.setFocus(QtCore.Qt.FocusReason.OtherFocusReason)
+
+    def apply_profile(self, profile: UiProfile) -> None:
+        """Follow chrome to other display while card stays open."""
+        self.layout().setContentsMargins(*(profile.modal_margin,) * 4)
+        if hasattr(self.card, "set_compact"):
+            self.card.set_compact(profile.compact)
 
     def paintEvent(self, event) -> None:
         QtGui.QPainter(self).fillRect(self.rect(), _DIM)

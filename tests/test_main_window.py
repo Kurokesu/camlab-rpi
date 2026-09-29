@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""UI density, log button tint, boot backlog replay and the sensor card the window opens."""
+"""UI density, log button tint, boot backlog replay and cards the window opens."""
 
 from __future__ import annotations
 
@@ -14,11 +14,13 @@ from conftest import FAILURES, PANEL_NAME, PANEL_OVERLAY, logged
 main_window = pytest.importorskip("camlab.gui.main_window")
 
 from camlab import config_manager
+from camlab.gui.about_dialog import AboutCard
 from camlab.gui.mirror_view import MirrorView
 from camlab.gui.status_strip import StatusStrip
 from camlab.gui.style import COMPACT, REGULAR, build_stylesheet
 from camlab.gui.widgets import ScrollRow
 from camlab.integrity import IntegrityStats, NullCapture
+from camlab.modes import SensorMode
 from camlab.qt import QtCore, QtWidgets
 from camlab.sensors import Sensor, SensorRegistry
 
@@ -370,6 +372,40 @@ def test_open_sensor_card_follows_chrome_between_displays(win, qapp):
     assert row.sizeHint().width() == 0
     assert row.horizontalScrollBar().maximum() > 0
     assert row._hint_delay.isActive()
+
+
+def test_open_mode_card_relabels_between_displays_and_keeps_selection(win):
+    """Monitor spells units out, DSI drops them. Apply stays off, nothing was chosen."""
+    mode = SensorMode(format="", size=(1920, 1080), bit_depth=12, max_fps=60.0)
+    win.engine.modes = [mode]
+    win.engine.current_mode = mode
+    win.engine.fps_current = 30.0
+    win.engine.fps_fixed = False
+    win._on_topology_changed(BOTH)
+    win.claim_display(True)
+    win._choose_mode()
+    card = win._overlay.card
+    assert card.res_sel.checked_button().text() == "1920x1080"
+    win.claim_display(False)
+    assert card.res_sel.checked_button().text() == "1920 x 1080"
+    assert card.fps_sel.checked_button().text() == "30 fps"
+    assert not card.apply_btn.isEnabled()
+
+
+def test_open_about_card_and_its_margin_follow_chrome_between_displays(win, monkeypatch):
+    """Spacing and clearance from screen edge match display chrome moved to."""
+    monkeypatch.setattr(main_window.updater, "inventory", list)
+    monkeypatch.setattr(main_window.updater, "update_path", str)
+    monkeypatch.setattr(main_window.updater, "read_state", dict)
+    win._on_topology_changed(BOTH)
+    win.claim_display(True)
+    win._open_about()
+    card = win._overlay.card
+    win.claim_display(False)
+    regular = AboutCard([], "", {}, on_apply=print, on_back=print)
+    assert card.layout().spacing() == regular.layout().spacing()
+    assert card.layout().contentsMargins() == regular.layout().contentsMargins()
+    assert win._overlay.layout().contentsMargins().left() == REGULAR.modal_margin
 
 
 def test_sensor_row_shows_every_sensor_on_monitor(win):
