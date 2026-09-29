@@ -29,7 +29,7 @@ DSI_ONLY = topology(DSI, None, DSI)
 MONITOR_ONLY = topology(None, MONITOR_ALONE, MONITOR_ALONE)
 
 
-class Bench:
+class Harness:
     """Root plus mirror views its factory handed out."""
 
     def __init__(self, forced: tuple[int, int] | None = None):
@@ -49,78 +49,78 @@ class Bench:
 
 
 @pytest.fixture
-def bench(qapp) -> Bench:
-    return Bench()
+def harness(qapp) -> Harness:
+    return Harness()
 
 
-def test_dsi_only_fills_window_without_mirror_view(bench):
-    root = bench.settle((800, 480), DSI_ONLY)
+def test_dsi_only_fills_window_without_mirror_view(harness):
+    root = harness.settle((800, 480), DSI_ONLY)
     assert root.chrome_pane.geometry() == QtCore.QRect(0, 0, 800, 480)
     assert root.mirror_view is None
-    assert bench.made == []
+    assert harness.made == []
 
 
-def test_monitor_only_puts_chrome_on_monitor(bench):
-    root = bench.settle((1920, 1080), MONITOR_ONLY)
+def test_monitor_only_puts_chrome_on_monitor(harness):
+    root = harness.settle((1920, 1080), MONITOR_ONLY)
     assert root.chrome_pane.geometry() == QtCore.QRect(0, 0, 1920, 1080)
     assert root.mirror_view is None
 
 
-def test_both_puts_chrome_on_monitor_and_mirror_on_dsi(bench):
-    root = bench.settle((2720, 1080), BOTH)
+def test_both_puts_chrome_on_monitor_and_mirror_on_dsi(harness):
+    root = harness.settle((2720, 1080), BOTH)
     assert root.chrome_pane.geometry() == MONITOR
-    assert root.mirror_view is bench.made[0]
+    assert root.mirror_view is harness.made[0]
     assert root.mirror_view.geometry() == DSI
     assert root.mirror_view.isVisible()
 
 
-def test_unplug_hides_mirror_view_and_replug_reuses_it(bench):
-    root = bench.settle((2720, 1080), BOTH)
-    bench.settle((800, 480), DSI_ONLY)
+def test_unplug_hides_mirror_view_and_replug_reuses_it(harness):
+    root = harness.settle((2720, 1080), BOTH)
+    harness.settle((800, 480), DSI_ONLY)
     assert root.mirror_view.isHidden()
     assert root.chrome_pane.geometry() == QtCore.QRect(0, 0, 800, 480)
-    bench.settle((2720, 1080), BOTH)
+    harness.settle((2720, 1080), BOTH)
     assert root.mirror_view.isVisible()
-    assert len(bench.made) == 1
+    assert len(harness.made) == 1
 
 
-def test_no_screens_keeps_chrome_pane_on_window(bench):
-    root = bench.settle((640, 480), topology())
+def test_no_screens_keeps_chrome_pane_on_window(harness):
+    root = harness.settle((640, 480), topology())
     assert root.chrome_pane.geometry() == QtCore.QRect(0, 0, 640, 480)
     assert root.mirror_view is None
 
 
-def test_rects_are_relative_to_bounds_origin(bench):
+def test_rects_are_relative_to_bounds_origin(harness):
     shifted = topology(
         DSI.translated(-800, 0), MONITOR.translated(-800, 0), UNION.translated(-800, 0)
     )
-    root = bench.settle((2720, 1080), shifted)
+    root = harness.settle((2720, 1080), shifted)
     assert root.chrome_pane.geometry() == MONITOR
     assert root.mirror_view.geometry() == DSI
 
 
-def test_resize_refits_single_pane(bench):
-    root = bench.settle((800, 480), DSI_ONLY)
+def test_resize_refits_single_pane(harness):
+    root = harness.settle((800, 480), DSI_ONLY)
     root.resize(1024, 600)
     assert root.chrome_pane.geometry() == QtCore.QRect(0, 0, 1024, 600)
 
 
-def test_mirror_view_stacks_below_chrome_pane(bench):
-    root = bench.settle((2720, 1080), BOTH)
+def test_mirror_view_stacks_below_chrome_pane(harness):
+    root = harness.settle((2720, 1080), BOTH)
     children = [c for c in root.children() if isinstance(c, QtWidgets.QWidget)]
     assert children.index(root.mirror_view) < children.index(root.chrome_pane)
 
 
 def test_forced_size_centers_chrome_pane_and_skips_mirror(qapp):
-    bench = Bench(forced=(800, 480))
-    root = bench.settle((1920, 1080), BOTH)
+    harness = Harness(forced=(800, 480))
+    root = harness.settle((1920, 1080), BOTH)
     assert root.chrome_pane.geometry() == QtCore.QRect(560, 300, 800, 480)
     assert root.mirror_view is None
 
 
-def test_claimed_dsi_swaps_panes(bench):
+def test_claimed_dsi_swaps_panes(harness):
     """Chrome follows display just used, so mirror takes the one it left."""
-    root = bench.settle((2720, 1080), BOTH)
+    root = harness.settle((2720, 1080), BOTH)
     root.set_chrome_on_dsi(True)
     assert root.chrome_pane.geometry() == DSI
     assert root.mirror_view.geometry() == MONITOR
@@ -128,11 +128,11 @@ def test_claimed_dsi_swaps_panes(bench):
     assert root.chrome_pane.geometry() == MONITOR
     assert root.mirror_view.geometry() == DSI
     # One mirror throughout, since second would reset texture stream live view shares
-    assert len(bench.made) == 1
+    assert len(harness.made) == 1
 
 
-def test_claim_with_one_display_lit_leaves_pane_alone(bench):
-    root = bench.settle((1920, 1080), MONITOR_ONLY)
+def test_claim_with_one_display_lit_leaves_pane_alone(harness):
+    root = harness.settle((1920, 1080), MONITOR_ONLY)
     root.set_chrome_on_dsi(True)
     assert root.chrome_pane.geometry() == QtCore.QRect(0, 0, 1920, 1080)
     assert root.mirror_view is None
