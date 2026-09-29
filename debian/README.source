@@ -25,9 +25,10 @@ Branch layout
 Runtime dependencies
 --------------------
 
-debian/rules renders Depends from source tree's apt-packages into
-${camlab:Depends}, so a deb and a clone install cannot drift. Build
-fails when that file or a key it reads is missing.
+debian/rules renders Depends from source tree's apt-packages and from
+driver packages python3 -m camlab.sensors lists into ${camlab:Depends},
+so a deb and a clone install cannot drift. Build fails when that file or
+a key it reads is missing, or when the registry lists no driver.
 
 Trixie only, codename stored once in main's apt-packages. It reaches
 preinst as #OS_CODENAME# through dh_installdeb and install.sh reads same
@@ -37,14 +38,11 @@ preinst is the whole OS gate. Archive serves camlab-rpi to trixie only,
 so apt finds nothing on bookworm, and a bare dpkg -i of a downloaded
 deb is the one path bypassing it.
 
-Unlike the driver repos, this branch is deliberately detached from
-Kurokesu/ci while app packaging stabilizes: workflows carry their own
-build, sign and publish logic. The sign step mirrors deb-sign.yml
-conventions exactly (bundle naming, tilde rename, signed SHA256SUMS), so
-apt archive ingest cannot tell the difference. Once proven, the flow
-gets upstreamed into Kurokesu/ci as an app-family reusable workflow.
+Workflows carry their own build, sign and publish logic. The sign step
+follows Kurokesu/ci deb-sign.yml conventions exactly (bundle naming,
+tilde rename, signed SHA256SUMS), which apt archive ingest expects.
 
-Publish semantics also differ from the driver repos: deb assets land
+Publish semantics differ from the driver repos: deb assets land
 on the existing v-tag source release, next to the README-pinned
 camlab-rpi-<version>.tar.gz. The publish step deletes only assets it
 owns (SHA256SUMS* and camlab-rpi_*.tar.gz bundles), never the source
