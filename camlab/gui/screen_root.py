@@ -86,11 +86,10 @@ class ScreenRoot(QtWidgets.QWidget):
             pane.moveCenter(self.rect().center())
             return pane, None
         t = self._topology
-        if t is None or t.dsi is None or t.monitor is None:
+        if t is None or (mirror := mirror_screen(t, self._chrome_on_dsi)) is None:
             return self.rect(), None
         origin = t.bounds.topLeft()
         chrome = chrome_screen(t, self._chrome_on_dsi)
-        mirror = mirror_screen(t, self._chrome_on_dsi)
         return chrome.translated(-origin), mirror.translated(-origin)
 
     def _place(self) -> None:
