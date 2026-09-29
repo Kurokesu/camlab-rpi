@@ -171,19 +171,19 @@ def classify(names: Iterable[str]) -> tuple[str | None, str | None, tuple[str, .
 
 
 def plan_layout(mode: DisplayMode, outputs: Mapping[str, Output], dsi_display: bool) -> Layout:
-    monitor, panel, spare = classify(outputs)
+    monitor, dsi, spare = classify(outputs)
     # Cage lights DSI connector even with no panel wired
     phantom = ()
-    if panel is not None and not dsi_display:
-        phantom, panel = (panel,), None
+    if dsi is not None and not dsi_display:
+        phantom, dsi = (dsi,), None
 
     if monitor is None:
-        if panel is None:
+        if dsi is None:
             return Layout()  # nothing to fall back to, phantom stays lit
-        return Layout(on=(Target(panel, None, (0, 0)),))
+        return Layout(on=(Target(dsi, None, (0, 0)),))
 
-    if panel is not None and mode is DisplayMode.BUILTIN:
-        return Layout(on=(Target(panel, None, (0, 0)),), off=spare + (monitor,))
+    if dsi is not None and mode is DisplayMode.BUILTIN:
+        return Layout(on=(Target(dsi, None, (0, 0)),), off=spare + (monitor,))
 
     mon_mode = pick_mode(outputs[monitor].modes)
     if mon_mode is not None and not _within_budget(mon_mode):
@@ -193,22 +193,22 @@ def plan_layout(mode: DisplayMode, outputs: Mapping[str, Output], dsi_display: b
             *_MONITOR_MAX,
             mon_mode.arg(),
         )
-    if panel is None:
+    if dsi is None:
         return Layout(on=(Target(monitor, mon_mode, (0, 0)),), off=spare + phantom)
 
     if mode is DisplayMode.BOTH:
-        pw, ph = native_mode(outputs[panel]).size
+        dw, dh = native_mode(outputs[dsi]).size
         mw, mh = mon_mode.size
-        mx, my = pw + _LAYOUT_GAP, ph + _LAYOUT_GAP
+        mx, my = dw + _LAYOUT_GAP, dh + _LAYOUT_GAP
         home = Target(monitor, mon_mode, (mx, my))
         return Layout(
-            on=(Target(panel, None, (0, 0)), home),
+            on=(Target(dsi, None, (0, 0)), home),
             off=spare,
-            touch=touch_matrix((0, 0, pw, ph), (mx + mw, my + mh)),
+            touch=touch_matrix((0, 0, dw, dh), (mx + mw, my + mh)),
             home=home,
         )
 
-    return Layout(on=(Target(monitor, mon_mode, (0, 0)),), off=spare + (panel,), touch="off")
+    return Layout(on=(Target(monitor, mon_mode, (0, 0)),), off=spare + (dsi,), touch="off")
 
 
 def _target_args(target: Target) -> list[str]:
@@ -332,7 +332,7 @@ def _all_lit(targets: Iterable[Target]) -> bool:
 class Topology:
     """Screens as Qt reports them after a hotplug settle."""
 
-    panel: QtCore.QRect | None
+    dsi: QtCore.QRect | None
     monitor: QtCore.QRect | None
     bounds: QtCore.QRect
 
@@ -340,9 +340,9 @@ class Topology:
     def from_screens(cls, screens) -> Topology:
         screens = tuple(screens)
         by_name = {s.name(): s for s in screens}
-        monitor, panel, _spare = classify(by_name)
+        monitor, dsi, _spare = classify(by_name)
         return cls(
-            panel=by_name[panel].geometry() if panel else None,
+            dsi=by_name[dsi].geometry() if dsi else None,
             monitor=by_name[monitor].geometry() if monitor else None,
             bounds=screens[0].virtualGeometry() if screens else QtCore.QRect(),
         )

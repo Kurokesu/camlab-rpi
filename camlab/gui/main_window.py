@@ -821,7 +821,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Brightness only while DSI is lit, as only display with backlight
         backlight_pct = None
         if (
-            self._topology.panel is not None
+            self._topology.dsi is not None
             and self._backlight is not None
             and self._backlight.available
         ):
@@ -974,8 +974,8 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         self._display_key = topology
         log.info(
-            "display: panel %s, monitor %s, bounds %s",
-            rect_text(topology.panel),
+            "display: dsi %s, monitor %s, bounds %s",
+            rect_text(topology.dsi),
             rect_text(topology.monitor),
             rect_text(topology.bounds),
         )
@@ -985,7 +985,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def claim_display(self, on_dsi: bool) -> bool:
         """Move chrome to display behind press, reporting whether it moved. Needs both lit."""
-        both_lit = self._topology.panel is not None and self._topology.monitor is not None
+        both_lit = self._topology.dsi is not None and self._topology.monitor is not None
         if not both_lit or on_dsi == self._root.chrome_on_dsi:
             return False
         log.info("chrome claimed by %s", "touch" if on_dsi else "mouse")

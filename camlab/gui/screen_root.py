@@ -16,9 +16,7 @@ from ..qt import Qt, QtCore, QtWidgets
 
 def chrome_screen(topology, chrome_on_dsi: bool = False) -> QtCore.QRect | None:
     """Chrome screen rect."""
-    order = (
-        (topology.panel, topology.monitor) if chrome_on_dsi else (topology.monitor, topology.panel)
-    )
+    order = (topology.dsi, topology.monitor) if chrome_on_dsi else (topology.monitor, topology.dsi)
     for rect in order:
         if rect is not None:
             return rect
@@ -27,9 +25,9 @@ def chrome_screen(topology, chrome_on_dsi: bool = False) -> QtCore.QRect | None:
 
 def mirror_screen(topology, chrome_on_dsi: bool = False) -> QtCore.QRect | None:
     """Mirror screen rect."""
-    if topology.panel is None or topology.monitor is None:
+    if topology.dsi is None or topology.monitor is None:
         return None
-    return topology.monitor if chrome_on_dsi else topology.panel
+    return topology.monitor if chrome_on_dsi else topology.dsi
 
 
 def rect_text(rect: QtCore.QRect | None) -> str:
@@ -88,7 +86,7 @@ class ScreenRoot(QtWidgets.QWidget):
             pane.moveCenter(self.rect().center())
             return pane, None
         t = self._topology
-        if t is None or t.panel is None or t.monitor is None:
+        if t is None or t.dsi is None or t.monitor is None:
             return self.rect(), None
         origin = t.bounds.topLeft()
         chrome = chrome_screen(t, self._chrome_on_dsi)
