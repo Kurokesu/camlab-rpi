@@ -12,12 +12,13 @@
 #   camlabctl status
 #   camlabctl logs [journalctl-args]     default: last 200 lines
 #   camlabctl log-level <level>          trace|debug|info|warn|error|off
-#   camlabctl shot [path]                screenshot live kiosk (needs grim)
+#   camlabctl shot [path]                screenshot each kiosk output (needs grim)
 #   camlabctl rec [secs] [path]          record live kiosk (needs wf-recorder)
-#   camlabctl tap <x> <y>                click in live kiosk (needs wlrctl)
+#   camlabctl tap <x> <y>                click in live kiosk
 #   camlabctl net <on|off|status>        toggle networking (off for production,
 #                                         on for SSH dev)
 #   camlabctl touch <a b c d e f>|clear  libinput calibration on touchscreens
+#   camlabctl touch off                  ignore touchscreens
 #   camlabctl rw                         boot writable next time
 #   camlabctl ro                         boot read-only next time
 #   camlabctl help
@@ -89,10 +90,14 @@ _kiosk_session() {
 
 cmd_shot() {
     command -v grim >/dev/null || die "grim not installed (sudo apt install grim)"
-    local out="${1:-/tmp/camlab-$(date +%Y%m%d-%H%M%S).png}"
+    local base="${1:-/tmp/camlab-$(date +%Y%m%d-%H%M%S).png}"
+    local name out
     _kiosk_session
-    grim "$out"
-    log "saved $out"
+    while read -r name; do
+        out="${base%.png}-$name.png"
+        grim -o "$name" "$out"
+        log "saved $out"
+    done < <(wlr-randr | awk '/^[^ ]/ { name = $1 } /^  Enabled: yes/ { print name }')
 }
 
 cmd_rec() {
@@ -113,14 +118,13 @@ cmd_rec() {
 }
 
 cmd_tap() {
-    command -v wlrctl >/dev/null || die "wlrctl not installed (sudo apt install wlrctl)"
     local x="${1:-}" y="${2:-}"
     if [ -z "$x" ] || [ -z "$y" ]; then
         die "tap requires x and y"
     fi
     _kiosk_session
     # Pointer moves are relative, so clamp into the corner for a known origin first
-    wlrctl pointer move -4000 -4000
+    wlrctl pointer move -65536 -65536
     wlrctl pointer move "$x" "$y"
     wlrctl pointer click left
 }
@@ -199,8 +203,7 @@ cmd_net() {
     esac
 }
 
-# Touch calibration confines panel touch to its own pane when the layout spans
-# a monitor too. Runtime rule, so a reboot starts clean
+# Touch matrix or ignore rule, under /run so reboot starts clean
 TOUCHMAP_RULE="/run/udev/rules.d/90-camlab-touchmap.rules"
 
 _touchscreens() {
@@ -223,18 +226,26 @@ _touch_readd() {
 }
 
 cmd_touch() {
-    if [ "${1:-}" = "clear" ]; then
-        [ -e "$TOUCHMAP_RULE" ] || return 0
-        sudo rm -f "$TOUCHMAP_RULE"
-        _touch_readd
-        return
-    fi
-    [ "$#" -eq 6 ] || die "touch: expected six matrix values or clear"
     local v rule
-    for v in "$@"; do
-        [[ "$v" =~ ^-?[0-9]+(\.[0-9]+)?$ ]] || die "touch: '$v' is not a number"
-    done
-    rule="ENV{ID_INPUT_TOUCHSCREEN}==\"1\", ENV{LIBINPUT_CALIBRATION_MATRIX}=\"$*\""
+    case "${1:-}" in
+        clear)
+            [ -e "$TOUCHMAP_RULE" ] || return 0
+            sudo rm -f "$TOUCHMAP_RULE"
+            _touch_readd
+            return
+            ;;
+        off)
+            [ "$#" -eq 1 ] || die "touch: off takes no values"
+            rule='ENV{ID_INPUT_TOUCHSCREEN}=="1", ENV{LIBINPUT_IGNORE_DEVICE}="1"'
+            ;;
+        *)
+            [ "$#" -eq 6 ] || die "touch: expected six matrix values, off or clear"
+            for v in "$@"; do
+                [[ "$v" =~ ^-?[0-9]+(\.[0-9]+)?$ ]] || die "touch: '$v' is not a number"
+            done
+            rule="ENV{ID_INPUT_TOUCHSCREEN}==\"1\", ENV{LIBINPUT_CALIBRATION_MATRIX}=\"$*\""
+            ;;
+    esac
     [ "$(cat "$TOUCHMAP_RULE" 2>/dev/null)" != "$rule" ] || return 0
     sudo install -d -m 0755 "$(dirname "$TOUCHMAP_RULE")"
     printf '%s\n' "$rule" | sudo tee "$TOUCHMAP_RULE" >/dev/null

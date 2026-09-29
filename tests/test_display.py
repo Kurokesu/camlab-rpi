@@ -54,6 +54,11 @@ HDMI-A-1 "Generic 4K Monitor (HDMI-A-1)"
   Scale: 1.000000
 """
 
+# Both layout already in place, REPORT is cage's own placement right after plug
+SETTLED_REPORT = REPORT.replace(
+    "Position: 800,0", f"Position: {800 + display._LAYOUT_GAP},{480 + display._LAYOUT_GAP}"
+)
+
 DISABLED_REPORT = """HDMI-A-1 "Generic 4K Monitor (HDMI-A-1)"
   Enabled: no
   Modes:
@@ -194,11 +199,12 @@ def test_panel_only_ignores_mode():
         assert layout.touch is None
 
 
-def test_external_enables_monitor_and_drops_panel():
+def test_external_enables_monitor_and_drops_dsi_with_its_touch():
+    """Unconfined touch spans monitor, so finger on dark DSI would click there."""
     layout = plan_layout(DisplayMode.EXTERNAL, _outputs(PANEL, MONITOR), dsi_display=True)
     assert layout.on == (Target("HDMI-A-1", PICKED, (0, 0)),)
     assert layout.off == ("DSI-2",)
-    assert layout.touch is None
+    assert layout.touch == "off"
 
 
 def test_builtin_enables_panel_and_drops_monitor():
@@ -208,14 +214,24 @@ def test_builtin_enables_panel_and_drops_monitor():
     assert layout.touch is None
 
 
-def test_both_places_monitor_right_of_panel():
+GAP = display._LAYOUT_GAP
+GAPPED_MONITOR = Target("HDMI-A-1", PICKED, (800 + GAP, 480 + GAP))
+GAPPED_BOUNDS = (2720 + GAP, 1560 + GAP)
+
+
+def test_both_parks_monitor_past_gap_on_both_axes_from_dsi():
+    """Touching outputs let pointer walk onto DSI, so gap stops it at monitor edge."""
     layout = plan_layout(DisplayMode.BOTH, _outputs(PANEL, MONITOR), dsi_display=True)
-    assert layout.on == (
-        Target("DSI-2", None, (0, 0)),
-        Target("HDMI-A-1", PICKED, (800, 0)),
-    )
+    assert layout.on == (Target("DSI-2", None, (0, 0)), GAPPED_MONITOR)
     assert layout.off == ()
-    assert layout.touch == touch_matrix((0, 0, 800, 480), (2720, 1080))
+    assert layout.touch == touch_matrix((0, 0, 800, 480), GAPPED_BOUNDS)
+    assert layout.home == GAPPED_MONITOR
+
+
+def test_single_display_layout_has_no_pointer_home():
+    """One output leaves no gap to strand pointer across."""
+    for mode, outs in ((DisplayMode.EXTERNAL, (MONITOR,)), (DisplayMode.BUILTIN, (PANEL,))):
+        assert plan_layout(mode, _outputs(*outs), dsi_display=True).home is None
 
 
 def test_monitor_past_budget_still_lights_and_says_so(caplog):
@@ -240,14 +256,19 @@ def test_builtin_is_quiet_about_monitor_it_switches_off(caplog):
 
 
 @pytest.fixture
-def rig(monkeypatch):
-    """REPORT as the live compositor, every wlr-randr write and shim call recorded."""
+def report():
+    return REPORT
+
+
+@pytest.fixture
+def rig(monkeypatch, report):
+    """Reports as live compositor, recording every wlr-randr write and shim call."""
     calls: list[list[str]] = []
 
     def wlr(args=()):
         if args:
             calls.append(["wlr-randr", *args])
-        return REPORT
+        return report
 
     monkeypatch.setattr(display, "_wlr_randr", wlr)
     monkeypatch.setattr(display, "has_dsi_display", lambda: True)
@@ -256,21 +277,35 @@ def rig(monkeypatch):
 
 
 TOUCH_SET = ["sudo", "-n", display._CAMLABCTL, "touch"] + [
-    f"{v:.6f}" for v in touch_matrix((0, 0, 800, 480), (2720, 1080))
+    f"{v:.6f}" for v in touch_matrix((0, 0, 800, 480), GAPPED_BOUNDS)
 ]
 TOUCH_CLEAR = ["sudo", "-n", display._CAMLABCTL, "touch", "clear"]
+TOUCH_OFF = ["sudo", "-n", display._CAMLABCTL, "touch", "off"]
+OVERSHOOT = str(display._POINTER_OVERSHOOT)
+CARRY = [
+    ["wlrctl", "pointer", "move", OVERSHOOT, OVERSHOOT],
+    ["wlrctl", "pointer", "move", "-960", "-540"],
+]
 
 
+@pytest.mark.parametrize("report", [SETTLED_REPORT])
 def test_apply_both_is_touch_only_when_outputs_already_match(rig):
     display.apply_output_layout(DisplayMode.BOTH)
     assert rig == [TOUCH_SET]
 
 
-def test_apply_external_clears_touch_before_dropping_panel(rig):
+def test_plugged_monitor_moves_past_gap_and_takes_pointer_to_its_center(rig):
+    """Pointer sat on DSI while monitor was away, and gap holds it there."""
+    display.apply_output_layout(DisplayMode.BOTH)
+    place = ["--output", "HDMI-A-1", "--on", "--pos", f"{800 + GAP},{480 + GAP}"]
+    assert rig == [["wlr-randr", *place, "--mode", PICKED.arg()], *CARRY, TOUCH_SET]
+
+
+def test_apply_external_drops_touch_before_dropping_dsi(rig):
     display.apply_output_layout(DisplayMode.EXTERNAL)
     assert rig == [
         ["wlr-randr", "--output", "HDMI-A-1", "--on", "--pos", "0,0", "--mode", PICKED.arg()],
-        TOUCH_CLEAR,
+        TOUCH_OFF,
         ["wlr-randr", "--output", "DSI-2", "--off"],
     ]
 
@@ -290,7 +325,7 @@ def test_apply_skips_touch_without_dsi_display(rig, monkeypatch):
 
 
 def test_apply_never_disables_when_target_did_not_light(rig, monkeypatch):
-    # Monitor reads disabled before and after the enable, panel must stay lit
+    # Monitor reads disabled before and after enable, so DSI must stay lit and take touch
     dark_monitor = "Enabled: no".join(REPORT.rsplit("Enabled: yes", 1))
     monkeypatch.setattr(display, "_wlr_randr", lambda args=(): dark_monitor)
     display.apply_output_layout(DisplayMode.EXTERNAL)

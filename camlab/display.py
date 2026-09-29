@@ -17,6 +17,7 @@ import subprocess
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from .drm import has_dsi_display
 from .qt import QtCore, QtGui, QtWidgets, Signal
@@ -37,6 +38,11 @@ _SETTLE_MS = 300
 _MONITOR_MAX = (1920, 1080)
 # Nominal 60 reports as 59.94 or 60.03
 _MAX_REFRESH_HZ = 60.5
+
+# Pointer clamps to nearest output, so jump must clear this on both axes to reach DSI
+_LAYOUT_GAP = 1000
+# Past any layout, so move clamps to its far corner
+_POINTER_OVERSHOOT = 1 << 16
 
 _MODE_RE = re.compile(r"^(\d+)x(\d+) px, ([\d.]+) Hz(.*)$")
 _POS_RE = re.compile(r"^Position: (-?\d+),(-?\d+)$")
@@ -81,7 +87,10 @@ class Target:
 class Layout:
     on: tuple[Target, ...] = ()
     off: tuple[str, ...] = ()
-    touch: tuple[float, ...] | None = None
+    # Matrix confines touch, off drops it, None spans whole layout
+    touch: tuple[float, ...] | Literal["off"] | None = None
+    # Pointer lands here whenever this output gets placed
+    home: Target | None = None
 
 
 def _blocks(text: str) -> list[tuple[str, list[str]]]:
@@ -190,13 +199,16 @@ def plan_layout(mode: DisplayMode, outputs: Mapping[str, Output], dsi_display: b
     if mode is DisplayMode.BOTH:
         pw, ph = native_mode(outputs[panel]).size
         mw, mh = mon_mode.size
+        mx, my = pw + _LAYOUT_GAP, ph + _LAYOUT_GAP
+        home = Target(monitor, mon_mode, (mx, my))
         return Layout(
-            on=(Target(panel, None, (0, 0)), Target(monitor, mon_mode, (pw, 0))),
+            on=(Target(panel, None, (0, 0)), home),
             off=spare,
-            touch=touch_matrix((0, 0, pw, ph), (pw + mw, max(ph, mh))),
+            touch=touch_matrix((0, 0, pw, ph), (mx + mw, my + mh)),
+            home=home,
         )
 
-    return Layout(on=(Target(monitor, mon_mode, (0, 0)),), off=spare + (panel,))
+    return Layout(on=(Target(monitor, mon_mode, (0, 0)),), off=spare + (panel,), touch="off")
 
 
 def _target_args(target: Target) -> list[str]:
@@ -244,26 +256,55 @@ def apply_output_layout(mode: DisplayMode) -> None:
     for target in layout.on:
         if not _satisfied(outputs.get(target.name), target):
             args += _target_args(target)
+    home = layout.home
+    carry = home is not None and not _satisfied(outputs.get(home.name), home)
     if args:
         log.info("applying display layout (%s): %s", mode, " ".join(args))
         if _wlr_randr(args) is None:
             return
-    if has_dsi_display():
-        _apply_touch(layout.touch)
+    if carry:
+        _carry_pointer(home)
 
     stale = [n for n in layout.off if n in outputs and outputs[n].enabled]
-    if not stale:
-        return
-    if not layout.on or not _all_lit(layout.on):
+    kept = bool(stale) and (not layout.on or not _all_lit(layout.on))
+    if kept:
         log.error("keeping %s enabled, target outputs did not light", ", ".join(stale))
-        return
-    log.info("disabling %s", " ".join(stale))
-    _wlr_randr([a for n in stale for a in ("--output", n, "--off")])
+    if has_dsi_display():
+        # Kept DSI is sole view, so it keeps touch
+        _apply_touch(None if kept and layout.touch == "off" else layout.touch)
+    if stale and not kept:
+        log.info("disabling %s", " ".join(stale))
+        _wlr_randr([a for n in stale for a in ("--output", n, "--off")])
 
 
-def _apply_touch(matrix: tuple[float, ...] | None) -> None:
+def _carry_pointer(home: Target) -> None:
+    """Gap holds pointer left on DSI, so carry it to monitor center.
+
+    Overshoot clamps to monitor's bottom right corner, half its size back is center.
+    """
+    w, h = home.mode.size
+    for dx, dy in ((_POINTER_OVERSHOOT, _POINTER_OVERSHOOT), (-(w // 2), -(h // 2))):
+        try:
+            subprocess.run(
+                ["wlrctl", "pointer", "move", str(dx), str(dy)],
+                capture_output=True,
+                text=True,
+                timeout=_WLR_TIMEOUT_S,
+                check=True,
+            )
+        except (OSError, subprocess.TimeoutExpired, subprocess.CalledProcessError) as exc:
+            log.error("pointer carry to %s failed: %s", home.name, exc)
+            return
+
+
+def _apply_touch(touch: tuple[float, ...] | Literal["off"] | None) -> None:
     """camlabctl owns the udev rule and skips when it already matches."""
-    args = ["clear"] if matrix is None else [f"{v:.6f}" for v in matrix]
+    if touch is None:
+        args = ["clear"]
+    elif touch == "off":
+        args = ["off"]
+    else:
+        args = [f"{v:.6f}" for v in touch]
     try:
         subprocess.run(
             ["sudo", "-n", _CAMLABCTL, "touch", *args],
