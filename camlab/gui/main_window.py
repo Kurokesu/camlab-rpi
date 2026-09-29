@@ -1103,7 +1103,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._engine_started = True
         if self.engine.picam2 is None or self.engine.current_mode is None:
             return
-        # Boot lores size was an estimate. Camera has not started, so refitting is free
+        # Boot configured lores without viewfinder size, camera not started so refit is free
         self._refit_lores()
         try:
             self.engine.start()

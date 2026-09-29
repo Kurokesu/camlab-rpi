@@ -116,10 +116,6 @@ def profile_for_rect(rect) -> UiProfile:
     return COMPACT if rect.height() <= _COMPACT_MAX_HEIGHT else REGULAR
 
 
-def profile_for_screen(screen) -> UiProfile:
-    return profile_for_rect(None if screen is None else screen.geometry())
-
-
 _STYLE = Template("""
 QWidget { background: #1b1d22; color: #d7dae0; }
 QFrame#statusStrip { background: #23262d; border-bottom: 1px solid #2f333c; }
