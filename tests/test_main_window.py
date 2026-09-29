@@ -408,6 +408,16 @@ def test_open_about_card_and_its_margin_follow_chrome_between_displays(win, monk
     assert win._overlay.layout().contentsMargins().left() == REGULAR.modal_margin
 
 
+def test_update_confirm_card_keeps_cancel_on_left_edge(win):
+    """Same button order as Mode and Settings, Cancel apart from the action."""
+    win._confirm_update(["app"], ["camlab-rpi"])
+    lay = win._overlay.card.layout()
+    row = lay.itemAt(lay.count() - 1).layout()
+    assert row.itemAt(0).widget().text() == "Cancel"
+    assert row.itemAt(1).spacerItem() is not None
+    assert row.itemAt(2).widget().text() == "Update"
+
+
 def test_sensor_row_shows_every_sensor_on_monitor(win):
     """Monitor has room, so no sensor hides behind scrolling and row stays still."""
     win.resize(1920, 1080)

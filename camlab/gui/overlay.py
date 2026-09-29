@@ -168,14 +168,18 @@ def message_card(title: str, message: str, buttons: list[Button]) -> QtWidgets.Q
         lay.addWidget(msg_lbl)
 
     row = QtWidgets.QHBoxLayout()
-    row.addStretch(1)
+    # First of several holds left edge, as Cancel does on every other card
+    if len(buttons) < 2:
+        row.addStretch(1)
     primary = None
-    for label, role, callback in buttons:
+    for i, (label, role, callback) in enumerate(buttons):
         btn = QtWidgets.QPushButton(label)
         if role == "danger":
             btn.setObjectName("danger")
         btn.clicked.connect(callback)
         row.addWidget(btn)
+        if i == 0 and len(buttons) > 1:
+            row.addStretch(1)
         # Enter goes to Cancel where the action is destructive, Apply where it is not
         if role != "danger" or primary is None:
             primary = btn
