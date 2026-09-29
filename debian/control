@@ -3,7 +3,9 @@ Section: video
 Priority: optional
 Maintainer: UAB Kurokesu <info@kurokesu.com>
 Uploaders: Danius Kalvaitis <danius@kurokesu.com>
-Build-Depends: debhelper-compat (= 13)
+Build-Depends: debhelper-compat (= 13),
+ python3,
+ python3-yaml
 Standards-Version: 4.7.0
 Homepage: https://github.com/Kurokesu/camlab-rpi
 Vcs-Browser: https://github.com/Kurokesu/camlab-rpi/tree/debian/latest
@@ -17,14 +19,9 @@ Architecture: all
 Depends: ${misc:Depends},
  python3,
  ${camlab:Depends}
-# camlab-setup installs drivers after kernel.sh prunes the
-# sibling kernel flavor.
-Suggests: ar0234-rpi-dkms,
- ar0822-rpi-dkms,
- imx585-rpi-dkms
 Description: Kiosk app for live preview and testing MIPI CSI camera modules
  Runs on Raspberry Pi 5 and CM5. Sensor and CSI port are chosen in the GUI.
- Covers AR0234, AR0822, IMX283, IMX462, IMX477 and IMX585.
+ Covers AR0234, AR0822, IMX283, IMX462, IMX477, IMX585 and OS08E10.
  .
  Viewfinder carries focus peaking, zebra clipping, histogram and focus map.
  Exposure, gain and white balance run auto or manual. Resolution, bit depth
