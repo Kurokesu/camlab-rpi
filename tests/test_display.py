@@ -65,7 +65,7 @@ DISABLED_REPORT = """HDMI-A-1 "Generic 4K Monitor (HDMI-A-1)"
     1920x1080 px, 60.000000 Hz (preferred)
 """
 
-PANEL = Output("DSI-2", True, (Mode(800, 480, 60.029, preferred=True, current=True),))
+DSI = Output("DSI-2", True, (Mode(800, 480, 60.029, preferred=True, current=True),))
 MONITOR_MODES = (
     Mode(3840, 2160, 59.9965),
     Mode(2560, 1440, 59.95, preferred=True),
@@ -87,10 +87,10 @@ def _outputs(*outs: Output) -> dict[str, Output]:
 def test_parse_report():
     outputs = parse_outputs(REPORT)
     assert set(outputs) == {"DSI-2", "HDMI-A-1"}
-    panel = outputs["DSI-2"]
-    assert panel.enabled is True
-    assert panel.pos == (0, 0)
-    assert panel.current == Mode(800, 480, 60.028999, preferred=True, current=True)
+    dsi = outputs["DSI-2"]
+    assert dsi.enabled is True
+    assert dsi.pos == (0, 0)
+    assert dsi.current == Mode(800, 480, 60.028999, preferred=True, current=True)
     monitor = outputs["HDMI-A-1"]
     assert len(monitor.modes) == 5
     assert monitor.pos == (800, 0)
@@ -173,13 +173,13 @@ def test_spare_hdmi_switched_off():
 
 
 def test_phantom_dsi_switched_off():
-    layout = plan_layout(DisplayMode.EXTERNAL, _outputs(PANEL, MONITOR), dsi_display=False)
+    layout = plan_layout(DisplayMode.EXTERNAL, _outputs(DSI, MONITOR), dsi_display=False)
     assert layout.on == (Target("HDMI-A-1", PICKED, (0, 0)),)
     assert layout.off == ("DSI-2",)
 
 
 def test_phantom_dsi_alone_stays_lit():
-    layout = plan_layout(DisplayMode.EXTERNAL, _outputs(PANEL), dsi_display=False)
+    layout = plan_layout(DisplayMode.EXTERNAL, _outputs(DSI), dsi_display=False)
     assert layout.on == ()
     assert layout.off == ()
 
@@ -191,9 +191,9 @@ def test_nothing_connected():
     assert layout.touch is None
 
 
-def test_panel_only_ignores_mode():
+def test_dsi_only_ignores_mode():
     for mode in DisplayMode:
-        layout = plan_layout(mode, _outputs(PANEL), dsi_display=True)
+        layout = plan_layout(mode, _outputs(DSI), dsi_display=True)
         assert layout.on == (Target("DSI-2", None, (0, 0)),)
         assert layout.off == ()
         assert layout.touch is None
@@ -201,14 +201,14 @@ def test_panel_only_ignores_mode():
 
 def test_external_enables_monitor_and_drops_dsi_with_its_touch():
     """Unconfined touch spans monitor, so finger on dark DSI would click there."""
-    layout = plan_layout(DisplayMode.EXTERNAL, _outputs(PANEL, MONITOR), dsi_display=True)
+    layout = plan_layout(DisplayMode.EXTERNAL, _outputs(DSI, MONITOR), dsi_display=True)
     assert layout.on == (Target("HDMI-A-1", PICKED, (0, 0)),)
     assert layout.off == ("DSI-2",)
     assert layout.touch == "off"
 
 
-def test_builtin_enables_panel_and_drops_monitor():
-    layout = plan_layout(DisplayMode.BUILTIN, _outputs(PANEL, MONITOR), dsi_display=True)
+def test_builtin_enables_dsi_and_drops_monitor():
+    layout = plan_layout(DisplayMode.BUILTIN, _outputs(DSI, MONITOR), dsi_display=True)
     assert layout.on == (Target("DSI-2", None, (0, 0)),)
     assert layout.off == ("HDMI-A-1",)
     assert layout.touch is None
@@ -221,7 +221,7 @@ GAPPED_BOUNDS = (2720 + GAP, 1560 + GAP)
 
 def test_both_parks_monitor_past_gap_on_both_axes_from_dsi():
     """Touching outputs let pointer walk onto DSI, so gap stops it at monitor edge."""
-    layout = plan_layout(DisplayMode.BOTH, _outputs(PANEL, MONITOR), dsi_display=True)
+    layout = plan_layout(DisplayMode.BOTH, _outputs(DSI, MONITOR), dsi_display=True)
     assert layout.on == (Target("DSI-2", None, (0, 0)), GAPPED_MONITOR)
     assert layout.off == ()
     assert layout.touch == touch_matrix((0, 0, 800, 480), GAPPED_BOUNDS)
@@ -230,7 +230,7 @@ def test_both_parks_monitor_past_gap_on_both_axes_from_dsi():
 
 def test_single_display_layout_has_no_pointer_home():
     """One output leaves no gap to strand pointer across."""
-    for mode, outs in ((DisplayMode.EXTERNAL, (MONITOR,)), (DisplayMode.BUILTIN, (PANEL,))):
+    for mode, outs in ((DisplayMode.EXTERNAL, (MONITOR,)), (DisplayMode.BUILTIN, (DSI,))):
         assert plan_layout(mode, _outputs(*outs), dsi_display=True).home is None
 
 
@@ -250,7 +250,7 @@ def test_monitor_within_budget_is_quiet(caplog):
 
 def test_builtin_is_quiet_about_monitor_it_switches_off(caplog):
     with caplog.at_level(logging.WARNING, logger="camlab.display"):
-        layout = plan_layout(DisplayMode.BUILTIN, _outputs(PANEL, UHD_MONITOR), dsi_display=True)
+        layout = plan_layout(DisplayMode.BUILTIN, _outputs(DSI, UHD_MONITOR), dsi_display=True)
     assert layout.off == ("HDMI-A-1",)
     assert caplog.records == []
 
@@ -332,7 +332,7 @@ def test_apply_never_disables_when_target_did_not_light(rig, monkeypatch):
     assert rig == [TOUCH_CLEAR]
 
 
-PANEL_RECT = QtCore.QRect(0, 0, 800, 480)
+DSI_RECT = QtCore.QRect(0, 0, 800, 480)
 MONITOR_RECT = QtCore.QRect(800, 0, 1920, 1080)
 UNION_RECT = QtCore.QRect(0, 0, 2720, 1080)
 
@@ -344,22 +344,22 @@ def _screen(name: str, geometry: QtCore.QRect, virtual: QtCore.QRect) -> SimpleN
     )
 
 
-def test_topology_panel_only():
-    topo = Topology.from_screens([_screen("DSI-2", PANEL_RECT, PANEL_RECT)])
-    assert topo == Topology(panel=PANEL_RECT, monitor=None, bounds=PANEL_RECT)
+def test_topology_dsi_only():
+    topo = Topology.from_screens([_screen("DSI-2", DSI_RECT, DSI_RECT)])
+    assert topo == Topology(dsi=DSI_RECT, monitor=None, bounds=DSI_RECT)
 
 
 def test_topology_monitor_only():
     monitor = QtCore.QRect(0, 0, 1920, 1080)
     topo = Topology.from_screens([_screen("HDMI-A-1", monitor, monitor)])
-    assert topo == Topology(panel=None, monitor=monitor, bounds=monitor)
+    assert topo == Topology(dsi=None, monitor=monitor, bounds=monitor)
 
 
-def test_topology_panel_and_monitor():
+def test_topology_dsi_and_monitor():
     topo = Topology.from_screens(
-        [_screen("DSI-2", PANEL_RECT, UNION_RECT), _screen("HDMI-A-1", MONITOR_RECT, UNION_RECT)]
+        [_screen("DSI-2", DSI_RECT, UNION_RECT), _screen("HDMI-A-1", MONITOR_RECT, UNION_RECT)]
     )
-    assert topo == Topology(panel=PANEL_RECT, monitor=MONITOR_RECT, bounds=UNION_RECT)
+    assert topo == Topology(dsi=DSI_RECT, monitor=MONITOR_RECT, bounds=UNION_RECT)
 
 
 def test_topology_ignores_spare_hdmi():
@@ -368,16 +368,16 @@ def test_topology_ignores_spare_hdmi():
     topo = Topology.from_screens(
         [
             _screen("HDMI-A-2", spare, union),
-            _screen("DSI-2", PANEL_RECT, union),
+            _screen("DSI-2", DSI_RECT, union),
             _screen("HDMI-A-1", MONITOR_RECT, union),
         ]
     )
-    assert topo == Topology(panel=PANEL_RECT, monitor=MONITOR_RECT, bounds=union)
+    assert topo == Topology(dsi=DSI_RECT, monitor=MONITOR_RECT, bounds=union)
 
 
 def test_topology_no_screens():
     topo = Topology.from_screens([])
-    assert topo.panel is None
+    assert topo.dsi is None
     assert topo.monitor is None
     assert topo.bounds == QtCore.QRect()
     assert topo.bounds.isNull()
@@ -399,19 +399,19 @@ def test_manager_emits_topology_with_no_screens():
     seen: list[Topology] = []
     manager.topology_changed.connect(seen.append)
     manager._emit_changed()
-    assert seen == [Topology(panel=None, monitor=None, bounds=QtCore.QRect())]
+    assert seen == [Topology(dsi=None, monitor=None, bounds=QtCore.QRect())]
 
 
 def test_manager_emits_topology_from_app_screens():
     screens = [
-        _screen("DSI-2", PANEL_RECT, UNION_RECT),
+        _screen("DSI-2", DSI_RECT, UNION_RECT),
         _screen("HDMI-A-1", MONITOR_RECT, UNION_RECT),
     ]
     manager = display.DisplayManager(FakeApp(screens), lambda: DisplayMode.BOTH)
     seen: list[Topology] = []
     manager.topology_changed.connect(seen.append)
     manager._emit_changed()
-    assert seen == [Topology(panel=PANEL_RECT, monitor=MONITOR_RECT, bounds=UNION_RECT)]
+    assert seen == [Topology(dsi=DSI_RECT, monitor=MONITOR_RECT, bounds=UNION_RECT)]
 
 
 class ScreenStub(QtCore.QObject):

@@ -20,12 +20,12 @@ from camlab.gui.style import COMPACT, REGULAR, build_stylesheet
 from camlab.integrity import IntegrityStats, NullCapture
 from camlab.qt import QtCore, QtWidgets
 
-PANEL_RECT = QtCore.QRect(0, 0, 800, 480)
+DSI_RECT = QtCore.QRect(0, 0, 800, 480)
 MONITOR_RECT = QtCore.QRect(0, 0, 1920, 1080)
-PANEL_ONLY = SimpleNamespace(panel=PANEL_RECT, monitor=None, bounds=PANEL_RECT)
-MONITOR_ONLY = SimpleNamespace(panel=None, monitor=MONITOR_RECT, bounds=MONITOR_RECT)
+DSI_ONLY = SimpleNamespace(dsi=DSI_RECT, monitor=None, bounds=DSI_RECT)
+MONITOR_ONLY = SimpleNamespace(dsi=None, monitor=MONITOR_RECT, bounds=MONITOR_RECT)
 BOTH = SimpleNamespace(
-    panel=PANEL_RECT,
+    dsi=DSI_RECT,
     monitor=QtCore.QRect(800, 0, 1920, 1080),
     bounds=QtCore.QRect(0, 0, 2720, 1080),
 )
@@ -52,7 +52,7 @@ def test_profile_follows_chrome_screen_across_display_switch(win):
     win._on_topology_changed(MONITOR_ONLY)
     assert win.profile is REGULAR
     assert win.styleSheet() == build_stylesheet(REGULAR)
-    win._on_topology_changed(PANEL_ONLY)
+    win._on_topology_changed(DSI_ONLY)
     assert win.profile is COMPACT
     assert win.styleSheet() == build_stylesheet(COMPACT)
     # Chrome takes monitor whenever there is one, so Both skins regular
@@ -64,12 +64,12 @@ def test_backlight_slider_offered_whenever_dsi_is_lit(win):
     """Chrome sits on monitor in Both mode, so density no longer tracks lit DSI."""
     win._backlight = SimpleNamespace(available=True, get_percent=lambda: 60)
     offered = {}
-    for name, topology in (("panel", PANEL_ONLY), ("both", BOTH), ("monitor", MONITOR_ONLY)):
+    for name, topology in (("dsi", DSI_ONLY), ("both", BOTH), ("monitor", MONITOR_ONLY)):
         win._on_topology_changed(topology)
         win._open_settings()
         offered[name] = hasattr(win._overlay.card, "backlight_slider")
         win._close_modal()
-    assert offered == {"panel": True, "both": True, "monitor": False}
+    assert offered == {"dsi": True, "both": True, "monitor": False}
 
 
 def test_one_board_sample_feeds_both_strips(win, monkeypatch):
@@ -89,18 +89,18 @@ def test_mirror_is_addressed_only_while_lit(win):
     assert win._live_mirror is None
     win._on_topology_changed(BOTH)
     assert win._live_mirror is win._root.mirror_view
-    win._on_topology_changed(PANEL_ONLY)
+    win._on_topology_changed(DSI_ONLY)
     assert win._live_mirror is None
     win._on_topology_changed(BOTH)
     assert win._live_mirror is win._root.mirror_view
 
 
-def test_touch_hands_chrome_to_panel_and_mouse_takes_it_back(win):
+def test_touch_hands_chrome_to_dsi_and_mouse_takes_it_back(win):
     """Mouse stays on monitor and touch on DSI, so press names where chrome belongs."""
     win._on_topology_changed(BOTH)
     mirror = win._live_mirror
     assert win.claim_display(True) is True
-    assert win._root.chrome_pane.geometry() == PANEL_RECT
+    assert win._root.chrome_pane.geometry() == DSI_RECT
     assert win.profile is COMPACT
     # Mirror takes display chrome left, dressed for it
     assert (mirror.screen_rect, mirror.profile) == (BOTH.monitor, REGULAR)
@@ -109,7 +109,7 @@ def test_touch_hands_chrome_to_panel_and_mouse_takes_it_back(win):
     assert win.claim_display(False) is True
     assert win._root.chrome_pane.geometry() == BOTH.monitor
     assert win.profile is REGULAR
-    assert (mirror.screen_rect, mirror.profile) == (PANEL_RECT, COMPACT)
+    assert (mirror.screen_rect, mirror.profile) == (DSI_RECT, COMPACT)
     # Same mirror throughout, since second would reset texture stream live view shares
     assert win._live_mirror is mirror
 
@@ -125,12 +125,12 @@ def test_plugging_display_hands_chrome_back_to_monitor(win):
     """Fresh start puts it there, so hotplug should not leave it where finger did."""
     win._on_topology_changed(BOTH)
     win.claim_display(True)
-    win._on_topology_changed(PANEL_ONLY)
+    win._on_topology_changed(DSI_ONLY)
     win._on_topology_changed(BOTH)
     assert win._root.chrome_pane.geometry() == BOTH.monitor
     assert win.profile is REGULAR
     mirror = win._live_mirror
-    assert (mirror.screen_rect, mirror.profile) == (PANEL_RECT, COMPACT)
+    assert (mirror.screen_rect, mirror.profile) == (DSI_RECT, COMPACT)
 
 
 def test_one_telemetry_snapshot_reaches_mirror(win, monkeypatch):
@@ -169,7 +169,7 @@ def test_mirror_lores_matches_what_mirror_stacks(win, qapp, monkeypatch):
     win.resize(BOTH.bounds.width(), BOTH.bounds.height())
     qapp.processEvents()
     mirror = win._live_mirror
-    avail = main_window._pane_avail(PANEL_RECT, mirror.status)
+    avail = main_window._pane_avail(DSI_RECT, mirror.status)
     assert mirror.viewfinder_area.lores_size() == avail
 
 
@@ -178,7 +178,7 @@ def test_lores_size_covers_larger_display(win):
     win._on_topology_changed(BOTH)
     width, height = win._lores_avail()
     assert width == BOTH.monitor.width()
-    assert PANEL_RECT.height() < height < BOTH.monitor.height()
+    assert DSI_RECT.height() < height < BOTH.monitor.height()
 
 
 def test_claim_leaves_lores_size_alone(win):
@@ -300,7 +300,7 @@ def test_neither_apply_is_live_until_selection_changes(win, cm):
 
 def test_sensor_card_footer_fits_compact_panel(win):
     """Three footer buttons beside the rewire warning still fit 800x480 touch panel."""
-    win._on_topology_changed(PANEL_ONLY)
+    win._on_topology_changed(DSI_ONLY)
     assert win.profile is COMPACT
     card = sensor_card(win)
     inset = win._overlay.layout().contentsMargins()

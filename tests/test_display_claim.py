@@ -78,7 +78,7 @@ def press() -> QtGui.QMouseEvent:
     )
 
 
-def test_touch_claims_panel_and_mouse_monitor():
+def test_touch_claims_dsi_and_mouse_monitor():
     """Mouse stays on monitor and touch on DSI, so device is whole decision."""
     claims = Claims()
     claim = filter_over(claims)

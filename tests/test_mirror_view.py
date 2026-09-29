@@ -27,7 +27,7 @@ OFF = MonitorState(
     histogram=False, focus_map=False, peaking=False, zebra=False, zebra_threshold=0.95
 )
 # Displays mirror can land on, DSI and monitor
-PANEL = (800, 480)
+DSI = (800, 480)
 MONITOR = (1920, 1080)
 
 
@@ -175,7 +175,7 @@ def test_mirror_stacks_strip_alone_over_picture(bench, qapp):
 
 
 @pytest.mark.parametrize(
-    ("profile", "size"), ((COMPACT, PANEL), (REGULAR, MONITOR)), ids=("compact", "regular")
+    ("profile", "size"), ((COMPACT, DSI), (REGULAR, MONITOR)), ids=("compact", "regular")
 )
 def test_picture_takes_room_controls_bar_held(qapp, profile, size):
     """Bar is gone on either display, so everything under strip is picture."""
