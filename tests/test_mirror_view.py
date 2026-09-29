@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""MonitorView against a stub engine, fake mirror and scripted monitor sheet state."""
+"""MirrorView against a stub engine, fake mirror and scripted monitor sheet state."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from camlab.gui import focus_map
 from camlab.gui.chips import CTRL_SPEC, chip_text
 from camlab.gui.focus_map import FocusMapOverlay
 from camlab.gui.histogram import HistogramOverlay
-from camlab.gui.monitor_view import MonitorView
+from camlab.gui.mirror_view import MirrorView
 from camlab.qt import Qt, QtCore, QtWidgets, Signal
 from camlab.settings import MonitorState
 
@@ -43,7 +43,7 @@ def bench(qapp):
     engine = FakeEngine()
     sampler = FakeSampler()
     sheet = Sheet()
-    view = MonitorView(engine, sampler, lambda: sheet.state)
+    view = MirrorView(engine, sampler, lambda: sheet.state)
     return SimpleNamespace(engine=engine, sampler=sampler, sheet=sheet, view=view)
 
 
@@ -62,7 +62,7 @@ def test_no_camera_means_no_mirror(qapp):
     engine = FakeEngine()
     engine.picam2 = None
     engine.current_mode = None
-    view = MonitorView(engine, FakeSampler(), lambda: OFF)
+    view = MirrorView(engine, FakeSampler(), lambda: OFF)
     assert engine.mirrors == []
     assert not view.viewfinder_area.has_camera
     assert view.mode_btn.text() == " Mode: --"

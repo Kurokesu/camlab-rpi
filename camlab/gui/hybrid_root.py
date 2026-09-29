@@ -1,10 +1,10 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""HybridRoot places panel pane and monitor view inside the union window.
+"""HybridRoot places panel pane and mirror view inside the union window.
 
 Cage hands the app one window spanning every lit screen. Panel pane sits on the
-panel rect, display-only monitor view on the monitor rect. With one head lit the
+panel rect, display-only mirror view on the monitor rect. With one head lit the
 panel pane fills the window.
 """
 
@@ -34,7 +34,7 @@ class HybridRoot(QtWidgets.QWidget):
 
     def __init__(
         self,
-        make_monitor: Callable[[QtWidgets.QWidget], QtWidgets.QWidget],
+        make_mirror_view: Callable[[QtWidgets.QWidget], QtWidgets.QWidget],
         forced: tuple[int, int] | None = None,
         parent: QtWidgets.QWidget | None = None,
     ):
@@ -44,8 +44,8 @@ class HybridRoot(QtWidgets.QWidget):
         # Selector scopes the black to the root, a bare rule cascades
         self.setStyleSheet("QWidget#hybridRoot { background: #000; }")
         self.panel_pane = QtWidgets.QWidget(self)
-        self.monitor_view: QtWidgets.QWidget | None = None
-        self._make_monitor = make_monitor
+        self.mirror_view: QtWidgets.QWidget | None = None
+        self._make_mirror_view = make_mirror_view
         self._forced = forced
         self._topology = None
 
@@ -73,12 +73,12 @@ class HybridRoot(QtWidgets.QWidget):
         panel, monitor = self._rects()
         self.panel_pane.setGeometry(panel)
         if monitor is None:
-            if self.monitor_view is not None:
-                self.monitor_view.hide()
+            if self.mirror_view is not None:
+                self.mirror_view.hide()
             return
-        if self.monitor_view is None:
-            self.monitor_view = self._make_monitor(self)
+        if self.mirror_view is None:
+            self.mirror_view = self._make_mirror_view(self)
             # Covers stay above it, a hotplug blank spans both panes
-            self.monitor_view.lower()
-        self.monitor_view.setGeometry(monitor)
-        self.monitor_view.show()
+            self.mirror_view.lower()
+        self.mirror_view.setGeometry(monitor)
+        self.mirror_view.show()

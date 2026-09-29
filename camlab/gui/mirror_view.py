@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""MonitorView: display-only twin of the panel UI for the monitor in Both mode.
+"""MirrorView: display-only twin of the panel UI for the monitor in Both mode.
 
 Same strip, viewfinder, control chips and assists as the panel at REGULAR
 density. Panel pushes each telemetry snapshot, assists come from its monitor
@@ -26,7 +26,7 @@ _ACCENT_ON = "#e5c07b"
 _ACCENT_OFF = "#d7dae0"
 
 
-class MonitorView(QtWidgets.QWidget):
+class MirrorView(QtWidgets.QWidget):
     def __init__(
         self,
         engine,
