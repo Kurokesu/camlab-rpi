@@ -40,7 +40,7 @@ PANEL = _screen("DSI-2", PANEL_RECT, UNION_RECT)
 MONITOR = _screen("HDMI-A-1", MONITOR_RECT, UNION_RECT)
 
 
-def test_both_sizes_to_monitor_pane():
+def test_both_sizes_to_chrome_pane():
     assert app_module._avail_size(_app(PANEL, MONITOR), DisplayMode.BOTH) == (
         1920,
         1080 - app_module._CHROME_PX,

@@ -25,7 +25,7 @@ from .about_dialog import AboutCard
 from .chips import CTRL_SPEC, chip_sample, chip_text, fmt_ct, fmt_exposure, fmt_gain
 from .control_sheet import ControlSheet, MonitorSheet
 from .covers import BootCover, SwitchCover
-from .hybrid_root import HybridRoot, pane_screen, rect_text
+from .hybrid_root import HybridRoot, chrome_screen, mirror_screen, rect_text
 from .log_panel import LogPanel
 from .mirror_view import MirrorView
 from .mode_dialog import ModeCard
@@ -56,6 +56,14 @@ _ACCENT_OFF = "#d7dae0"
 _PAINT_MS = 80
 
 
+def _pane_avail(rect: QtCore.QRect | None, *rows: QtWidgets.QWidget) -> tuple[int, int]:
+    """Viewfinder size screen rect leaves once stacked rows take hint height."""
+    if rect is None:
+        return (0, 0)
+    taken = sum(row.sizeHint().height() for row in rows)
+    return rect.width(), max(rect.height() - taken, 0)
+
+
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(
         self,
@@ -83,7 +91,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._backlight = backlight
         # Output layout settled before Qt started, screens are already final
         self._topology = Topology.from_screens(QtWidgets.QApplication.screens())
-        self._profile: UiProfile = profile_for_rect(pane_screen(self._topology))
+        self._profile: UiProfile = profile_for_rect(chrome_screen(self._topology))
         self._display_key: Topology | None = None
         self._sev = ""  # severity tinting the log button
         self._log_btn_state: tuple | None = None  # last synced look, skips no-op restyles
@@ -93,7 +101,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setStyleSheet(build_stylesheet(self._profile))
 
         self._root = HybridRoot(self._make_mirror_view, forced_screen())
-        central = self._root.panel_pane
+        central = self._root.chrome_pane
         self.setCentralWidget(self._root)
         # Focus sink: empty chrome click parks focus here, not on button
         central.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
@@ -113,7 +121,8 @@ class MainWindow(QtWidgets.QMainWindow):
         root.addWidget(self.viewfinder_area, 1)
 
         self._build_sheets()
-        root.addWidget(self._build_controls_row())
+        self._controls = self._build_controls_row()
+        root.addWidget(self._controls)
 
         # Log panel starts collapsed. Equal stretch shrinks viewfinder when open
         self.log_panel = LogPanel(classifier)
@@ -140,7 +149,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._build_shortcuts()
         self._build_timers()
-        # Panes go last, a mirror view reads the sheets and sampler built above
         self._root.set_topology(self._topology)
 
         # Black covers over chrome: boot until first fullscreen, switch across a hotplug
@@ -154,7 +162,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @property
     def profile(self) -> UiProfile:
-        """Density the panel pane draws at, live across a display switch."""
+        """Density chrome pane draws at."""
         return self._profile
 
     # construction
@@ -323,15 +331,23 @@ class MainWindow(QtWidgets.QMainWindow):
             scr.geometryChanged.connect(lambda _g: self._resync_fullscreen())
 
     def _make_mirror_view(self, parent: QtWidgets.QWidget) -> MirrorView:
-        """Called once both heads are lit, the mirror needs the panel viewfinder first."""
+        """Called once both displays are lit, mirror needs chrome viewfinder first."""
         sheet = self._sheets["monitor"]
-        return MirrorView(self.engine, self.focus_sampler, lambda: sheet.state, parent)
+        rect = mirror_screen(self._topology, self._root.chrome_on_dsi)
+        return MirrorView(
+            self.engine,
+            self.focus_sampler,
+            lambda: sheet.state,
+            profile_for_rect(rect),
+            parent,
+            screen_rect=rect,
+        )
 
     @property
     def _live_mirror(self) -> MirrorView | None:
-        """Mirror while both heads are lit. None before first plug and once hidden."""
-        monitor = self._root.mirror_view
-        return monitor if monitor is not None and not monitor.isHidden() else None
+        """Mirror while both displays are lit."""
+        mirror = self._root.mirror_view
+        return mirror if mirror is not None and not mirror.isHidden() else None
 
     # wiring
     def _wire(self) -> None:
@@ -434,8 +450,8 @@ class MainWindow(QtWidgets.QMainWindow):
         texts = field_texts(self._rpi_stats.sample())
         self.status.set_rpi_stats(texts)
         self.viewfinder_area.update_stats(texts)
-        if (monitor := self._live_mirror) is not None:
-            monitor.status.set_rpi_stats(texts)
+        if (mirror := self._live_mirror) is not None:
+            mirror.status.set_rpi_stats(texts)
 
     def _on_first_frame(self, boot_time: float) -> None:
         self.log_panel.set_boot_time(boot_time)
@@ -465,8 +481,8 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.focus_sampler.sampling:
             self.focus_sampler.poll()
         self._render_chips(md)
-        if (monitor := self._live_mirror) is not None:
-            monitor.update_status(t)
+        if (mirror := self._live_mirror) is not None:
+            mirror.update_status(t)
 
     def _render_chips(self, md: dict) -> None:
         """Chips carry live values, open sheet tracks value in auto.
@@ -672,7 +688,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Overlay traps Tab. Backdrop press cancels, same as Escape. Enter/Escape are shortcuts
         margin = 16 if self._profile.compact else 40
         self._overlay = ModalOverlay(
-            self._root.panel_pane,
+            self._root.chrome_pane,
             card,
             margin=margin,
             on_backdrop=self._close_modal,
@@ -802,9 +818,13 @@ class MainWindow(QtWidgets.QMainWindow):
     def _open_settings(self) -> None:
         # Also the way back from About, so drop that card first. No-op from chrome
         self._close_modal()
-        # Brightness only while touch panel is active display, HDMI would dim dark one
+        # Brightness only while DSI is lit, as only display with backlight
         backlight_pct = None
-        if self._profile.compact and self._backlight is not None and self._backlight.available:
+        if (
+            self._topology.panel is not None
+            and self._backlight is not None
+            and self._backlight.available
+        ):
             backlight_pct = self._backlight.get_percent()
         card = SettingsCard(
             settings=self.settings,
@@ -959,15 +979,33 @@ class MainWindow(QtWidgets.QMainWindow):
             rect_text(topology.monitor),
             rect_text(topology.bounds),
         )
-        profile = profile_for_rect(pane_screen(topology))
+        # Hotplug hands chrome back to monitor, as fresh start does
+        self._seat_chrome(False)
+        self._resync_fullscreen()
+
+    def claim_display(self, on_dsi: bool) -> bool:
+        """Move chrome to display behind press, reporting whether it moved. Needs both lit."""
+        both_lit = self._topology.panel is not None and self._topology.monitor is not None
+        if not both_lit or on_dsi == self._root.chrome_on_dsi:
+            return False
+        log.info("chrome claimed by %s", "touch" if on_dsi else "mouse")
+        self._seat_chrome(on_dsi)
+        return True
+
+    def _seat_chrome(self, on_dsi: bool) -> None:
+        """Chrome and mirror each dress for display they now sit on."""
+        self._root.set_chrome_on_dsi(on_dsi)
+        profile = profile_for_rect(chrome_screen(self._topology, on_dsi))
         if profile != self._profile:
             self._apply_profile(profile)
-        self._resync_fullscreen()
+        if (mirror := self._live_mirror) is not None:
+            rect = mirror_screen(self._topology, on_dsi)
+            mirror.apply_profile(profile_for_rect(rect), rect)
         self._refit_timer.start()
 
     def _check_chrome_fit(self) -> None:
         """Chrome wider than the screen clips silently, so say so loudly."""
-        pane = self._root.panel_pane
+        pane = self._root.chrome_pane
         hint = pane.minimumSizeHint().width()
         if hint > pane.width():
             log.warning(
@@ -1004,10 +1042,19 @@ class MainWindow(QtWidgets.QMainWindow):
         self._update_status()
 
     def _lores_avail(self) -> tuple[int, int]:
-        """Largest viewfinder across both heads, lores never upscales on either."""
-        sizes = [self.viewfinder_area.lores_size()]
-        if (monitor := self._live_mirror) is not None:
-            sizes.append(monitor.viewfinder_area.lores_size())
+        """Largest viewfinder across both displays.
+
+        Each display peaks carrying mirror.
+        """
+        forced = forced_screen()  # dev preview shrinks pane below screen
+        pane = (
+            QtCore.QRect(0, 0, *forced)
+            if forced
+            else chrome_screen(self._topology, self._root.chrome_on_dsi)
+        )
+        if (mirror := self._live_mirror) is None:
+            return _pane_avail(pane, self.status, self._controls)
+        sizes = (_pane_avail(pane, self.status), _pane_avail(mirror.screen_rect, mirror.status))
         return max(sizes, key=lambda s: s[0] * s[1])
 
     def _refit_lores(self) -> None:

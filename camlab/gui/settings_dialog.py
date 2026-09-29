@@ -50,7 +50,7 @@ class SettingsCard(QtWidgets.QFrame):
 
         form = QtWidgets.QFormLayout()
 
-        # None hides row: no backlight device or panel is not active display
+        # None hides row: no backlight device or DSI is dark
         if backlight_pct is not None:
             bl_label = QtWidgets.QLabel()
             bl_label.setPixmap(icons.pixmap("brightness_6", _ICON_PX, "#8a909b"))
