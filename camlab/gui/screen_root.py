@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""HybridRoot places chrome pane and mirror view inside union window.
+"""ScreenRoot places chrome pane and mirror view inside union window.
 
 Cage hands app one window spanning every lit screen. In dual mode chrome
 is put on one display and a display-only mirror on the other.
@@ -39,7 +39,7 @@ def rect_text(rect: QtCore.QRect | None) -> str:
     return f"{rect.width()}x{rect.height()}+{rect.x()}+{rect.y()}"
 
 
-class HybridRoot(QtWidgets.QWidget):
+class ScreenRoot(QtWidgets.QWidget):
     """Central widget placing children by screen rect."""
 
     def __init__(
@@ -49,10 +49,10 @@ class HybridRoot(QtWidgets.QWidget):
         parent: QtWidgets.QWidget | None = None,
     ):
         super().__init__(parent)
-        self.setObjectName("hybridRoot")
+        self.setObjectName("screenRoot")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         # Selector scopes the black to the root, a bare rule cascades
-        self.setStyleSheet("QWidget#hybridRoot { background: #000; }")
+        self.setStyleSheet("QWidget#screenRoot { background: #000; }")
         self.chrome_pane = QtWidgets.QWidget(self)
         self.mirror_view: QtWidgets.QWidget | None = None
         self._make_mirror_view = make_mirror_view

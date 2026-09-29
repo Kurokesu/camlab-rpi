@@ -25,13 +25,13 @@ from .about_dialog import AboutCard
 from .chips import CTRL_SPEC, chip_sample, chip_text, fmt_ct, fmt_exposure, fmt_gain
 from .control_sheet import ControlSheet, MonitorSheet
 from .covers import BootCover, SwitchCover
-from .hybrid_root import HybridRoot, chrome_screen, mirror_screen, rect_text
 from .log_panel import LogPanel
 from .mirror_view import MirrorView
 from .mode_dialog import ModeCard
 from .overlay import ModalOverlay, message_card
 from .power_card import PowerCard
 from .rpi_stats import field_texts
+from .screen_root import ScreenRoot, chrome_screen, mirror_screen, rect_text
 from .sensor_dialog import SensorCard
 from .settings_dialog import SettingsCard
 from .status_strip import StatusStrip
@@ -100,7 +100,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setWindowTitle("camlab")
         self.setStyleSheet(build_stylesheet(self._profile))
 
-        self._root = HybridRoot(self._make_mirror_view, forced_screen())
+        self._root = ScreenRoot(self._make_mirror_view, forced_screen())
         central = self._root.chrome_pane
         self.setCentralWidget(self._root)
         # Focus sink: empty chrome click parks focus here, not on button

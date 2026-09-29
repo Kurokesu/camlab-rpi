@@ -11,7 +11,7 @@ import pytest
 
 pytest.importorskip("PyQt6")
 
-from camlab.gui.hybrid_root import HybridRoot, chrome_screen, mirror_screen, rect_text
+from camlab.gui.screen_root import ScreenRoot, chrome_screen, mirror_screen, rect_text
 from camlab.qt import QtCore, QtWidgets
 
 PANEL = QtCore.QRect(0, 0, 800, 480)
@@ -34,7 +34,7 @@ class Bench:
 
     def __init__(self, forced: tuple[int, int] | None = None):
         self.made: list[QtWidgets.QWidget] = []
-        self.root = HybridRoot(self._make_mirror_view, forced)
+        self.root = ScreenRoot(self._make_mirror_view, forced)
         self.root.show()
 
     def _make_mirror_view(self, parent: QtWidgets.QWidget) -> QtWidgets.QWidget:
@@ -42,7 +42,7 @@ class Bench:
         self.made.append(view)
         return view
 
-    def settle(self, size: tuple[int, int], topo: SimpleNamespace) -> HybridRoot:
+    def settle(self, size: tuple[int, int], topo: SimpleNamespace) -> ScreenRoot:
         self.root.resize(*size)
         self.root.set_topology(topo)
         return self.root
