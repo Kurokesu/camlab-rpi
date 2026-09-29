@@ -71,7 +71,7 @@ Root is read-only (overlayfs, RAM upper) so a yanked power cable can't corrupt i
 
 ## Debian packaging
 
-The deb recipe and its CI/release workflows are maintained on the `debian/latest` branch, separate from app source (DEP-14). `debian/source/README.source` there documents the layout, RELEASING.md here documents cutting a deb release.
+The deb recipe and its CI/release workflows are maintained on the `debian/latest` branch, separate from app source (DEP-14). `debian/README.source` there documents the layout, RELEASING.md here documents cutting a deb release.
 
 ## Boot storage
 
