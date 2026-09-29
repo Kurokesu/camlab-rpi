@@ -121,7 +121,7 @@ class FakeLive(QtWidgets.QWidget):
 
 
 class FakeEngine:
-    """Engine the window and monitor view build against. Exposure and gain only, no WB chip."""
+    """Engine window and mirror view build against. Exposure and gain only."""
 
     def __init__(self):
         self.picam2 = object()

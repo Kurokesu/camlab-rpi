@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""MirrorView against a stub engine, fake mirror and scripted monitor sheet state."""
+"""MirrorView against stub engine, fake mirror and scripted monitor sheet state."""
 
 from __future__ import annotations
 
@@ -14,17 +14,21 @@ pytest.importorskip("PyQt6")
 
 from conftest import FakeEngine, telemetry
 
+from camlab.focus_metric import FocusSample
 from camlab.gui import focus_map
-from camlab.gui.chips import CTRL_SPEC, chip_text
 from camlab.gui.focus_map import FocusMapOverlay
 from camlab.gui.histogram import HistogramOverlay
 from camlab.gui.mirror_view import MirrorView
+from camlab.gui.style import COMPACT, REGULAR
 from camlab.qt import Qt, QtCore, QtWidgets, Signal
 from camlab.settings import MonitorState
 
 OFF = MonitorState(
     histogram=False, focus_map=False, peaking=False, zebra=False, zebra_threshold=0.95
 )
+# Displays mirror can land on, DSI and monitor
+PANEL = (800, 480)
+MONITOR = (1920, 1080)
 
 
 class FakeSampler(QtCore.QObject):
@@ -43,12 +47,12 @@ def bench(qapp):
     engine = FakeEngine()
     sampler = FakeSampler()
     sheet = Sheet()
-    view = MirrorView(engine, sampler, lambda: sheet.state)
+    view = MirrorView(engine, sampler, lambda: sheet.state, REGULAR)
     return SimpleNamespace(engine=engine, sampler=sampler, sheet=sheet, view=view)
 
 
 def tick(bench) -> None:
-    """One panel tick, which is what pushes a snapshot here now."""
+    """One chrome tick, which pushes snapshot here."""
     bench.view.update_status(bench.engine.telemetry)
 
 
@@ -62,43 +66,46 @@ def test_no_camera_means_no_mirror(qapp):
     engine = FakeEngine()
     engine.picam2 = None
     engine.current_mode = None
-    view = MirrorView(engine, FakeSampler(), lambda: OFF)
+    view = MirrorView(engine, FakeSampler(), lambda: OFF, REGULAR)
     assert engine.mirrors == []
     assert not view.viewfinder_area.has_camera
-    assert view.mode_btn.text() == " Mode: --"
 
 
-def test_tick_reads_telemetry_into_strip_and_chips(bench):
+def test_density_follows_display_it_lands_on(qapp):
+    """Mirror on DSI skins compact, as chrome would there."""
+    engine = FakeEngine()
+    engine.telemetry = telemetry(frame=1, fps=30.0, ExposureTime=20000)
+    view = MirrorView(engine, FakeSampler(), lambda: OFF, COMPACT)
+    view.update_status(engine.telemetry)
+    assert view.profile is COMPACT
+    assert view.status._compact
+    # Compact drops frame counter, so strip itself reads density
+    assert view.status.telemetry_lbl.text() == "30.00 fps exp 20000"
+
+
+def test_screen_rect_reports_display_it_was_placed_on(qapp):
+    """Chrome sizes lores off this, so mirror reports where it sits, not where it renders."""
+    rect = QtCore.QRect(800, 0, *MONITOR)
+    view = MirrorView(FakeEngine(), FakeSampler(), lambda: OFF, REGULAR, screen_rect=rect)
+    assert view.screen_rect == rect
+
+
+def test_tick_reads_telemetry_into_strip(bench):
     bench.engine.telemetry = telemetry(
         frame=42, fps=30.0, ExposureTime=20000, AnalogueGain=2.0, SensorTemperature=41.2
     )
     tick(bench)
     assert bench.view.status.telemetry_lbl.text() == "#42 (30.00 fps) exp 20000 ag 2.00"
     assert bench.view.status.temp_lbl.text() == "41.2\u00b0C"
-    assert bench.view.mode_btn.text() == " Mode: 1920x1080 SRGGB12 30fps"
-    chips = bench.view._chips
-    assert chips["exposure_us"].text() == chip_text(CTRL_SPEC["exposure_us"], 20000, False)
-    assert chips["gain"].text() == chip_text(CTRL_SPEC["gain"], 2.0, False)
-    assert chips["colour_temp"].isHidden()
 
 
 def test_metadata_gap_holds_last_reading(bench):
+    """Line holds while metadata drops keys across pipeline restart."""
     bench.engine.telemetry = telemetry(frame=1, fps=30.0, ExposureTime=20000)
     tick(bench)
     bench.engine.telemetry = telemetry(frame=2, fps=30.0)
     tick(bench)
-    assert bench.view._chips["exposure_us"].text() == chip_text(
-        CTRL_SPEC["exposure_us"], 20000, False
-    )
-
-
-def test_manual_control_tints_chip(bench):
-    bench.engine.control_state.gain = 4.0
-    tick(bench)
-    assert bench.view._chips["gain"].property("manual") is True
-    bench.engine.control_state.gain = None
-    tick(bench)
-    assert bench.view._chips["gain"].property("manual") is False
+    assert bench.view.status.telemetry_lbl.text() == "#2 (30.00 fps) exp 20000"
 
 
 def test_assists_follow_monitor_sheet(bench):
@@ -118,12 +125,12 @@ def test_focus_samples_reach_map_while_enabled(bench, monkeypatch):
     seen: list = []
     monkeypatch.setattr(focus_map.FocusMapOverlay, "set_levels", lambda _self, lv: seen.append(lv))
     heat = np.ones((8, 8))
-    bench.sampler.sample.emit(SimpleNamespace(heat=heat))
+    bench.sampler.sample.emit(FocusSample(heat=heat))
     assert seen == []
     bench.sheet.state = OFF._replace(focus_map=True)
     bench.view.show()
     tick(bench)
-    bench.sampler.sample.emit(SimpleNamespace(heat=heat))
+    bench.sampler.sample.emit(FocusSample(heat=heat))
     assert len(seen) == 1 and seen[0] is heat
 
 
@@ -138,17 +145,49 @@ def test_histogram_pushed_on_tick_when_shown(bench, monkeypatch):
     assert len(seen) == 1
 
 
-def test_no_input_surface(bench):
-    view = bench.view
+@pytest.mark.parametrize("profile", (COMPACT, REGULAR), ids=("compact", "regular"))
+def test_nothing_on_mirror_invites_press(qapp, profile):
+    """Mirror carries no controls, at either density since it swaps displays with chrome."""
+    view = MirrorView(FakeEngine(), FakeSampler(), lambda: OFF, profile)
     assert view.testAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-    buttons = view.findChildren(QtWidgets.QPushButton)
-    assert len(buttons) == len(CTRL_SPEC) + 1  # control chips plus the mode chip
-    assert all(b.focusPolicy() == Qt.FocusPolicy.NoFocus for b in buttons)
-    assert not any(b.isCheckable() for b in buttons)
+    assert view.findChildren(QtWidgets.QAbstractButton) == []
+    assert all(
+        w.cursor().shape() == Qt.CursorShape.ArrowCursor
+        for w in view.viewfinder_area.findChildren(QtWidgets.QWidget)
+    )
+
+
+def test_mirror_stacks_strip_alone_over_picture(bench, qapp):
+    """Chrome sizes mirror lores by subtracting strip hint alone, so third row here would
+    steal picture camera never hears about."""
+    view = bench.view
+    root = view.layout()
+    assert [root.itemAt(i).widget() for i in range(root.count())] == [
+        view.status,
+        view.viewfinder_area,
+    ]
+    view.resize(*MONITOR)
+    view.show()
+    qapp.processEvents()
+    # Sizing reads hint, so layout must hand out exactly that
+    assert view.status.height() == view.status.sizeHint().height()
+    assert view.viewfinder_area.height() == MONITOR[1] - view.status.height()
+
+
+@pytest.mark.parametrize(
+    ("profile", "size"), ((COMPACT, PANEL), (REGULAR, MONITOR)), ids=("compact", "regular")
+)
+def test_picture_takes_room_controls_bar_held(qapp, profile, size):
+    """Bar is gone on either display, so everything under strip is picture."""
+    view = MirrorView(FakeEngine(), FakeSampler(), lambda: OFF, profile)
+    view.resize(*size)
+    view.show()
+    qapp.processEvents()
+    assert view.viewfinder_area.lores_size() == (size[0], size[1] - view.status.height())
 
 
 def test_no_timer_of_its_own(bench):
-    """Panel drives every refresh, a second timer would put the heads out of phase."""
+    """Chrome drives every refresh, so second timer would put displays out of phase."""
     timers = bench.view.findChildren(
         QtCore.QTimer, options=Qt.FindChildOption.FindDirectChildrenOnly
     )
@@ -156,15 +195,5 @@ def test_no_timer_of_its_own(bench):
 
 
 def test_board_stats_are_not_sampled_here(bench):
-    """Panel owns the one sampler, so the twin must not read the counters again."""
+    """Chrome owns the one sampler, so twin must not read counters again."""
     assert not hasattr(bench.view, "_rpi_stats")
-
-
-def test_viewfinder_takes_width_under_strip_and_chips(bench, qapp):
-    view = bench.view
-    view.resize(1920, 1080)
-    view.show()
-    qapp.processEvents()
-    width, height = view.viewfinder_area.lores_size()
-    assert width == 1920
-    assert 0 < height < 1080

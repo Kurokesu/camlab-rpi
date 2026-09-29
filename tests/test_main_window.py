@@ -47,7 +47,7 @@ def calls(win, monkeypatch):
     return seen
 
 
-def test_profile_follows_pane_screen_across_display_switch(win):
+def test_profile_follows_chrome_screen_across_display_switch(win):
     """Accessor follows the pane screen, matching the profile the window skinned with."""
     win._on_topology_changed(MONITOR_ONLY)
     assert win.profile is REGULAR
@@ -55,6 +55,21 @@ def test_profile_follows_pane_screen_across_display_switch(win):
     win._on_topology_changed(PANEL_ONLY)
     assert win.profile is COMPACT
     assert win.styleSheet() == build_stylesheet(COMPACT)
+    # Chrome takes monitor whenever there is one, so Both skins regular
+    win._on_topology_changed(BOTH)
+    assert win.profile is REGULAR
+
+
+def test_backlight_slider_offered_whenever_dsi_is_lit(win):
+    """Chrome sits on monitor in Both mode, so density no longer tracks lit DSI."""
+    win._backlight = SimpleNamespace(available=True, get_percent=lambda: 60)
+    offered = {}
+    for name, topology in (("panel", PANEL_ONLY), ("both", BOTH), ("monitor", MONITOR_ONLY)):
+        win._on_topology_changed(topology)
+        win._open_settings()
+        offered[name] = hasattr(win._overlay.card, "backlight_slider")
+        win._close_modal()
+    assert offered == {"panel": True, "both": True, "monitor": False}
 
 
 def test_one_board_sample_feeds_both_strips(win, monkeypatch):
@@ -80,13 +95,102 @@ def test_mirror_is_addressed_only_while_lit(win):
     assert win._live_mirror is win._root.mirror_view
 
 
+def test_touch_hands_chrome_to_panel_and_mouse_takes_it_back(win):
+    """Mouse stays on monitor and touch on DSI, so press names where chrome belongs."""
+    win._on_topology_changed(BOTH)
+    mirror = win._live_mirror
+    assert win.claim_display(True) is True
+    assert win._root.chrome_pane.geometry() == PANEL_RECT
+    assert win.profile is COMPACT
+    # Mirror takes display chrome left, dressed for it
+    assert (mirror.screen_rect, mirror.profile) == (BOTH.monitor, REGULAR)
+    # Already there, so press is operator working a control, not a claim
+    assert win.claim_display(True) is False
+    assert win.claim_display(False) is True
+    assert win._root.chrome_pane.geometry() == BOTH.monitor
+    assert win.profile is REGULAR
+    assert (mirror.screen_rect, mirror.profile) == (PANEL_RECT, COMPACT)
+    # Same mirror throughout, since second would reset texture stream live view shares
+    assert win._live_mirror is mirror
+
+
+def test_claim_needs_both_displays_lit(win):
+    """One display carries chrome whatever was pressed, so nothing moves."""
+    win._on_topology_changed(MONITOR_ONLY)
+    assert win.claim_display(True) is False
+    assert win.profile is REGULAR
+
+
+def test_plugging_display_hands_chrome_back_to_monitor(win):
+    """Fresh start puts it there, so hotplug should not leave it where finger did."""
+    win._on_topology_changed(BOTH)
+    win.claim_display(True)
+    win._on_topology_changed(PANEL_ONLY)
+    win._on_topology_changed(BOTH)
+    assert win._root.chrome_pane.geometry() == BOTH.monitor
+    assert win.profile is REGULAR
+    mirror = win._live_mirror
+    assert (mirror.screen_rect, mirror.profile) == (PANEL_RECT, COMPACT)
+
+
 def test_one_telemetry_snapshot_reaches_mirror(win, monkeypatch):
-    """Mirror ticking itself left the heads on frames up to a tick apart."""
+    """Mirror ticking itself left displays on frames up to a tick apart."""
     win._on_topology_changed(BOTH)
     seen: list = []
     monkeypatch.setattr(MirrorView, "update_status", lambda _self, t: seen.append(t))
     win._update_status()
     assert len(seen) == 1 and seen[0] is win.engine.telemetry
+
+
+def test_lores_size_holds_across_layout_caught_mid_settle(win):
+    """Sizing from live widgets bought second camera reconfigure over a few pixels."""
+    win._on_topology_changed(MONITOR_ONLY)
+    settled = win._lores_avail()
+    # Resize burst mid-switch: rows and viewfinder still carry outgoing layout
+    win.status.resize(win.status.width(), win.status.height() + 20)
+    win.viewfinder_area.resize(640, 360)
+    assert win._lores_avail() == settled
+
+
+def test_lores_size_matches_settled_layout(win, qapp, monkeypatch):
+    """Derived size has to be what settled layout hands viewfinder, not near it."""
+    monkeypatch.setattr(win, "_apply_fullscreen", lambda: None)  # offscreen screen is not 1080p
+    win._on_topology_changed(MONITOR_ONLY)
+    win.resize(MONITOR_RECT.width(), MONITOR_RECT.height())
+    qapp.processEvents()
+    assert win._lores_avail() == win.viewfinder_area.lores_size()
+
+
+def test_mirror_lores_matches_what_mirror_stacks(win, qapp, monkeypatch):
+    """Mirror branch subtracts mirror strip alone, so row added there must reach this sum
+    too or camera streams size picture cannot use."""
+    monkeypatch.setattr(win, "_apply_fullscreen", lambda: None)  # offscreen screen is not 1080p
+    win._on_topology_changed(BOTH)
+    win.resize(BOTH.bounds.width(), BOTH.bounds.height())
+    qapp.processEvents()
+    mirror = win._live_mirror
+    avail = main_window._pane_avail(PANEL_RECT, mirror.status)
+    assert mirror.viewfinder_area.lores_size() == avail
+
+
+def test_lores_size_covers_larger_display(win):
+    """Lores never upscales on either display, so Both sizes to monitor."""
+    win._on_topology_changed(BOTH)
+    width, height = win._lores_avail()
+    assert width == BOTH.monitor.width()
+    assert PANEL_RECT.height() < height < BOTH.monitor.height()
+
+
+def test_claim_leaves_lores_size_alone(win):
+    """Size change restarts camera, so every tap moving chrome froze picture. Size is
+    monitor carrying mirror, which chrome pane never exceeds."""
+    win._on_topology_changed(BOTH)
+    monitor_mirror = main_window._pane_avail(BOTH.monitor, win.status)
+    sizes = [win._lores_avail()]
+    for on_dsi in (True, False):
+        win.claim_display(on_dsi)
+        sizes.append(win._lores_avail())
+    assert sizes == [monitor_mirror] * 3
 
 
 @pytest.mark.parametrize(

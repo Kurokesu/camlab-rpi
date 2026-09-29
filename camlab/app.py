@@ -17,6 +17,7 @@ from .display import Backlight, CursorPolicy, DisplayManager, Topology, apply_ou
 from .dsi_panels import PanelRegistry
 from .gl_viewfinder import install_gles_format
 from .gui import fonts
+from .gui.display_claim import DisplayClaim
 from .gui.main_window import MainWindow
 from .gui.style import profile_for_screen
 from .integrity import LOG_DATEFMT, LOG_FORMAT, LogClassifier, NullCapture, StderrCapture
@@ -142,6 +143,7 @@ def main(argv: list[str] | None = None) -> int:
         backlight=backlight,
     )
     win.showFullScreen()
+    DisplayClaim(app, win.claim_display)
     display_manager.start()
 
     # Sent by ExecStop. Handler lands between bytecodes, so event loop does the write

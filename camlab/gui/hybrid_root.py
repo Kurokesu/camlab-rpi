@@ -1,11 +1,10 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""HybridRoot places panel pane and mirror view inside the union window.
+"""HybridRoot places chrome pane and mirror view inside union window.
 
-Cage hands the app one window spanning every lit screen. Panel pane sits on the
-panel rect, display-only mirror view on the monitor rect. With one head lit the
-panel pane fills the window.
+Cage hands app one window spanning every lit screen. In dual mode chrome
+is put on one display and a display-only mirror on the other.
 """
 
 from __future__ import annotations
@@ -15,15 +14,26 @@ from collections.abc import Callable
 from ..qt import Qt, QtCore, QtWidgets
 
 
-def pane_screen(topology) -> QtCore.QRect | None:
-    """Screen rect the panel pane lands on: panel, else whatever is lit."""
-    if topology.panel is not None:
-        return topology.panel
+def chrome_screen(topology, chrome_on_dsi: bool = False) -> QtCore.QRect | None:
+    """Chrome screen rect."""
+    order = (
+        (topology.panel, topology.monitor) if chrome_on_dsi else (topology.monitor, topology.panel)
+    )
+    for rect in order:
+        if rect is not None:
+            return rect
     return None if topology.bounds.isEmpty() else topology.bounds
 
 
+def mirror_screen(topology, chrome_on_dsi: bool = False) -> QtCore.QRect | None:
+    """Mirror screen rect."""
+    if topology.panel is None or topology.monitor is None:
+        return None
+    return topology.monitor if chrome_on_dsi else topology.panel
+
+
 def rect_text(rect: QtCore.QRect | None) -> str:
-    """WxH+X+Y for logs, "none" for an absent head."""
+    """WxH+X+Y for logs, "none" for absent display."""
     if rect is None:
         return "none"
     return f"{rect.width()}x{rect.height()}+{rect.x()}+{rect.y()}"
@@ -43,14 +53,27 @@ class HybridRoot(QtWidgets.QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         # Selector scopes the black to the root, a bare rule cascades
         self.setStyleSheet("QWidget#hybridRoot { background: #000; }")
-        self.panel_pane = QtWidgets.QWidget(self)
+        self.chrome_pane = QtWidgets.QWidget(self)
         self.mirror_view: QtWidgets.QWidget | None = None
         self._make_mirror_view = make_mirror_view
         self._forced = forced
         self._topology = None
+        self._chrome_on_dsi = False
 
     def set_topology(self, topology) -> None:
         self._topology = topology
+        self._place()
+
+    @property
+    def chrome_on_dsi(self) -> bool:
+        """DSI carries chrome, as last claim left it."""
+        return self._chrome_on_dsi
+
+    def set_chrome_on_dsi(self, chrome_on_dsi: bool) -> None:
+        """Swap panes so claimed display carries chrome."""
+        if chrome_on_dsi == self._chrome_on_dsi:
+            return
+        self._chrome_on_dsi = chrome_on_dsi
         self._place()
 
     def resizeEvent(self, event) -> None:
@@ -58,21 +81,24 @@ class HybridRoot(QtWidgets.QWidget):
         self._place()
 
     def _rects(self) -> tuple[QtCore.QRect, QtCore.QRect | None]:
+        """Chrome pane rect, then mirror view rect."""
         if self._forced is not None:
             # Panel preview: Cage forces fullscreen, shrink and center the pane instead
-            panel = QtCore.QRect(QtCore.QPoint(), QtCore.QSize(*self._forced))
-            panel.moveCenter(self.rect().center())
-            return panel, None
+            pane = QtCore.QRect(QtCore.QPoint(), QtCore.QSize(*self._forced))
+            pane.moveCenter(self.rect().center())
+            return pane, None
         t = self._topology
         if t is None or t.panel is None or t.monitor is None:
             return self.rect(), None
         origin = t.bounds.topLeft()
-        return t.panel.translated(-origin), t.monitor.translated(-origin)
+        chrome = chrome_screen(t, self._chrome_on_dsi)
+        mirror = mirror_screen(t, self._chrome_on_dsi)
+        return chrome.translated(-origin), mirror.translated(-origin)
 
     def _place(self) -> None:
-        panel, monitor = self._rects()
-        self.panel_pane.setGeometry(panel)
-        if monitor is None:
+        pane, mirror = self._rects()
+        self.chrome_pane.setGeometry(pane)
+        if mirror is None:
             if self.mirror_view is not None:
                 self.mirror_view.hide()
             return
@@ -80,5 +106,5 @@ class HybridRoot(QtWidgets.QWidget):
             self.mirror_view = self._make_mirror_view(self)
             # Covers stay above it, a hotplug blank spans both panes
             self.mirror_view.lower()
-        self.mirror_view.setGeometry(monitor)
+        self.mirror_view.setGeometry(mirror)
         self.mirror_view.show()
