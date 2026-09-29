@@ -8,4 +8,4 @@ selection (writes the dtoverlay) and signal-integrity / status surfacing. Runs
 fullscreen under a Cage kiosk. See the repo README and spec.
 """
 
-__version__ = "1.2.0-dev"
+__version__ = "1.2.0"
