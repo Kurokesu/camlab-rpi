@@ -14,7 +14,7 @@
 #   camlabctl log-level <level>          trace|debug|info|warn|error|off
 #   camlabctl shot [path]                screenshot each kiosk output (needs grim)
 #   camlabctl rec [secs] [path]          record live kiosk (needs wf-recorder)
-#   camlabctl tap <x> <y>                click in live kiosk
+#   camlabctl tap <output> <x> <y>       click x,y on DSI or HDMI output
 #   camlabctl net <on|off|status>        toggle networking (off for production,
 #                                         on for SSH dev)
 #   camlabctl touch <a b c d e f>|clear  libinput calibration on touchscreens
@@ -118,14 +118,19 @@ cmd_rec() {
 }
 
 cmd_tap() {
-    local x="${1:-}" y="${2:-}"
-    if [ -z "$x" ] || [ -z "$y" ]; then
-        die "tap requires x and y"
+    local output="${1:-}" x="${2:-}" y="${3:-}" ox oy
+    if [ -z "$output" ] || [ -z "$x" ] || [ -z "$y" ]; then
+        die "tap requires output, x and y"
     fi
     _kiosk_session
-    # Pointer moves are relative, so clamp into the corner for a known origin first
+    read -r ox oy < <(wlr-randr | awk -v want="${output^^}" '
+        /^[^ ]/ { name = $1; lit = 0 }
+        /^  Enabled: yes/ { lit = 1 }
+        lit && /^  Position:/ && index(name, want) == 1 { sub(",", " ", $2); print $2; exit }
+    ') || die "no lit output matching $output"
+    # Pointer moves are relative, so clamp into layout origin first
     wlrctl pointer move -65536 -65536
-    wlrctl pointer move "$x" "$y"
+    wlrctl pointer move "$((ox + x))" "$((oy + y))"
     wlrctl pointer click left
 }
 
