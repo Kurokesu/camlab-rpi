@@ -34,10 +34,10 @@ class Bench:
 
     def __init__(self, forced: tuple[int, int] | None = None):
         self.made: list[QtWidgets.QWidget] = []
-        self.root = HybridRoot(self._make_monitor, forced)
+        self.root = HybridRoot(self._make_mirror_view, forced)
         self.root.show()
 
-    def _make_monitor(self, parent: QtWidgets.QWidget) -> QtWidgets.QWidget:
+    def _make_mirror_view(self, parent: QtWidgets.QWidget) -> QtWidgets.QWidget:
         view = QtWidgets.QWidget(parent)
         self.made.append(view)
         return view
@@ -53,41 +53,41 @@ def bench(qapp) -> Bench:
     return Bench()
 
 
-def test_panel_only_fills_window_without_monitor_view(bench):
+def test_panel_only_fills_window_without_mirror_view(bench):
     root = bench.settle((800, 480), PANEL_ONLY)
     assert root.panel_pane.geometry() == QtCore.QRect(0, 0, 800, 480)
-    assert root.monitor_view is None
+    assert root.mirror_view is None
     assert bench.made == []
 
 
 def test_monitor_only_puts_panel_ui_on_monitor(bench):
     root = bench.settle((1920, 1080), MONITOR_ONLY)
     assert root.panel_pane.geometry() == QtCore.QRect(0, 0, 1920, 1080)
-    assert root.monitor_view is None
+    assert root.mirror_view is None
 
 
 def test_both_places_panes_side_by_side(bench):
     root = bench.settle((2720, 1080), BOTH)
     assert root.panel_pane.geometry() == PANEL
-    assert root.monitor_view is bench.made[0]
-    assert root.monitor_view.geometry() == MONITOR
-    assert root.monitor_view.isVisible()
+    assert root.mirror_view is bench.made[0]
+    assert root.mirror_view.geometry() == MONITOR
+    assert root.mirror_view.isVisible()
 
 
-def test_unplug_hides_monitor_view_and_replug_reuses_it(bench):
+def test_unplug_hides_mirror_view_and_replug_reuses_it(bench):
     root = bench.settle((2720, 1080), BOTH)
     bench.settle((800, 480), PANEL_ONLY)
-    assert root.monitor_view.isHidden()
+    assert root.mirror_view.isHidden()
     assert root.panel_pane.geometry() == QtCore.QRect(0, 0, 800, 480)
     bench.settle((2720, 1080), BOTH)
-    assert root.monitor_view.isVisible()
+    assert root.mirror_view.isVisible()
     assert len(bench.made) == 1
 
 
 def test_no_screens_keeps_panel_pane_on_window(bench):
     root = bench.settle((640, 480), topology())
     assert root.panel_pane.geometry() == QtCore.QRect(0, 0, 640, 480)
-    assert root.monitor_view is None
+    assert root.mirror_view is None
 
 
 def test_rects_are_relative_to_bounds_origin(bench):
@@ -96,7 +96,7 @@ def test_rects_are_relative_to_bounds_origin(bench):
     )
     root = bench.settle((2720, 1080), shifted)
     assert root.panel_pane.geometry() == PANEL
-    assert root.monitor_view.geometry() == MONITOR
+    assert root.mirror_view.geometry() == MONITOR
 
 
 def test_resize_refits_single_pane(bench):
@@ -105,17 +105,17 @@ def test_resize_refits_single_pane(bench):
     assert root.panel_pane.geometry() == QtCore.QRect(0, 0, 1024, 600)
 
 
-def test_monitor_view_stacks_below_panel_pane(bench):
+def test_mirror_view_stacks_below_panel_pane(bench):
     root = bench.settle((2720, 1080), BOTH)
     children = [c for c in root.children() if isinstance(c, QtWidgets.QWidget)]
-    assert children.index(root.monitor_view) < children.index(root.panel_pane)
+    assert children.index(root.mirror_view) < children.index(root.panel_pane)
 
 
 def test_forced_size_centers_panel_pane_and_skips_monitor(qapp):
     bench = Bench(forced=(800, 480))
     root = bench.settle((1920, 1080), BOTH)
     assert root.panel_pane.geometry() == QtCore.QRect(560, 300, 800, 480)
-    assert root.monitor_view is None
+    assert root.mirror_view is None
 
 
 def test_pane_screen_prefers_panel_then_bounds():

@@ -14,7 +14,7 @@ from conftest import FAILURES, PANEL_NAME, PANEL_OVERLAY, logged
 main_window = pytest.importorskip("camlab.gui.main_window")
 
 from camlab import config_manager
-from camlab.gui.monitor_view import MonitorView
+from camlab.gui.mirror_view import MirrorView
 from camlab.gui.status_strip import StatusStrip
 from camlab.gui.style import COMPACT, REGULAR, build_stylesheet
 from camlab.integrity import IntegrityStats, NullCapture
@@ -65,26 +65,26 @@ def test_one_board_sample_feeds_both_strips(win, monkeypatch):
         StatusStrip, "set_rpi_stats", lambda self, texts: seen.append((self, texts))
     )
     win._sample_rpi()
-    assert [strip for strip, _ in seen] == [win.status, win._root.monitor_view.status]
+    assert [strip for strip, _ in seen] == [win.status, win._root.mirror_view.status]
     assert seen[0][1] is seen[1][1]
 
 
 def test_mirror_is_addressed_only_while_lit(win):
     """One guard for every reader, so none of them can disagree about the mirror."""
-    assert win._live_monitor is None
+    assert win._live_mirror is None
     win._on_topology_changed(BOTH)
-    assert win._live_monitor is win._root.monitor_view
+    assert win._live_mirror is win._root.mirror_view
     win._on_topology_changed(PANEL_ONLY)
-    assert win._live_monitor is None
+    assert win._live_mirror is None
     win._on_topology_changed(BOTH)
-    assert win._live_monitor is win._root.monitor_view
+    assert win._live_mirror is win._root.mirror_view
 
 
 def test_one_telemetry_snapshot_reaches_mirror(win, monkeypatch):
     """Mirror ticking itself left the heads on frames up to a tick apart."""
     win._on_topology_changed(BOTH)
     seen: list = []
-    monkeypatch.setattr(MonitorView, "update_status", lambda _self, t: seen.append(t))
+    monkeypatch.setattr(MirrorView, "update_status", lambda _self, t: seen.append(t))
     win._update_status()
     assert len(seen) == 1 and seen[0] is win.engine.telemetry
 

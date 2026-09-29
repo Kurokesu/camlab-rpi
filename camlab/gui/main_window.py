@@ -27,8 +27,8 @@ from .control_sheet import ControlSheet, MonitorSheet
 from .covers import BootCover, SwitchCover
 from .hybrid_root import HybridRoot, pane_screen, rect_text
 from .log_panel import LogPanel
+from .mirror_view import MirrorView
 from .mode_dialog import ModeCard
-from .monitor_view import MonitorView
 from .overlay import ModalOverlay, message_card
 from .power_card import PowerCard
 from .rpi_stats import field_texts
@@ -92,7 +92,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setWindowTitle("camlab")
         self.setStyleSheet(build_stylesheet(self._profile))
 
-        self._root = HybridRoot(self._make_monitor_view, forced_screen())
+        self._root = HybridRoot(self._make_mirror_view, forced_screen())
         central = self._root.panel_pane
         self.setCentralWidget(self._root)
         # Focus sink: empty chrome click parks focus here, not on button
@@ -140,7 +140,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._build_shortcuts()
         self._build_timers()
-        # Panes go last, a monitor view reads the sheets and sampler built above
+        # Panes go last, a mirror view reads the sheets and sampler built above
         self._root.set_topology(self._topology)
 
         # Black covers over chrome: boot until first fullscreen, switch across a hotplug
@@ -322,15 +322,15 @@ class MainWindow(QtWidgets.QMainWindow):
         for scr in app.screens():
             scr.geometryChanged.connect(lambda _g: self._resync_fullscreen())
 
-    def _make_monitor_view(self, parent: QtWidgets.QWidget) -> MonitorView:
+    def _make_mirror_view(self, parent: QtWidgets.QWidget) -> MirrorView:
         """Called once both heads are lit, the mirror needs the panel viewfinder first."""
         sheet = self._sheets["monitor"]
-        return MonitorView(self.engine, self.focus_sampler, lambda: sheet.state, parent)
+        return MirrorView(self.engine, self.focus_sampler, lambda: sheet.state, parent)
 
     @property
-    def _live_monitor(self) -> MonitorView | None:
+    def _live_mirror(self) -> MirrorView | None:
         """Mirror while both heads are lit. None before first plug and once hidden."""
-        monitor = self._root.monitor_view
+        monitor = self._root.mirror_view
         return monitor if monitor is not None and not monitor.isHidden() else None
 
     # wiring
@@ -434,7 +434,7 @@ class MainWindow(QtWidgets.QMainWindow):
         texts = field_texts(self._rpi_stats.sample())
         self.status.set_rpi_stats(texts)
         self.viewfinder_area.update_stats(texts)
-        if (monitor := self._live_monitor) is not None:
+        if (monitor := self._live_mirror) is not None:
             monitor.status.set_rpi_stats(texts)
 
     def _on_first_frame(self, boot_time: float) -> None:
@@ -465,7 +465,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.focus_sampler.sampling:
             self.focus_sampler.poll()
         self._render_chips(md)
-        if (monitor := self._live_monitor) is not None:
+        if (monitor := self._live_mirror) is not None:
             monitor.update_status(t)
 
     def _render_chips(self, md: dict) -> None:
@@ -1006,7 +1006,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def _lores_avail(self) -> tuple[int, int]:
         """Largest viewfinder across both heads, lores never upscales on either."""
         sizes = [self.viewfinder_area.lores_size()]
-        if (monitor := self._live_monitor) is not None:
+        if (monitor := self._live_mirror) is not None:
             sizes.append(monitor.viewfinder_area.lores_size())
         return max(sizes, key=lambda s: s[0] * s[1])
 
