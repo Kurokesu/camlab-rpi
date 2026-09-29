@@ -9,12 +9,13 @@ camlabctl status               # print service state
 camlabctl start|stop           # start/stop kiosk service
 camlabctl restart              # restart
 camlabctl logs -f              # tail service logs
-camlabctl shot                 # screenshot live kiosk (needs grim)
+camlabctl shot                 # screenshot each kiosk output (needs grim)
 camlabctl rec                  # record live kiosk (needs wf-recorder)
-camlabctl tap <x> <y>          # click in live kiosk (needs wlrctl)
+camlabctl tap <x> <y>          # click in live kiosk
 camlabctl log-level debug      # set log level (follow with camlabctl restart)
 camlabctl net off|on|status    # toggle networking
 camlabctl touch <a..f>|clear   # set or clear touchscreen calibration
+camlabctl touch off            # ignore touchscreen
 camlabctl rw                   # boot writable next time
 camlabctl ro                   # boot read-only next time
 ```
@@ -54,7 +55,15 @@ sudo systemctl daemon-reload && camlabctl restart
 
 ## Touch calibration
 
-In Both display mode the window spans panel and monitor, so touch is confined to the panel by a libinput calibration matrix. `camlabctl touch <a> <b> <c> <d> <e> <f>` writes it to `/run/udev/rules.d/90-camlab-touchmap.rules` and re-adds every touchscreen node (libinput reads the matrix at device add only), `camlabctl touch clear` removes the rule the same way. camlab calls both through sudoers, and a rule under `/run` does not survive a reboot.
+camlab sets touchscreen rule to match display mode:
+
+| Display mode | Command | Effect |
+| --- | --- | --- |
+| Both | `camlabctl touch <a> <b> <c> <d> <e> <f>` | Calibration matrix confines touch to DSI |
+| External | `camlabctl touch off` | `LIBINPUT_IGNORE_DEVICE` drops touch while DSI is dark |
+| Built-in | `camlabctl touch clear` | No rule, touch spans DSI |
+
+Rule is written to `/run/udev/rules.d/90-camlab-touchmap.rules`, so reboot starts clean. Changing rule re-adds every touchscreen node, since libinput reads it only at device add. camlab runs all three commands through sudoers.
 
 ## Read-only root
 

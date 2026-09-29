@@ -9,7 +9,7 @@
 #   - poweroff (both a sensor swap and operator shutdown power the unit off)
 #   - reboot (operator choice on the power card)
 #   - networking toggle (Settings dialog)
-#   - touch calibration (arguments are matrix numbers, validated by the script)
+#   - touch calibration (script validates arguments)
 
 CAMLAB_USER ALL=(root) NOPASSWD: /usr/local/bin/camlab-apply
 CAMLAB_USER ALL=(root) NOPASSWD: /usr/local/bin/camlab-update check
