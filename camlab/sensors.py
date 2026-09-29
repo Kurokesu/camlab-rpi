@@ -88,3 +88,10 @@ class SensorRegistry:
             if s.overlay.lower() == overlay.lower():
                 return s
         return None
+
+
+if __name__ == "__main__":
+    # drivers.sh and deb Depends read this, one overlay<TAB>package per line
+    for sensor in SensorRegistry.load():
+        if sensor.driver_package:
+            print(f"{sensor.overlay}\t{sensor.driver_package}")
