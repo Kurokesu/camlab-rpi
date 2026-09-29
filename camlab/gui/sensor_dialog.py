@@ -13,7 +13,7 @@ from collections.abc import Callable
 from ..dsi_panels import PanelRegistry
 from ..qt import Qt, QtWidgets
 from ..sensors import SensorRegistry
-from .widgets import SegmentedSelector, hline
+from .widgets import ScrollRow, SegmentedSelector, hline
 
 
 class SensorCard(QtWidgets.QFrame):
@@ -29,6 +29,7 @@ class SensorCard(QtWidgets.QFrame):
         blocked_ports: set[str],
         on_apply: Callable[[str, str, bool, str | None, bool], None],
         on_cancel: Callable[[], None],
+        compact: bool = False,
     ):
         super().__init__()
         self.setObjectName("modalCard")
@@ -100,7 +101,8 @@ class SensorCard(QtWidgets.QFrame):
         self.variant_sel = SegmentedSelector()
         self.variant_sel.changed.connect(self._refresh_apply)
 
-        form.addRow("Sensor:", self.sensor_sel)
+        self._sensor_row = ScrollRow(self.sensor_sel, show_all=not compact)
+        form.addRow("Sensor:", self._sensor_row)
         form.addRow(self.variant_lbl, self.variant_sel)
         form.addRow("CSI port:", self.port_sel)
         form.addRow("Touch display:", self.display_sel)
@@ -141,6 +143,10 @@ class SensorCard(QtWidgets.QFrame):
         lay.addLayout(buttons)
 
         self._refresh_apply()
+
+    def set_compact(self, compact: bool) -> None:
+        """Follow chrome to other display while card stays open."""
+        self._sensor_row.set_show_all(not compact)
 
     def _on_sensor_changed(self) -> None:
         name = self.sensor_sel.current_value()

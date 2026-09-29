@@ -17,8 +17,10 @@ from camlab import config_manager
 from camlab.gui.mirror_view import MirrorView
 from camlab.gui.status_strip import StatusStrip
 from camlab.gui.style import COMPACT, REGULAR, build_stylesheet
+from camlab.gui.widgets import ScrollRow
 from camlab.integrity import IntegrityStats, NullCapture
 from camlab.qt import QtCore, QtWidgets
+from camlab.sensors import Sensor, SensorRegistry
 
 DSI_RECT = QtCore.QRect(0, 0, 800, 480)
 MONITOR_RECT = QtCore.QRect(0, 0, 1920, 1080)
@@ -306,3 +308,76 @@ def test_sensor_card_footer_fits_compact_panel(win):
     inset = win._overlay.layout().contentsMargins()
     avail = win._overlay.width() - inset.left() - inset.right()
     assert card.sizeHint().width() <= avail
+
+
+def test_sensor_row_scrolls_on_compact_panel_and_keeps_selection_in_view(win, cm):
+    """Registry outgrowing DSI scrolls sensor row, card stays within panel."""
+    sensors = [Sensor(f"SENSOR{i:02d}", f"sensor{i:02d}") for i in range(12)]
+    win.registry = SensorRegistry(sensors)
+    (cm.overlays_dir / "sensor11.dtbo").touch()
+    cm._rewrite_in_place("sensor11", "cam1", [])
+    win._on_topology_changed(DSI_ONLY)
+    card = sensor_card(win)
+    QtWidgets.QApplication.processEvents()
+    inset = win._overlay.layout().contentsMargins()
+    assert card.width() <= win._overlay.width() - inset.left() - inset.right()
+    row = card.findChild(ScrollRow)
+    assert card.sensor_sel.width() > row.viewport().width()
+    last = card.sensor_sel.button("SENSOR11")
+    shown = row.viewport().rect()
+    assert shown.contains(last.geometry().translated(-row.horizontalScrollBar().value(), 0))
+
+
+def test_compact_sensor_card_width_ignores_registry_size(win):
+    """On DSI footer sets card width, however many sensors registry lists."""
+    win._on_topology_changed(DSI_ONLY)
+    width = sensor_card(win).sizeHint().width()
+    win._close_modal()
+    win.registry = SensorRegistry([Sensor(f"SENSOR{i:02d}", f"sensor{i:02d}") for i in range(12)])
+    assert sensor_card(win).sizeHint().width() == width
+
+
+def test_clipped_sensor_row_nudges_toward_hidden_sensors(win, cm):
+    """Forward from first sensor, back from last."""
+    win.registry = SensorRegistry([Sensor(f"SENSOR{i:02d}", f"sensor{i:02d}") for i in range(12)])
+    win._on_topology_changed(DSI_ONLY)
+    leans = []
+    for overlay in ("sensor00", "sensor11"):
+        (cm.overlays_dir / f"{overlay}.dtbo").touch()
+        cm._rewrite_in_place(overlay, "cam1", [])
+        row = sensor_card(win).findChild(ScrollRow)
+        QtWidgets.QApplication.processEvents()
+        start = row.horizontalScrollBar().value()
+        row.nudge()
+        leans.append(row._hint.keyValueAt(0.45) - start)
+        win._close_modal()
+    assert leans[0] > 0 > leans[1]
+
+
+def test_open_sensor_card_follows_chrome_between_displays(win, qapp):
+    """Monitor shows every sensor, back on DSI row clips again and nudges."""
+    win.registry = SensorRegistry([Sensor(f"SENSOR{i:02d}", f"sensor{i:02d}") for i in range(12)])
+    win._on_topology_changed(BOTH)
+    win.claim_display(True)
+    card = sensor_card(win)
+    row = card.findChild(ScrollRow)
+    win.claim_display(False)
+    qapp.processEvents()
+    assert row.sizeHint().width() == card.sensor_sel.sizeHint().width()
+    row._hint_delay.stop()
+    win.claim_display(True)
+    qapp.processEvents()
+    assert row.sizeHint().width() == 0
+    assert row.horizontalScrollBar().maximum() > 0
+    assert row._hint_delay.isActive()
+
+
+def test_sensor_row_shows_every_sensor_on_monitor(win):
+    """Monitor has room, so no sensor hides behind scrolling and row stays still."""
+    win.resize(1920, 1080)
+    win._on_topology_changed(MONITOR_ONLY)
+    row = sensor_card(win).findChild(ScrollRow)
+    QtWidgets.QApplication.processEvents()
+    assert row.horizontalScrollBar().maximum() == 0
+    row.nudge()
+    assert row._hint.state() == QtCore.QAbstractAnimation.State.Stopped

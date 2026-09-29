@@ -770,6 +770,7 @@ class MainWindow(QtWidgets.QMainWindow):
             blocked_ports=blocked,
             on_apply=self._apply_sensor,
             on_cancel=self._close_modal,
+            compact=self._profile.compact,
         )
         self._open_modal(card)
 
@@ -1040,6 +1041,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._populate_static()
         self._refresh_monitor_chip()
         self._update_status()
+        if self._overlay is not None and hasattr(self._overlay.card, "set_compact"):
+            self._overlay.card.set_compact(profile.compact)
 
     def _lores_avail(self) -> tuple[int, int]:
         """Largest viewfinder across both displays.
