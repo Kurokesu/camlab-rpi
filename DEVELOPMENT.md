@@ -11,7 +11,7 @@ camlabctl restart              # restart
 camlabctl logs -f              # tail service logs
 camlabctl shot                 # screenshot each kiosk output (needs grim)
 camlabctl rec                  # record live kiosk (needs wf-recorder)
-camlabctl tap <x> <y>          # click in live kiosk
+camlabctl tap <output> <x> <y> # click x,y on DSI or HDMI output
 camlabctl log-level debug      # set log level (follow with camlabctl restart)
 camlabctl net off|on|status    # toggle networking
 camlabctl touch <a..f>|clear   # set or clear touchscreen calibration
