@@ -13,39 +13,19 @@ import sys
 from . import dmesg
 from .camera import CameraEngine
 from .config_manager import ConfigManager
-from .display import Backlight, CursorPolicy, DisplayManager, Topology, apply_output_layout
+from .display import Backlight, CursorPolicy, DisplayManager, apply_output_layout
 from .dsi_panels import PanelRegistry
 from .gl_viewfinder import install_gles_format
 from .gui import fonts
 from .gui.display_claim import DisplayClaim
 from .gui.main_window import MainWindow
-from .gui.style import profile_for_screen
 from .integrity import LOG_DATEFMT, LOG_FORMAT, LogClassifier, NullCapture, StderrCapture
 from .modes import resolve_initial_mode
 from .qt import QtCore, QtWidgets
 from .sensors import SensorRegistry
-from .settings import AwbMode, DisplayMode, SettingsStore
+from .settings import AwbMode, SettingsStore
 
 log = logging.getLogger("camlab")
-
-# Chrome height (status strip + controls row) sizing the boot lores stream
-# Errors are free, the stream refits to the real viewfinder before camera start
-_CHROME_PX = 90
-_CHROME_COMPACT_PX = 85
-
-
-def _avail_size(app, mode: DisplayMode) -> tuple[int, int]:
-    """Largest viewfinder estimate (screen minus chrome) for boot lores sizing."""
-    if mode is DisplayMode.BOTH:
-        monitor = Topology.from_screens(app.screens()).monitor
-        if monitor is not None:
-            return (monitor.width(), max(1, monitor.height() - _CHROME_PX))
-    screen = app.primaryScreen()
-    geo = screen.geometry() if screen else None
-    if geo is None:
-        return (1280, 720)
-    chrome = _CHROME_COMPACT_PX if profile_for_screen(screen).compact else _CHROME_PX
-    return (geo.width(), max(1, geo.height() - chrome))
 
 
 _LEVELS = {
@@ -112,15 +92,15 @@ def main(argv: list[str] | None = None) -> int:
     app = QtWidgets.QApplication(argv if argv is not None else sys.argv)
     fonts.apply(app)
 
-    avail = _avail_size(app, settings.get_display())
-
     # Boot mode: persisted selection when valid, else heaviest runnable mode
     if engine.picam2 is not None and engine.modes:
         overlay = config.get_current().get("overlay") or ""
         saved = settings.get_mode(overlay)
         mode, fps = resolve_initial_mode(engine.modes, saved)
         try:
-            engine.configure_mode(mode, fps, avail, fps_fixed=saved["fps_fixed"] if saved else True)
+            fixed = saved["fps_fixed"] if saved else True
+            # Viewfinder size needs built window, so lores refits before camera start
+            engine.configure_mode(mode, fps, (0, 0), fps_fixed=fixed)
             # Restore manual overrides after configure, so they clamp to the new ranges
             engine.set_control_state(**settings.get_controls(overlay))
             engine.set_grey_world(settings.get_awb() is AwbMode.GREY)
