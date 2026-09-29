@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..qt import Qt, QtWidgets, Signal
+from ..qt import Qt, QtCore, QtWidgets, Signal
 
 
 def repolish(*widgets: QtWidgets.QWidget) -> None:
@@ -38,7 +38,7 @@ def vline(parent=None) -> QtWidgets.QFrame:
 
 
 def kinetic_scroll(viewport: QtWidgets.QWidget) -> None:
-    """Drag-to-scroll on a scroll area viewport, vertical only.
+    """Drag-to-scroll on a scroll area viewport, no rubber band sideways.
 
     grabGesture sets WA_AcceptTouchEvents on the viewport, so the widget below
     stops seeing the mouse events Qt synthesizes from a finger drag.
@@ -144,3 +144,94 @@ class SegmentedSelector(QtWidgets.QWidget):
     def checked_button(self) -> QtWidgets.QAbstractButton | None:
         """Selected segment, the selector's single Tab stop."""
         return self._group.checkedButton()
+
+
+class ScrollRow(QtWidgets.QScrollArea):
+    """SegmentedSelector that scrolls sideways once it outgrows its space.
+
+    `show_all` requests the whole row. Otherwise row shrinks to no width and the rest
+    of its form sets it. Selection stays in view. Row nudges each time it starts clipping.
+    """
+
+    NUDGE = 0.03
+    NUDGE_MS = 700
+    NUDGE_DELAY_MS = 200
+
+    def __init__(self, selector: SegmentedSelector, show_all: bool, parent=None):
+        super().__init__(parent)
+        self._selector = selector
+        self._show_all = show_all
+        self.setWidget(selector)
+        self.setWidgetResizable(True)
+        self.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        kinetic_scroll(self.viewport())
+        selector.changed.connect(self._reveal)
+        # Layout places buttons as selector resizes, so reveal needs that event too
+        selector.installEventFilter(self)
+        self._hint = QtCore.QPropertyAnimation(self.horizontalScrollBar(), b"value", self)
+        self._hint.setDuration(self.NUDGE_MS)
+        self._hint.setEasingCurve(QtCore.QEasingCurve.Type.InOutSine)
+        QtWidgets.QScroller.scroller(self.viewport()).stateChanged.connect(
+            lambda _state: self._hint.stop()
+        )
+        # Owned timer, so a card closed before it fires takes the nudge with it
+        self._hint_delay = QtCore.QTimer(self)
+        self._hint_delay.setSingleShot(True)
+        self._hint_delay.setInterval(self.NUDGE_DELAY_MS)
+        self._hint_delay.timeout.connect(self.nudge)
+        self._clipped = False
+        self.horizontalScrollBar().rangeChanged.connect(self._on_range)
+
+    def set_show_all(self, show_all: bool) -> None:
+        self._show_all = show_all
+        self.updateGeometry()
+
+    def eventFilter(self, obj, event) -> bool:
+        if obj is self._selector and event.type() == QtCore.QEvent.Type.Resize:
+            self._reveal()
+        return False
+
+    def sizeHint(self) -> QtCore.QSize:
+        hint = self._selector.sizeHint()
+        return QtCore.QSize(hint.width() if self._show_all else 0, hint.height())
+
+    def minimumSizeHint(self) -> QtCore.QSize:
+        return QtCore.QSize(0, self._selector.sizeHint().height())
+
+    def wheelEvent(self, event) -> None:
+        self._hint.stop()
+        # Vertical bar never scrolls, so wheel drives horizontal one
+        QtWidgets.QApplication.sendEvent(self.horizontalScrollBar(), event)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._reveal()
+
+    def nudge(self) -> None:
+        """Lean toward hidden options and fall back, so clipped row reads as scrollable."""
+        bar = self.horizontalScrollBar()
+        start = bar.value()
+        reach = round(self.viewport().width() * self.NUDGE)
+        ahead = bar.maximum() - start
+        lean = min(ahead, reach) if ahead else -min(start - bar.minimum(), reach)
+        if not lean:
+            return
+        self._hint.stop()
+        self._hint.setKeyValueAt(0.0, start)
+        self._hint.setKeyValueAt(0.45, start + lean)
+        self._hint.setKeyValueAt(1.0, start)
+        self._hint.start()
+
+    def _on_range(self, _lo: int, hi: int) -> None:
+        if hi and not self._clipped:
+            self._hint_delay.start()
+        self._clipped = bool(hi)
+
+    def _reveal(self) -> None:
+        self._hint.stop()
+        btn = self._selector.checked_button()
+        if btn is not None:
+            self.ensureWidgetVisible(btn, 0, 0)
