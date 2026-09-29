@@ -1,3 +1,18 @@
+camlab-rpi (1.2.0-1) unstable; urgency=medium
+
+  * New upstream release. Notes:
+    https://github.com/Kurokesu/camlab-rpi/releases/tag/v1.2.0
+  * Render Depends from apt-packages and sensor registry in source tree.
+  * Move sensor drivers from Suggests back to Depends, adding
+    os08e10-rpi-dkms. An app update now brings driver for a newly
+    supported sensor.
+  * Floor libcamera at 1:0.7.2+rpt20260817+krks4, rpicam-apps at
+    1:1.13.0+krks1 and cage at 0.3.1.
+  * Add wlrctl, camlab uses it to carry pointer onto monitor.
+  * Drop unread version stamp from postinst.
+
+ -- Danius Kalvaitis <danius@kurokesu.com>  Tue, 29 Sep 2026 18:18:38 +0300
+
 camlab-rpi (1.1.0-1) unstable; urgency=medium
 
   * New upstream release. Notes:
