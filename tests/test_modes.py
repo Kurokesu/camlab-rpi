@@ -1,13 +1,20 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Preview stream sizing: main bound, lores fit and the shared area budget."""
+"""FPS choices per mode and preview stream sizing: main bound, lores fit and area budget."""
 
 from __future__ import annotations
 
 import pytest
 
-from camlab.modes import _STREAM_MAX_PIXELS, plan_lores_size, plan_main_size
+from camlab.modes import (
+    _STREAM_MAX_PIXELS,
+    SensorMode,
+    fps_options,
+    plan_lores_size,
+    plan_main_size,
+    resolve_initial_mode,
+)
 
 # Viewfinder area on each head, screen minus chrome
 AVAIL_1080P = (1920, 1006)
@@ -27,6 +34,33 @@ LORES_1080P = {
     "ar0234": ((1920, 1200), (1608, 1006)),
     "imx585": ((3856, 2180), (1780, 1006)),
 }
+
+
+def _mode(size: tuple[int, int], max_fps: float, bit_depth: int = 12) -> SensorMode:
+    return SensorMode(format="", size=size, bit_depth=bit_depth, max_fps=max_fps)
+
+
+def test_isp_rate_caps_4k_without_offering_ceiling():
+    """4K at 60 overruns ISP front end, ceiling is a bound rather than a rate."""
+    assert fps_options(_mode((3840, 2160), 60.01, bit_depth=10)) == [24.0, 30.0]
+
+
+def test_sensor_max_between_rates_is_offered():
+    assert fps_options(_mode((3840, 2160), 33.89)) == [24.0, 30.0, 33.89]
+
+
+def test_app_ceiling_holds_small_mode():
+    assert fps_options(_mode((960, 600), 236.85, bit_depth=10)) == [24.0, 30.0, 60.0, 120.0]
+
+
+def test_isp_ceiling_below_every_standard_rate_is_sole_option():
+    assert fps_options(_mode((5472, 3648), 25.0)) == [19.04]
+
+
+def test_saved_rate_over_isp_ceiling_snaps_down():
+    modes = [_mode((3840, 2160), 60.01, bit_depth=10)]
+    saved = {"size": [3840, 2160], "bit_depth": 10, "fps": 60.0}
+    assert resolve_initial_mode(modes, saved) == (modes[0], 30.0)
 
 
 @pytest.mark.parametrize("sensor", SENSORS.values(), ids=list(SENSORS))

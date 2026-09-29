@@ -5,7 +5,8 @@
 
 A mode is one raw sensor output: packed format, size, bit depth, max fps.
 Operator picks via Resolution --> Bit depth --> FPS. Standard rates (24, 30, 60,
-120) capped by mode and MAX_FPS, plus sensor max when it sits between rates.
+120) capped by mode, MAX_FPS and ISP pixel rate, plus sensor max when it sits
+between rates.
 Display never limits sensor rate. Default without a persisted pick: heaviest
 mode at DEFAULT_FPS.
 """
@@ -20,6 +21,9 @@ BASE_FPS: tuple[float, ...] = (24.0, 30.0, 60.0, 120.0)
 # App ceiling. Higher rates run but start unreliably (AR0234 960x600 claims
 # 236.85, locks about half the time)
 MAX_FPS = 120.0
+
+# PiSP front end ceiling, libcamera minPixelProcessingTime (1 us / 380)
+ISP_PIXEL_RATE = 380e6
 
 # Boot rate when nothing is persisted. Higher rates are opt-in
 DEFAULT_FPS = 30.0
@@ -82,19 +86,21 @@ def enumerate_modes(raw_modes) -> list[SensorMode]:
     return sorted(by_key.values(), key=lambda s: (s.area, s.bit_depth, s.max_fps))
 
 
-def fps_options(max_fps: float) -> list[float]:
+def fps_options(mode: SensorMode) -> list[float]:
     """FPS choices camlab offers for a mode.
 
-    eff = min(sensor max, MAX_FPS). At or below 24: one locked option. Above:
-    standard rates that fit, plus eff when it sits between two rates
-    (33.89 --> [24, 30, 33.89]). One element means lock the selector.
+    Ceiling is MAX_FPS or ISP_PIXEL_RATE over mode area, whichever is lower.
+    Standard rates within sensor max and ceiling, plus sensor max when it sits
+    between two rates (33.89 --> [24, 30, 33.89]). Ceiling adds no rate of its
+    own unless no standard one fits. One element means lock the selector.
     """
-    eff = min(max_fps, MAX_FPS)
-    if eff <= BASE_FPS[0] + _FPS_EPS:
-        return [BASE_FPS[0]] if eff >= BASE_FPS[0] - _FPS_EPS else [round(eff, 2)]
-    opts = [r for r in BASE_FPS if r <= eff + _FPS_EPS]
-    if eff - opts[-1] > _FPS_EPS:
-        opts.append(round(eff, 2))
+    ceiling = min(MAX_FPS, ISP_PIXEL_RATE / mode.area)
+    top = min(mode.max_fps, ceiling)
+    opts = [r for r in BASE_FPS if r <= min(mode.max_fps + _FPS_EPS, ceiling)]
+    if not opts:
+        return [round(top, 2)]
+    if mode.max_fps <= ceiling and top - opts[-1] > _FPS_EPS:
+        opts.append(round(top, 2))
     return opts
 
 
@@ -152,7 +158,7 @@ def default_mode(modes: list[SensorMode]) -> tuple[SensorMode, float]:
     if not modes:
         raise ValueError("no sensor modes to choose from")
     best = max(modes, key=lambda m: (m.area, m.bit_depth, m.max_fps))
-    return best, nearest_fps_option(fps_options(best.max_fps), DEFAULT_FPS)
+    return best, nearest_fps_option(fps_options(best), DEFAULT_FPS)
 
 
 def resolve_initial_mode(modes: list[SensorMode], saved: dict | None) -> tuple[SensorMode, float]:
@@ -171,9 +177,7 @@ def resolve_initial_mode(modes: list[SensorMode], saved: dict | None) -> tuple[S
             m = mode_for(modes, (int(size[0]), int(size[1])), int(depth))
             if m is not None:
                 fps = saved.get("fps")
-                return m, nearest_fps_option(
-                    fps_options(m.max_fps), DEFAULT_FPS if fps is None else fps
-                )
+                return m, nearest_fps_option(fps_options(m), DEFAULT_FPS if fps is None else fps)
     return default_mode(modes)
 
 

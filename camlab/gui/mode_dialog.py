@@ -127,7 +127,7 @@ class ModeCard(QtWidgets.QFrame):
 
     def _rebuild_fps(self, prefer_fps: float | None) -> None:
         m = mode_for(self._modes, self.res_sel.current_value(), self.depth_sel.current_value())
-        opts = fps_options(m.max_fps) if m else [30.0]
+        opts = fps_options(m) if m else [30.0]
         unit = "" if self._compact else " fps"
         # Keep chosen rate when still offered, else nearest
         self.fps_sel.set_options(
