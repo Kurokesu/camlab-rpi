@@ -39,7 +39,7 @@ _MONITOR_MAX = (1920, 1080)
 # Nominal 60 reports as 59.94 or 60.03
 _MAX_REFRESH_HZ = 60.5
 
-# Pointer clamps to nearest output, so jump must clear this on both axes to reach DSI
+# Pointer clamps to nearest output, so move must clear half of this to reach DSI
 _LAYOUT_GAP = 1000
 # Past any layout, so move clamps to its far corner
 _POINTER_OVERSHOOT = 1 << 16
@@ -199,12 +199,12 @@ def plan_layout(mode: DisplayMode, outputs: Mapping[str, Output], dsi_display: b
     if mode is DisplayMode.BOTH:
         dw, dh = native_mode(outputs[dsi]).size
         mw, mh = mon_mode.size
-        mx, my = dw + _LAYOUT_GAP, dh + _LAYOUT_GAP
-        home = Target(monitor, mon_mode, (mx, my))
+        mx = dw + _LAYOUT_GAP
+        home = Target(monitor, mon_mode, (mx, 0))
         return Layout(
             on=(Target(dsi, None, (0, 0)), home),
             off=spare,
-            touch=touch_matrix((0, 0, dw, dh), (mx + mw, my + mh)),
+            touch=touch_matrix((0, 0, dw, dh), (mx + mw, max(dh, mh))),
             home=home,
         )
 

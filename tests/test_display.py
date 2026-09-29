@@ -55,9 +55,7 @@ HDMI-A-1 "Generic 4K Monitor (HDMI-A-1)"
 """
 
 # Both layout already in place, REPORT is cage's own placement right after plug
-SETTLED_REPORT = REPORT.replace(
-    "Position: 800,0", f"Position: {800 + display._LAYOUT_GAP},{480 + display._LAYOUT_GAP}"
-)
+SETTLED_REPORT = REPORT.replace("Position: 800,0", f"Position: {800 + display._LAYOUT_GAP},0")
 
 DISABLED_REPORT = """HDMI-A-1 "Generic 4K Monitor (HDMI-A-1)"
   Enabled: no
@@ -215,17 +213,24 @@ def test_builtin_enables_dsi_and_drops_monitor():
 
 
 GAP = display._LAYOUT_GAP
-GAPPED_MONITOR = Target("HDMI-A-1", PICKED, (800 + GAP, 480 + GAP))
-GAPPED_BOUNDS = (2720 + GAP, 1560 + GAP)
+GAPPED_MONITOR = Target("HDMI-A-1", PICKED, (800 + GAP, 0))
+GAPPED_BOUNDS = (2720 + GAP, 1080)
 
 
-def test_both_parks_monitor_past_gap_on_both_axes_from_dsi():
+def test_both_parks_monitor_past_gap_beside_dsi():
     """Touching outputs let pointer walk onto DSI, so gap stops it at monitor edge."""
     layout = plan_layout(DisplayMode.BOTH, _outputs(DSI, MONITOR), dsi_display=True)
     assert layout.on == (Target("DSI-2", None, (0, 0)), GAPPED_MONITOR)
     assert layout.off == ()
     assert layout.touch == touch_matrix((0, 0, 800, 480), GAPPED_BOUNDS)
     assert layout.home == GAPPED_MONITOR
+
+
+def test_both_layout_is_no_taller_than_tallest_output():
+    """Window spans layout, so rows past tallest output cost 4K frames and show nothing."""
+    portrait = Output("DSI-2", True, (Mode(1080, 1920, 60.0, preferred=True, current=True),))
+    layout = plan_layout(DisplayMode.BOTH, _outputs(portrait, MONITOR), dsi_display=True)
+    assert layout.touch == touch_matrix((0, 0, 1080, 1920), (1080 + GAP + 1920, 1920))
 
 
 def test_single_display_layout_has_no_pointer_home():
@@ -297,7 +302,7 @@ def test_apply_both_is_touch_only_when_outputs_already_match(rig):
 def test_plugged_monitor_moves_past_gap_and_takes_pointer_to_its_center(rig):
     """Pointer sat on DSI while monitor was away, and gap holds it there."""
     display.apply_output_layout(DisplayMode.BOTH)
-    place = ["--output", "HDMI-A-1", "--on", "--pos", f"{800 + GAP},{480 + GAP}"]
+    place = ["--output", "HDMI-A-1", "--on", "--pos", f"{800 + GAP},0"]
     assert rig == [["wlr-randr", *place, "--mode", PICKED.arg()], *CARRY, TOUCH_SET]
 
 
