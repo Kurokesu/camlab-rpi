@@ -519,15 +519,36 @@ class TestRun:
         monkeypatch.setattr(
             updater, "_install", lambda packages, progress=None: self.installed.append(packages)
         )
+        self.auto: set[str] = set()
+        self.marked: list[list[str]] = []
+        monkeypatch.setattr(updater, "_run", self.apt_mark)
 
-    def arm(self, attempts: int = 0) -> None:
-        plan = {"version": 1, "ids": ["app"], "attempts": attempts, "armed": "now"}
+    def apt_mark(self, cmd: list[str], env=None) -> str:
+        if cmd[:2] == ["apt-mark", "showauto"]:
+            return "".join(f"{p}\n" for p in cmd[2:] if p in self.auto)
+        self.marked.append(cmd)
+        return ""
+
+    def arm(self, attempts: int = 0, ids: tuple[str, ...] = ("app",)) -> None:
+        plan = {"version": 1, "ids": list(ids), "attempts": attempts, "armed": "now"}
         updater.write_state(plan, updater.plan_file())
 
     def test_installs_what_plan_names(self):
         self.arm()
         assert updater.run() == ""
         assert self.installed == [["app-pkg"]]
+
+    def test_update_keeps_auto_marks_it_found(self):
+        """Depends holds the driver, so an update must not pin it manual."""
+        self.auto = {"driver:ar0234-pkg"}
+        self.arm(ids=("app", "driver:ar0234"))
+        assert updater.run() == ""
+        assert self.marked == [["apt-mark", "auto", "driver:ar0234-pkg"]]
+
+    def test_manual_package_stays_manual(self):
+        self.arm()
+        updater.run()
+        assert self.marked == []
 
     def test_success_disarms(self):
         self.arm()
