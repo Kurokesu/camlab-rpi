@@ -147,7 +147,7 @@ flowchart TB
         shaders["GLSL ES shaders<br>peaking, zebra, blur"]
         gui["Qt widgets<br>controls, histogram, focus map"]
     end
-    picamera2 --> engine
+    picamera2 --> app
     engine -->|YUV420 dmabuf| viewfinder
     viewfinder --> shaders
     engine -->|ISP stats| gui
