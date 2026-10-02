@@ -131,6 +131,48 @@ Setup:
 - CM5: pick it in **Select sensor** dialog together with the sensor, one **Apply & Shutdown** covers both
 - CM5 without HDMI: install with `--display vc4-kms-dsi-7inch`, reboot and continue sensor selection on touch display
 
+## Architecture
+
+Camera pipeline:
+
+```mermaid
+%%{init: {"flowchart": {"wrappingWidth": 240}}}%%
+flowchart TB
+    sensor[Camera module] -->|MIPI CSI-2| driver[V4L2 sensor driver]
+    driver --> libcamera["libcamera fork<br>PiSP pipeline + IPA"]
+    libcamera --> picamera2
+    subgraph app [camlab PyQt6 app]
+        engine[CameraEngine]
+        viewfinder["GL viewfinder<br>dmabuf to EGLImage"]
+        shaders["GLSL ES shaders<br>peaking, zebra, blur"]
+        gui["Qt widgets<br>controls, histogram, focus map"]
+    end
+    picamera2 --> engine
+    engine -->|YUV420 dmabuf| viewfinder
+    viewfinder --> shaders
+    engine -->|ISP stats| gui
+    gui -->|libcamera controls| engine
+    gui -->|assist toggles| shaders
+    shaders -->|Wayland surface| cage["Cage<br>wlroots kiosk compositor"]
+    cage --> kms["DRM/KMS, vc4"]
+    kms --> screen[HDMI or DSI display]
+```
+
+System integration:
+
+```mermaid
+%%{init: {"flowchart": {"wrappingWidth": 240}}}%%
+flowchart TB
+    service["camlab.service<br>systemd unit on tty1"] -->|launches| app[camlab in Cage]
+    app -->|sensor and display choice| apply[camlab-apply via sudo]
+    apply --> configtxt["/boot/firmware/config.txt"]
+    configtxt -.->|next boot| overlays["Firmware loads dtoverlays<br>sensor and panel"]
+    app -->|update| update[camlab-update via sudo]
+    update -.->|"plan.json, reboot with overlayroot off"| updateSvc["camlab-update.service<br>apt install, relock, reboot"]
+    apt[apt.kurokesu.com] -->|.deb packages| updateSvc
+    app -->|persistent settings| state["/var/lib/camlab<br>loopback ext4 image"]
+```
+
 ## Development
 
 Development and debugging notes - [DEVELOPMENT.md](DEVELOPMENT.md).
