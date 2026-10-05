@@ -92,16 +92,16 @@ def main(argv: list[str] | None = None) -> int:
     app = QtWidgets.QApplication(argv if argv is not None else sys.argv)
     fonts.apply(app)
 
-    # Boot mode: persisted selection when valid, else heaviest runnable mode
     if engine.picam2 is not None and engine.modes:
         overlay = config.get_current().get("overlay") or ""
         saved = settings.get_mode(overlay)
         mode, fps = resolve_initial_mode(engine.modes, saved)
         try:
             fixed = saved["fps_fixed"] if saved else True
+            hflip = saved["hflip"] if saved else False
             # Viewfinder size needs built window, so lores refits before camera start
-            engine.configure_mode(mode, fps, (0, 0), fps_fixed=fixed)
-            # Restore manual overrides after configure, so they clamp to the new ranges
+            engine.configure_mode(mode, fps, (0, 0), fps_fixed=fixed, hflip=hflip)
+            # After configure, so overrides clamp to new ranges
             engine.set_control_state(**settings.get_controls(overlay))
             engine.set_grey_world(settings.get_awb() is AwbMode.GREY)
         except Exception:

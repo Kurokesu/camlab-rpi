@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Sensor mode selection card: Resolution, Bit depth, FPS cascade.
+"""Sensor mode selection card.
 
 Inline SegmentedSelectors (Cage misplaces dropdown popups). Selectors dependent:
 resolution reconciles bit depth, upstream change rebuilds FPS row. Apply persists
@@ -32,7 +32,8 @@ class ModeCard(QtWidgets.QFrame):
         current_mode: SensorMode | None,
         fps_current: float | None,
         fps_fixed: bool,
-        on_apply: Callable[[tuple[int, int], int, float, bool], None],
+        hflip: bool,
+        on_apply: Callable[[tuple[int, int], int, float, bool, bool], None],
         on_cancel: Callable[[], None],
         compact: bool = False,
     ):
@@ -51,6 +52,7 @@ class ModeCard(QtWidgets.QFrame):
         self.depth_sel = SegmentedSelector()
         self.fps_sel = SegmentedSelector()
         self.fps_lock_sel = SegmentedSelector()
+        self.mirror_sel = SegmentedSelector()
 
         self._rebuild_res(tuple(current_mode.size) if current_mode else None)
         self._rebuild_depths(current_mode.bit_depth if current_mode else None)
@@ -58,6 +60,7 @@ class ModeCard(QtWidgets.QFrame):
         self.fps_lock_sel.set_options(
             [("Fixed", True), ("Exposure driven", False)], current=bool(fps_fixed)
         )
+        self.mirror_sel.set_options([("On", True), ("Off", False)], current=bool(hflip))
 
         # Dirty check uses post-seed values (fps may snap to nearest option)
         self._initial = self._selection()
@@ -67,12 +70,14 @@ class ModeCard(QtWidgets.QFrame):
         self.depth_sel.changed.connect(self._on_depth_changed)
         self.fps_sel.changed.connect(self._refresh_apply)
         self.fps_lock_sel.changed.connect(self._refresh_apply)
+        self.mirror_sel.changed.connect(self._refresh_apply)
 
         form = QtWidgets.QFormLayout()
         form.addRow("Resolution:", self.res_sel)
         form.addRow("Bit depth:", self.depth_sel)
         form.addRow("FPS:", self.fps_sel)
         form.addRow("FPS lock:", self.fps_lock_sel)
+        form.addRow("Mirror:", self.mirror_sel)
 
         buttons = QtWidgets.QHBoxLayout()
         cancel_btn = QtWidgets.QPushButton("Cancel")
@@ -105,6 +110,7 @@ class ModeCard(QtWidgets.QFrame):
             self.depth_sel.current_value(),
             self.fps_sel.current_value(),
             self.fps_lock_sel.current_value(),
+            self.mirror_sel.current_value(),
         )
 
     def _refresh_apply(self) -> None:
@@ -149,4 +155,5 @@ class ModeCard(QtWidgets.QFrame):
             int(self.depth_sel.current_value()),
             float(self.fps_sel.current_value()),
             bool(self.fps_lock_sel.current_value()),
+            bool(self.mirror_sel.current_value()),
         )
