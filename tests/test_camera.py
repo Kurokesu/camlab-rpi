@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""CameraEngine: grey world estimator, gain easing, AwbEnable handover and open() bounds."""
+"""CameraEngine over faked picamera2, no camera needed."""
 
 from __future__ import annotations
 
@@ -12,9 +12,13 @@ import pytest
 
 pytest.importorskip("picamera2")
 
+from libcamera import Transform
+
 from camlab import camera
 from camlab.camera import CameraEngine, grey_world_gains
+from camlab.modes import SensorMode
 
+MODE = SensorMode("SRGGB12_CSI2P", (1920, 1080), 12, 60.0)
 PIXELS = 1000
 GREY = 4000  # 16-bit channel mean well above the lit threshold
 
@@ -46,6 +50,31 @@ class FakePicam2:
 
     def set_controls(self, ctrls: dict) -> None:
         self.pushed.append(dict(ctrls))
+
+
+class ConfiguringPicam2(FakePicam2):
+    def __init__(self, flips: bool):
+        super().__init__(COLOR_CONTROLS)
+        self.flips = flips
+        self.requested: Transform | None = None
+
+    def create_preview_configuration(self, **cfg) -> dict:
+        return cfg
+
+    def configure(self, cfg: dict) -> None:
+        self.requested = cfg["transform"]
+        kept = cfg["transform"] if self.flips else Transform()
+        self.config = {"transform": kept, "main": dict(cfg["main"]), "lores": dict(cfg["lores"])}
+
+    def camera_configuration(self) -> dict:
+        return self.config
+
+
+def _configured(flips: bool, hflip: bool) -> tuple[CameraEngine, ConfiguringPicam2]:
+    engine = CameraEngine()
+    engine.picam2 = ConfiguringPicam2(flips)
+    engine.configure_mode(MODE, 30.0, (800, 480), hflip=hflip)
+    return engine, engine.picam2
 
 
 def _engine(controls: dict = COLOR_CONTROLS) -> tuple[CameraEngine, FakePicam2]:
@@ -184,6 +213,24 @@ class TestEngine:
         engine._apply_controls()
         assert picam2.pushed[-1]["ColourGains"] == _gains(picam2)[0]
         assert picam2.pushed[-1]["AwbEnable"] is False
+
+
+class TestConfigure:
+    def test_configure_requests_hflip(self):
+        engine, picam2 = _configured(flips=True, hflip=True)
+        assert picam2.requested.hflip
+        assert engine.hflip is True
+
+    def test_sensor_without_flip_reads_back_unmirrored(self):
+        engine, picam2 = _configured(flips=False, hflip=True)
+        assert picam2.requested.hflip
+        assert engine.hflip is False
+
+    def test_lores_refit_keeps_hflip(self):
+        engine, picam2 = _configured(flips=True, hflip=True)
+        picam2.requested = None
+        assert engine.refit_lores((400, 240)) is True
+        assert picam2.requested.hflip
 
 
 class TestOpen:

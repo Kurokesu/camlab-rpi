@@ -17,6 +17,7 @@ from collections import deque
 from dataclasses import dataclass, field
 
 import numpy as np
+from libcamera import Transform
 from picamera2 import Picamera2
 
 from . import stack
@@ -122,7 +123,7 @@ class CameraEngine:
         self.current_mode: SensorMode | None = None
         self.fps_current: float | None = None
         self.fps_fixed = True  # False lets exposure extend frame duration to 1 s
-        # Stream shape from last configure, replayed on a lores refit
+        self.hflip = False
         self._main_size: tuple[int, int] | None = None
         self._raw = False
         self.control_state = ControlState()
@@ -189,6 +190,7 @@ class CameraEngine:
         fps_fixed: bool = True,
         main_size=None,
         raw: bool = False,
+        hflip: bool = False,
     ) -> None:
         """Configure mode streams and fit lores within avail_size.
 
@@ -209,6 +211,7 @@ class CameraEngine:
             main={"size": main_size, "format": self.pixel_format},
             lores={"size": lores_size, "format": "YUV420"},
             sensor={"output_size": sensor_size, "bit_depth": int(mode.bit_depth)},
+            transform=Transform(hflip=int(hflip)),
             display="lores",
             buffer_count=self._buffer_count(fps),
             controls={"FrameDurationLimits": (dur, dur)},
@@ -224,21 +227,24 @@ class CameraEngine:
                 limits = self._frame_duration_limits(fps, fixed=False)
                 self.picam2.set_controls({"FrameDurationLimits": limits})
         full = self.picam2.camera_configuration()
+        self.hflip = bool(full["transform"].hflip)
+        if hflip and not self.hflip:
+            log.info("sensor offers no horizontal flip, mirror dropped")
         self.main_config = dict(full["main"])
         self.lores_config = dict(full.get("lores") or {})
         self.current_mode = mode
         self.fps_current = float(fps)
         self.size = tuple(self.lores_config.get("size", lores_size))
-        # configure() resets picam2.controls, so re-clamp manual values against
-        # the new mode and push them again
+        # configure() resets picam2.controls
         self._clamp_control_state()
         self._apply_controls()
         log.info(
-            "configured: sensor_mode=%s fps=%.2f main=%s lores=%s",
+            "configured: sensor_mode=%s fps=%.2f main=%s lores=%s hflip=%s",
             mode.label(),
             fps,
             self.main_config.get("size"),
             self.size,
+            self.hflip,
         )
 
     def apply_mode(
@@ -250,12 +256,15 @@ class CameraEngine:
         main_size=None,
         raw: bool = False,
         reset_telemetry: bool = True,
+        hflip: bool = False,
     ) -> None:
         """Reconfigure to a new mode/fps while running (stop, configure, start)."""
         was_started = self._started
         if was_started:
             self.stop()
-        self.configure_mode(mode, fps, avail_size, fps_fixed, main_size=main_size, raw=raw)
+        self.configure_mode(
+            mode, fps, avail_size, fps_fixed, main_size=main_size, raw=raw, hflip=hflip
+        )
         if was_started:
             self.start(reset_telemetry=reset_telemetry)
 
@@ -275,6 +284,7 @@ class CameraEngine:
             main_size=self._main_size,
             raw=self._raw,
             reset_telemetry=False,
+            hflip=self.hflip,
         )
         return True
 

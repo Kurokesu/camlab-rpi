@@ -87,8 +87,8 @@ class SettingsStore:
         return data
 
     def get_mode(self, overlay: str) -> dict | None:
-        """{'size': [w, h], 'bit_depth': int, 'fps': float, 'fps_fixed': bool}
-        or None. Missing fps_fixed reads as fixed."""
+        """{'size': [w, h], 'bit_depth': int, 'fps': float, 'fps_fixed': bool, 'hflip': bool}
+        or None. Missing fps_fixed reads as fixed, missing hflip as unmirrored."""
         if not overlay:
             return None
         entry = (self._load().get("modes") or {}).get(overlay)
@@ -101,6 +101,7 @@ class SettingsStore:
                 "bit_depth": int(entry["bit_depth"]),
                 "fps": float(entry["fps"]),
                 "fps_fixed": bool(entry.get("fps_fixed", True)),
+                "hflip": bool(entry.get("hflip", False)),
             }
         except (KeyError, TypeError, ValueError, IndexError):
             log.warning("settings entry for %s is malformed - ignoring", overlay)
@@ -113,6 +114,7 @@ class SettingsStore:
         bit_depth: int,
         fps: float,
         fps_fixed: bool = True,
+        hflip: bool = False,
     ) -> bool:
         """Persist a selection for a sensor. True when written."""
         if not overlay:
@@ -125,6 +127,7 @@ class SettingsStore:
             "bit_depth": int(bit_depth),
             "fps": float(fps),
             "fps_fixed": bool(fps_fixed),
+            "hflip": bool(hflip),
         }
         return self._atomic_write(data)
 

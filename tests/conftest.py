@@ -132,6 +132,7 @@ class FakeEngine:
             size=(1920, 1080), width=1920, height=1080, label=lambda: "1920x1080 SRGGB12 30fps"
         )
         self.latest_histogram = None
+        self.hflip = False
         self.mirrors: list[FakeLive] = []
         self.modes: list = []
         self.info: dict = {}

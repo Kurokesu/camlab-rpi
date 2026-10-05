@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Persisted display and auto WB modes."""
+"""SettingsStore round trips and defaults."""
 
 from __future__ import annotations
 
@@ -68,3 +68,18 @@ def test_unknown_awb_mode_rejected(tmp_path: Path):
     store.set_awb(AwbMode.LIBCAMERA)
     assert store.set_awb("bayes") is False
     assert store.get_awb() is AwbMode.LIBCAMERA
+
+
+def test_mode_keeps_hflip(tmp_path: Path):
+    store = _store(tmp_path)
+    store.set_mode("imx477", (2028, 1520), 12, 30.0, hflip=True)
+    assert store.get_mode("imx477")["hflip"] is True
+
+
+def test_mode_saved_before_hflip_reads_unmirrored(tmp_path: Path):
+    store = _store(tmp_path)
+    store.set_mode("imx477", (2028, 1520), 12, 30.0, hflip=True)
+    data = json.loads(store.path.read_text())
+    del data["modes"]["imx477"]["hflip"]
+    store.path.write_text(json.dumps(data))
+    assert store.get_mode("imx477")["hflip"] is False
