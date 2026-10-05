@@ -602,7 +602,12 @@ def run() -> str:
             _refresh_with_retry(progress)
             repair(progress)
             progress.phase(0.10, 0.70, "Downloading updates")
-            _install(sorted({p for i in ids for p in resolve(i).packages}), progress)
+            packages = sorted({p for i in ids for p in resolve(i).packages})
+            # apt marks every named package manual
+            auto = _run(["apt-mark", "showauto", *packages]).split()
+            _install(packages, progress)
+            if auto:
+                _run(["apt-mark", "auto", *auto])
             progress.phase(0.70, 0.95, "Applying settings")
             converge(progress)
         except Exception as exc:  # noqa: BLE001 whatever broke, root still relocks
