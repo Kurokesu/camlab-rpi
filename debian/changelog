@@ -1,3 +1,11 @@
+camlab-rpi (1.2.1-1) unstable; urgency=medium
+
+  * Add Mirror option to flip image horizontally.
+  * Release notes:
+    https://github.com/Kurokesu/camlab-rpi/releases/tag/v1.2.1
+
+ -- Danius Kalvaitis <danius@kurokesu.com>  Mon, 05 Oct 2026 23:34:06 +0300
+
 camlab-rpi (1.2.0-1) unstable; urgency=medium
 
   * New upstream release. Notes:
