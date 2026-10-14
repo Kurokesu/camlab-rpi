@@ -46,18 +46,9 @@ done
 
 require_root
 
-# DKMS builds against the running kernel, so modules built before a pending
-# kernel reboot would not load afterwards. Check the reboot-required flag rather
-# than comparing /lib/modules, which carries several flavors (rpi-2712, rpi-v8)
-# of one version and would misfire on a CM5. Block only on kernel packages
-if [ -f /run/reboot-required ] \
-   && grep -qiE 'linux-image|raspi-firmware|rpi-.*kernel' /run/reboot-required.pkgs 2>/dev/null; then
-    die "a kernel update is pending a reboot ($(uname -r) is running). Reboot first, then re-run."
-fi
-
 FW_OVERLAYS="/boot/firmware/overlays"
 
-header "Installing sensor drivers: ${SENSORS[*]}"
+header "Sensor drivers: ${SENSORS[*]}"
 
 PACKAGES=()
 for sensor in "${SENSORS[@]}"; do
@@ -66,10 +57,21 @@ for sensor in "${SENSORS[@]}"; do
     PACKAGES+=("$package")
 done
 
-# dkms only recommends gcc and recommends are off here
-mapfile -t MISSING < <(missing_packages gcc)
-# Drivers every run, so an outdated one upgrades
-apt_get install -y "${MISSING[@]}" "${PACKAGES[@]}"
+# Naming a driver to apt would mark it manual
+if [ -z "$(missing_packages camlab-rpi)" ]; then
+    log "Drivers came with camlab-rpi."
+else
+    # Flag rather than /lib/modules, which carries several kernel flavors per version
+    if [ -f /run/reboot-required ] \
+       && grep -qiE 'linux-image|raspi-firmware|rpi-.*kernel' /run/reboot-required.pkgs 2>/dev/null; then
+        die "a kernel update is pending a reboot ($(uname -r) is running). Reboot first, then re-run."
+    fi
+
+    # dkms only recommends gcc and recommends are off here
+    mapfile -t MISSING < <(missing_packages gcc)
+    # Drivers every run, so an outdated one upgrades
+    apt_get install -y "${MISSING[@]}" "${PACKAGES[@]}"
+fi
 
 for sensor in "${SENSORS[@]}"; do
     if [ -f "$FW_OVERLAYS/${sensor}.dtbo" ]; then

@@ -120,6 +120,6 @@ fi
 
 # Mark manual, or autoremove reclaims what a removed package left auto
 # shellcheck disable=SC2086  # test_stack_pin.py asserts names are glob-free
-apt-mark manual "${UNPINNED[@]}" $CAGE_PACKAGES
+apt-mark manual "${UNPINNED[@]}" $CAGE_PACKAGES >/dev/null
 
 log "Done. All apt dependencies installed."

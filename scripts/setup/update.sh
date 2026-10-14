@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 UAB Kurokesu
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Update path: privilege shim (camlab-update) and the update boot unit.
+# Update path: privilege shim (camlab-update), update boot unit and driver apt marks.
 # Safe to re-run. Requires sudo.
 #
 # Usage: sudo scripts/setup/update.sh
@@ -42,5 +42,13 @@ install -m 0644 "$REPO_DIR/deploy/$UNIT" "/etc/systemd/system/$UNIT"
 systemctl daemon-reload
 systemctl enable "$UNIT" >/dev/null
 log "enabled $UNIT (inert until camlab-update apply arms a plan)"
+
+# Here because every update boot runs this script, old updaters included
+mapfile -t HELD < <(dpkg-query -Wf '${Depends}' camlab-rpi 2>/dev/null \
+    | tr ',' '\n' | awk '$1 ~ /-dkms$/ { print $1 }')
+if [ "${#HELD[@]}" -gt 0 ]; then
+    apt-mark auto "${HELD[@]}" >/dev/null
+    log "Marked auto, camlab-rpi Depends holds them: ${HELD[*]}"
+fi
 
 log "Done."
