@@ -46,21 +46,29 @@ def _picamera2() -> str:
         return "unknown"
 
 
+def _below(loaded: str, floor: str) -> bool:
+    """Dotted numeric order, an unreadable version counts as below."""
+    try:
+        return tuple(map(int, loaded.split("."))) < tuple(map(int, floor.split(".")))
+    except ValueError:
+        return True
+
+
 def mismatches(libcamera_version: str) -> list[str]:
     """Warnings for components off the stack this release was validated against.
 
-    libcamera_version comes from Picamera2.camera_manager.version.
+    libcamera_version comes from Picamera2.camera_manager.version. libcamera must
+    match its pin, picamera2 only reach its floor, since Raspberry Pi moves it.
     """
     env = pins()
     notes = []
-    for key, name, loaded in (
-        ("LIBCAMERA_VERSION", "libcamera", libcamera_version.lstrip("v")),
-        ("PICAMERA2_VERSION", "picamera2", _picamera2()),
-    ):
-        pinned = env.get(key)
-        if not pinned:  # pin file older than the component it would name
-            continue
-        want = _validated(pinned)
+    # Keys absent where pin file is older than the component it would name
+    if pinned := env.get("LIBCAMERA_VERSION"):
+        loaded, want = libcamera_version.lstrip("v"), _validated(pinned)
         if loaded != want:
-            notes.append(f"{PREFIX} {name} {loaded}, validated against {want}")
+            notes.append(f"{PREFIX} libcamera {loaded}, validated against {want}")
+    if floor := env.get("PICAMERA2_VERSION"):
+        loaded = _picamera2()
+        if _below(loaded, floor):
+            notes.append(f"{PREFIX} picamera2 {loaded}, below floor {floor}")
     return notes

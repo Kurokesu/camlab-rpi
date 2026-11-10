@@ -58,7 +58,7 @@ def test_replayed_and_live_lines_pass_same_classification(panel):
     """Drift warning captured before replay lands beside one captured after, both warnings."""
     source = LineSource()
     early = logged(f"{stack.PREFIX} libcamera 0.7.3, validated against 0.7.2")
-    late = logged(f"{stack.PREFIX} picamera2 0.3.31, validated against 0.3.30")
+    late = logged(f"{stack.PREFIX} picamera2 0.3.30, below floor 0.3.31")
     source.line_received.connect(panel.append_line)
     source.deliver(early)
     assert panel.view.toPlainText() == ""
