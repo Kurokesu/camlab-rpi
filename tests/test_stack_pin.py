@@ -70,10 +70,11 @@ def test_versions_carry_fork_epoch():
         assert ":" in env[f"{fork}_VERSION"], fork
 
 
-def test_cage_floor_names_version_and_packages():
+def test_cage_and_picamera2_floors_name_version_and_packages():
     env = pins()
-    assert env["CAGE_VERSION"]
-    assert env["CAGE_PACKAGES"].split()
+    for key in ("CAGE", "PICAMERA2"):
+        assert env[f"{key}_VERSION"], key
+        assert env[f"{key}_PACKAGES"].split(), key
 
 
 def test_floor_relations_admit_rebuild_and_next_fork():
@@ -90,7 +91,7 @@ def test_floor_relations_admit_rebuild_and_next_fork():
 def test_floor_relations_cover_every_floored_package():
     """Callers pass every floor in one call, so each package needs its relation."""
     env = pins()
-    keys = (*FORKS, "CAGE")
+    keys = (*FORKS, "PICAMERA2", "CAGE")
     given = [" ".join((env[f"{key}_VERSION"], env[f"{key}_PACKAGES"])) for key in keys]
     wanted = {pkg for key in keys for pkg in env[f"{key}_PACKAGES"].split()}
     assert set(relation_floors(*given)) == wanted
@@ -99,12 +100,6 @@ def test_floor_relations_cover_every_floored_package():
 def test_cage_is_named_once():
     """deps.sh installs it off CAGE_PACKAGES, so APP_PACKAGES must not repeat it."""
     assert set(pins()["CAGE_PACKAGES"].split()).isdisjoint(app_packages())
-
-
-def test_picamera2_is_recorded():
-    env = pins()
-    assert env["PICAMERA2_VERSION"]
-    assert env["PICAMERA2_PACKAGES"].split()
 
 
 def test_picamera2_is_named_once():
@@ -128,5 +123,6 @@ def test_no_package_names_soname_library():
 
 def test_package_names_are_bare():
     """Names reach deb Depends and unquoted shell arrays, so a glob breaks both."""
-    for pkg in app_packages() + pins()["CAGE_PACKAGES"].split():
+    env = pins()
+    for pkg in " ".join(env[f"{key}_PACKAGES"] for key in ("APP", "PICAMERA2", "CAGE")).split():
         assert re.fullmatch(r"[a-z0-9][a-z0-9+.-]*", pkg), pkg

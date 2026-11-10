@@ -32,8 +32,8 @@ source "$(resolve_repo_dir)/apt-packages"
 
 FLOORED=("$LIBCAMERA_VERSION $LIBCAMERA_PACKAGES"
          "$RPICAM_APPS_VERSION $RPICAM_APPS_PACKAGES"
+         "$PICAMERA2_VERSION $PICAMERA2_PACKAGES"
          "$CAGE_VERSION $CAGE_PACKAGES")
-RECORDED=("$PICAMERA2_VERSION $PICAMERA2_PACKAGES")
 
 FAILED=0
 fail() { warn "$*"; FAILED=1; }
@@ -79,7 +79,7 @@ check_loaded() {
 
 header "Checking camera stack pin"
 
-for pin in "${FLOORED[@]}" "${RECORDED[@]}"; do
+for pin in "${FLOORED[@]}"; do
     read -r floor packages <<<"$pin"
     for pkg in $packages; do
         version="$(published "$pkg" "$floor")"
