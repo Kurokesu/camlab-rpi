@@ -18,10 +18,14 @@ from camlab.integrity import LogClassifier
 LOADED = "v0.7.2+rpt20260817+krks3"
 PINNED = "1:0.7.2+rpt20260817+krks3"
 
+# Distribution metadata picamera2 reports, absent on a CI runner
+PICAMERA2 = "0.3.38"
+
 
 @pytest.fixture
 def pin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Callable[..., None]:
     """Point the check at a pin file holding the given assignments."""
+    monkeypatch.setattr(stack, "_picamera2", lambda: PICAMERA2)
 
     def write(**env: str) -> None:
         path = tmp_path / "apt-packages"
@@ -32,23 +36,41 @@ def pin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Callable[..., None]:
 
 
 def test_paired_stack_says_nothing(pin):
-    pin(LIBCAMERA_VERSION=PINNED, PICAMERA2_VERSION=stack._picamera2())
+    pin(LIBCAMERA_VERSION=PINNED, PICAMERA2_VERSION=PICAMERA2)
     assert stack.mismatches(LOADED) == []
 
 
 def test_source_build_names_drift(pin):
     """What /usr/local defeats every dpkg check with."""
-    pin(LIBCAMERA_VERSION=PINNED, PICAMERA2_VERSION=stack._picamera2())
+    pin(LIBCAMERA_VERSION=PINNED, PICAMERA2_VERSION=PICAMERA2)
     assert stack.mismatches("v0.7.3") == [
         "camera stack: libcamera 0.7.3, validated against 0.7.2+rpt20260817+krks3"
     ]
 
 
-def test_picamera2_drift_names_loaded_version(pin):
-    pin(LIBCAMERA_VERSION=PINNED, PICAMERA2_VERSION="0.3.99")
-    assert stack.mismatches(LOADED) == [
-        f"camera stack: picamera2 {stack._picamera2()}, validated against 0.3.99"
+def test_newer_libcamera_fork_build_names_drift(pin):
+    """libcamera floor moves only with camlab, so a newer fork build is unvalidated."""
+    pin(LIBCAMERA_VERSION=PINNED, PICAMERA2_VERSION=PICAMERA2)
+    assert stack.mismatches("v0.7.2+rpt20260817+krks4") == [
+        "camera stack: libcamera 0.7.2+rpt20260817+krks4, validated against 0.7.2+rpt20260817+krks3"
     ]
+
+
+def test_picamera2_below_floor_names_loaded_version(pin):
+    pin(LIBCAMERA_VERSION=PINNED, PICAMERA2_VERSION="0.3.99")
+    assert stack.mismatches(LOADED) == ["camera stack: picamera2 0.3.38, below floor 0.3.99"]
+
+
+def test_picamera2_above_floor_says_nothing(pin):
+    """Raspberry Pi archive moves picamera2 past floor on its own schedule."""
+    pin(LIBCAMERA_VERSION=PINNED, PICAMERA2_VERSION="0.3.9")
+    assert stack.mismatches(LOADED) == []
+
+
+def test_unreadable_picamera2_version_counts_as_below(pin, monkeypatch):
+    pin(LIBCAMERA_VERSION=PINNED, PICAMERA2_VERSION=PICAMERA2)
+    monkeypatch.setattr(stack, "_picamera2", lambda: "unknown")
+    assert stack.mismatches(LOADED) == ["camera stack: picamera2 unknown, below floor 0.3.38"]
 
 
 def test_debian_rebuild_still_pairs(pin):
