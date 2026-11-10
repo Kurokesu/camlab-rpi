@@ -1,3 +1,13 @@
+camlab-rpi (1.2.2-1) unstable; urgency=medium
+
+  * Depend on python3-libcamera and rpicam-apps-core by stable names, so
+    libcamera soname bump no longer removes camlab-rpi.
+  * Floor libcamera at 1:0.7.2+rpt20260817+krks6 and picamera2 at 0.3.38.
+  * Release notes:
+    https://github.com/Kurokesu/camlab-rpi/releases/tag/v1.2.2
+
+ -- Danius Kalvaitis <danius@kurokesu.com>  Tue, 10 Nov 2026 14:23:55 +0200
+
 camlab-rpi (1.2.1-1) unstable; urgency=medium
 
   * Add Mirror option to flip image horizontally.
