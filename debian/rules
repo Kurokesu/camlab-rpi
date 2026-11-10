@@ -3,8 +3,7 @@
 include /usr/share/dpkg/pkg-info.mk
 
 # Runtime relations for control, rendered from the source tree's apt-packages
-# and sensor registry. Camera stack forks and cage carry a floor, rest bare names.
-# PICAMERA2_VERSION is recorded for drift checks, not rendered.
+# and sensor registry. Camera stack, picamera2 and cage carry a floor, rest bare names.
 # ':?' stops the build on a missing key, rather than dropping dependencies.
 # python3 -B keeps registry bytecode out of the payload.
 # Unquoted expansion splits names, test_stack_pin.py on main asserts glob-free
@@ -15,8 +14,9 @@ DEPENDS := $(shell . ./apt-packages && set -o pipefail && { \
 	floor() { for p in $$2; do echo "$$p (>= $$1)"; done; }; \
 	floor "$${LIBCAMERA_VERSION:?}" "$${LIBCAMERA_PACKAGES:?}"; \
 	floor "$${RPICAM_APPS_VERSION:?}" "$${RPICAM_APPS_PACKAGES:?}"; \
+	floor "$${PICAMERA2_VERSION:?}" "$${PICAMERA2_PACKAGES:?}"; \
 	floor "$${CAGE_VERSION:?}" "$${CAGE_PACKAGES:?}"; \
-	printf '%s\n' $${APP_PACKAGES:?} $${PICAMERA2_PACKAGES:?}; \
+	printf '%s\n' $${APP_PACKAGES:?}; \
 	drivers=$$(python3 -B -m camlab.sensors | cut -f2); \
 	printf '%s\n' $${drivers:?}; \
 	} | awk '{ printf "%s%s", sep, $$0; sep = ", " }')
