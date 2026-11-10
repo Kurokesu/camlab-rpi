@@ -79,7 +79,7 @@ if [ "$UNHOLD" -eq 1 ]; then
     fi
     apt-mark unhold "${HELD[@]}" >/dev/null
     log "Unheld: ${HELD[*]}"
-    warn "Next apt upgrade can replace the kernel and rebuild every DKMS sensor"
+    warn "Next apt full-upgrade can replace the kernel and rebuild every DKMS sensor"
     warn "module. Verify cameras after, then re-run this script to hold."
     exit 0
 fi
