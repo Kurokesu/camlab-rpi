@@ -118,6 +118,14 @@ def test_app_packages_leave_fork_packages_to_pin():
     assert forked.isdisjoint(app_packages())
 
 
+def test_no_package_names_soname_library():
+    """lib<name><soversion> is renamed on every ABI bump and takes camlab-rpi with it."""
+    env = pins()
+    for key in (*FORKS, "CAGE", "PICAMERA2", "APP"):
+        for pkg in env[f"{key}_PACKAGES"].split():
+            assert not re.fullmatch(r"lib.*\d", pkg), pkg
+
+
 def test_package_names_are_bare():
     """Names reach deb Depends and unquoted shell arrays, so a glob breaks both."""
     for pkg in app_packages() + pins()["CAGE_PACKAGES"].split():
