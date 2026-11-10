@@ -30,7 +30,7 @@ Network toggle (GUI Settings or `camlabctl net`) persists across reboots. Turnin
 
 ## Upgrades
 
-Upgrades are manual. `boot.sh` masks apt timers and `unattended-upgrades` is absent, so package state moves only on `apt upgrade`. Treat that as a re-validation step. Kernel stays on `apt-mark hold` so apt cannot swap it under DKMS drivers, lift it with `kernel.sh --unhold`.
+Upgrades are manual. `boot.sh` masks apt timers and `unattended-upgrades` is absent, so package state moves only on `apt full-upgrade`. Treat that as a re-validation step. Kernel stays on `apt-mark hold` so apt cannot swap it under DKMS drivers, lift it with `kernel.sh --unhold`.
 
 ## Running the app
 
