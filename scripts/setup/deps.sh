@@ -69,7 +69,9 @@ source "$REPO/apt-packages"
 
 STACK=("$LIBCAMERA_VERSION $LIBCAMERA_PACKAGES"
        "$RPICAM_APPS_VERSION $RPICAM_APPS_PACKAGES")
-FLOORED=("${STACK[@]}" "$CAGE_VERSION $CAGE_PACKAGES")
+FLOORED=("${STACK[@]}"
+         "$PICAMERA2_VERSION $PICAMERA2_PACKAGES"
+         "$CAGE_VERSION $CAGE_PACKAGES")
 
 # Raising a floor can pull a new package, which plain upgrade refuses to do
 BELOW=()
@@ -107,7 +109,7 @@ if [ "${#AHEAD[@]}" -gt 0 ]; then
 fi
 
 # shellcheck disable=SC2206  # test_stack_pin.py asserts names are glob-free
-UNPINNED=($APP_PACKAGES $PICAMERA2_PACKAGES)
+UNPINNED=($APP_PACKAGES)
 
 mapfile -t MISSING < <(missing_packages "${UNPINNED[@]}")
 
@@ -120,6 +122,6 @@ fi
 
 # Mark manual, or autoremove reclaims what a removed package left auto
 # shellcheck disable=SC2086  # test_stack_pin.py asserts names are glob-free
-apt-mark manual "${UNPINNED[@]}" $CAGE_PACKAGES
+apt-mark manual "${UNPINNED[@]}" $PICAMERA2_PACKAGES $CAGE_PACKAGES
 
 log "Done. All apt dependencies installed."
